@@ -1,0 +1,175 @@
+{
+	"name": "insertsequence",
+	"version": "0.10.0",
+	"publisher": "volkerdobler",
+	"displayName": "Insert Sequences",
+	"description": "Insert sequences of any kind (numberic, alpha, expressions) to VSCode textdocuments",
+	"keywords": [
+		"sequences",
+		"numbers",
+		"insert",
+		"alphachars",
+		"expressions",
+		"frequencies"
+	],
+	"activationEvents": [],
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/volkerdobler/insertnums/issues",
+		"email": "vscode.insertnums.ext@volker-dobler.de"
+	},
+	"homepage": "https://github.com/volkerdobler/insertnums/blob/master/README.md",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/volkerdobler/insertnums.git"
+	},
+	"engines": {
+		"vscode": "^1.88.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"configuration": {
+			"title": "insertseq",
+			"properties": {
+				"historyLimit": {
+					"type": "number",
+					"default": 100,
+					"description": "Maximum number of historical records, 0 is unlimited"
+				},
+				"editHistory": {
+					"type": "boolean",
+					"default": false,
+					"description": "Items from PickHistory are editable (default: false)"
+				},
+				"start": {
+					"type": "string",
+					"default": "1",
+					"description": "Default start"
+				},
+				"step": {
+					"type": "string",
+					"default": "1",
+					"description": "Default increment"
+				},
+				"centerString": {
+					"type": "string",
+					"default": "l",
+					"enum": [
+						"l",
+						"r"
+					],
+					"enumdescription": [
+						"l (default): e.g. a 1 char string centered in a 4 char field is left oriented",
+						"r: e.g. a 1 char string centered in a 4 char field is right oriented"
+					]
+				},
+				"language": {
+					"type": "string",
+					"default": "de",
+					"description": "Default language format for months"
+				},
+				"insertOrder": {
+					"type": "string",
+					"default": "cursor",
+					"description": "Default order of insertion",
+					"enum": [
+						"cursor",
+						"sorted"
+					],
+					"enumdescription": [
+						"cursor (default): insertion is based on multi cursor click order",
+						"sorted: insertion is from top most click down (reverse is possible with option '!')"
+					]
+				},
+				"century": {
+					"type": "number",
+					"default": 20,
+					"description": "Default century if year has only 2 digits - default: 20"
+				},
+				"dateStepUnit": {
+					"type": "string",
+					"default": "d",
+					"description": "Default unit as date step",
+					"enum": [
+						"d",
+						"w",
+						"m",
+						"y"
+					],
+					"enumdescription": [
+						"d (default): days",
+						"w: weeks",
+						"m: months",
+						"y: years"
+					]
+				},
+				"dateFormat": {
+					"type": "string",
+					"default": "dd.MM.yyyy",
+					"description": "Default date format"
+				},
+				"delimiter": {
+					"type": "string",
+					"default": " ",
+					"description": "Delimiter, if no newlines should be inserted"
+				},
+				"alphabet": {
+					"type": "string",
+					"default": "abcdefghijklmnopqrstuvwxyz",
+					"description": "Alphabet, for string successors"
+				}
+			}
+		},
+		"commands": [
+			{
+				"command": "extension.insertSequence",
+				"title": "Insert Sequences"
+			},
+			{
+				"command": "extension.insertSeq.showHistory",
+				"title": "Insert Sequences Show History"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "extension.insertSequence",
+				"key": "ctrl+alt+.",
+				"mac": "cmd+alt+.",
+				"when": "editorTextFocus"
+			},
+			{
+				"command": "extension.insertSeq.showHistory",
+				"key": "ctrl+alt+,",
+				"mac": "cmd+alt+,",
+				"when": "editorTextFocus"
+			}
+		]
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./",
+		"lint": "eslint src --ext ts",
+		"pretest": "npm run compile && npm run lint"
+	},
+	"devDependencies": {
+		"@types/d3-format": "^2.0.5",
+		"@types/node": "^20.12.11",
+		"@types/vscode": "^1.89.0",
+		"eslint": "^9.2.0",
+		"prettier": "^3.2.5"
+	},
+	"icon": "insertseq.png",
+	"galleryBanner": {
+		"color": "#5757ff",
+		"theme": "dark"
+	},
+	"dependencies": {
+		"d3-format": "^2.0.0",
+		"date-fns": "^3.6.0",
+		"mathjs": "^12.4.2"
+	}
+}
