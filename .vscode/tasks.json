@@ -9,10 +9,8 @@
       "presentation": {
         "reveal": "never"
       },
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      }
+      "group": "build",
+      "problemMatcher": []
     },
     {
       "type": "npm",
@@ -37,6 +35,17 @@
         "group": "watch",
         "reveal": "never"
       }
+    },
+    {
+      "type": "npm",
+      "script": "compile",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "label": "npm: compile",
+      "detail": "npm run check-types && node esbuild.js"
     }
   ]
 }

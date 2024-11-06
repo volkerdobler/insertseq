@@ -2,6 +2,10 @@
 
 All notable changes to this extension (newest on top):
 
+- 0.10.2
+
+  Changed: Number of leading chars are always the same, even when starting with negative numbers and later inserting positive numbers.
+
 - 0.10.1
 
   New: underline is a new option for leading characters

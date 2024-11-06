@@ -324,7 +324,7 @@ function InsertSequenceCommand({
       numeric: '{{integer}} | {{float}}',
       signedNum: '([+-]? {{numeric}})|{{hexNum}}',
       startNum:
-        '([+-]? (?<lead_char1> 0+|\\s+|\\.+|_+)? {{numeric}})|((?<lead_char2> 0+|\\s+|\\.+|_+)? [+-]? {{numeric}})|{{hexNum}}',
+        '((?<numSign1>[+-])? (?<lead_char1> 0+|\\s+|\\.+|_+)? {{numeric}})|((?<lead_char2> 0+|\\s+|\\.+|_+)? (?<numSign2>[+-])? {{numeric}})|{{hexNum}}',
       format:
         '((?<format_padding> [^}}])? (?<format_align> [<>^=]))? (?<format_sign> [-+ ])? #? (?<format_filled> 0)? (?<format_integer> {{integer}})? (\\.(?<format_precision> \\d+))? (?<format_type> [bcdeEfFgGnoxX%])?',
       alphastart: '[a-z]+ | [A-Z]+',
@@ -690,9 +690,10 @@ function InsertSequenceCommand({
 
     // do we have a leading Character for formatting?
     const leadingChar = groups.lead_char1 || groups.lead_char2 || null;
-    const negativeBeforeLeadingChar = !!groups.lead_char1;
+    const availableLeadingChar = groups.numSign1 || groups.numSign2 || null;
+    const signBeforeLeadingChar = !!groups.numSign1;
     const startLength = leadingChar
-      ? groups.start[0] === '-' || groups.start[0] === '+'
+      ? availableLeadingChar === '-'
         ? groups.start.length - 1
         : groups.start.length
       : 0;
@@ -1055,8 +1056,10 @@ function InsertSequenceCommand({
       if (format) {
         // if the curValueStr is a number, use d3.format
         if (curValueIsNumber) {
-          if (+curValueStr < 0 && negativeBeforeLeadingChar) {
-            curValueStr = '-' + d3.format(format)(+curValueStr.substring(1));
+          if (+curValueStr < 0 && signBeforeLeadingChar) {
+            curValueStr =
+              availableLeadingChar +
+              d3.format(format)(+curValueStr.substring(1));
           } else {
             curValueStr = d3.format(format)(+curValueStr);
           }
