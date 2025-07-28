@@ -181,6 +181,8 @@
 	},
 	"dependencies": {
 		"d3-format": "^2.0.0",
-		"date-fns": "^3.6.0"
+		"date-fns": "^3.6.0",
+		"mathjs": "^14.6.0",
+		"ovsx": "^0.10.5"
 	}
 }
