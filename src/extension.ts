@@ -29,108 +29,270 @@ export function activate(context: vscode.ExtensionContext) {
 		const editor = vscode.window.activeTextEditor;
 		if (!editor) { return; }
 
-		InsertSequencesCommand(context, value);
+		InsertSeqCommand(context, value);
 		printToConsole('Congratulations, extension "insertseq" is now active!');
 	}));
 }
 
 export function deactivate() { }
 
-const appName: string = 'insertsequences';
+const appName: string = 'insertseq';
 
-async function InsertSequencesCommand(
-	context: vscode.ExtensionContext,
-	value: string
-) {
-	const editor = vscode.window.activeTextEditor;
-	if (!editor) { return; }
-
-	const orgTextSelections = editor.selections.map(selection => editor.document.getText(selection));
-	const orgMultiCursorEnds = editor.selections.map(selection => new vscode.Selection(selection.end, selection.end));
-
-	let currentSelection: string[] | null = orgTextSelections;
-
-	const defaultValues = getConfig();
-
-	const inputOptions: vscode.InputBoxOptions = {
-		placeHolder: "",
-		validateInput: function(input) {
-			currentSelection = createNewSequence(editor, currentSelection, input, orgTextSelections, orgMultiCursorEnds, defaultValues);
-			return "";
-		}
-	}
-
-	vscode.window.showInputBox(inputOptions)
-		.then(function(input) {
-			currentSelection = createNewSequence(editor, currentSelection, input, orgTextSelections, orgMultiCursorEnds, defaultValues);
-		})
-}
-
-type TConfig = {
-	start: string,
-	step: number,
-	repeat: number,
-	frequency: number,
-	format: string,
-	random: number,
-	expr: string,
-	stopexpr: string,
-	withSort: boolean,
-	withRevert: boolean,
-	ownsequences: string[][]
+interface RuleTemplate {
+	[key: string]: string;
 };
 
 type TInputType = "decimal" | "hex" | "octal" | "binary" | "alpha" | "date" | "expression" | "own" | null;
 
-type TInput = {
+interface IInput {
 	type: TInputType,
 	start: string,
-	step: number,
-	repeat: number,
-	frequency: number,
+	step: string,
+	repeat: string,
+	frequency: string,
 	expr: string,
 	stopexpr: string,
 	ownsequence: string[],
 	format: {
 		format: string,
-		padding: string | undefined,
-		align: string | undefined,
-		sign: string | undefined,
-		leading: string | undefined,
+		padding?: string,
+		align?: string,
+		sign?: string,
+		leading?: string,
 		length: string,
-		precision: string | undefined
+		precision?: string
 	}
 }
 
-// get Config-Information and return TConfig Type
-function getConfig(): TConfig {
-	return { start: "1", step: 1, repeat: 1, frequency: 1, format: "", random: 0, expr: "", stopexpr: "", withSort: false, withRevert: false, ownsequences: [["foo", "bar", "bez"], ["alpha", "beta", "gamma", "delta"]]};
+interface IConfig {
+	start: string,
+	step: string,
+	repeat: string,
+	frequency: string,
+	withSort: string,
+	withRevert: string,
+	ownsequences: string,
+};
+
+
+async function InsertSeqCommand(
+	context: vscode.ExtensionContext,
+	value: string
+) {
+
+// decimals: [<start>][:<step>][#<repeat>][*<frequency>][~<format>]r[+]<random>][::<expr>][@<stopexpr>][$][!]
+// alpha: <start>[:<step>][#<repeat>][\*<frequency>][~<format>][w][@<stopexpr>][$][!]
+// dates: %[<year>[-<month>[-<day>]]][:[dwmy]<step>][#<repeat>][*<frequency>][~<format>][$][!]
+// expressions: [<cast>]|[~<format>::]<expr>[@<stopexpr>][$][!]
+// own (war "months"): ;<start>[:<step>][#<repeat>][\*<frequency>][~<format>][@<stopexpr>][$][!]
+
+// alles innerhalb von Strings
+// :(?:(?:"(?:(?:(?<=\\)")|[^"])+")|(?:'(?:(?:(?<=\\)')|[^'])+')|[^~#*@]+)
+
+// alles innerhalb von Klammern
+// :((?:\((?:(?:(?<=\\)\))|[^)])+\))|[^~#*@]+)
+
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) { return; }
+
+	const rules = getRegExpressions();
+
+	const config: IConfig = {
+		start: getConfig('start', "0"),
+		step: getConfig('step', "1"),
+		repeat: getConfig('repeat', "0"),
+		frequency: getConfig('frequency', "0"),
+		withSort: getConfig('sort', ""),
+		withRevert: getConfig('revert', ""),
+		ownsequences: getConfig('ownsequences', ""),
+	};
+
+	const origTextSelections = editor.selections.map(selection => editor.document.getText(selection));
+	const origMultiCursorEnds = editor.selections.map(selection => new vscode.Selection(selection.end, selection.end));
+
+	let currentSelection: string[] | null = origTextSelections;
+
+	const inputOptions: vscode.InputBoxOptions = {
+		placeHolder: "",
+		validateInput: function(input) {
+			currentSelection = insertNewSequence(editor, currentSelection, input, origTextSelections, origMultiCursorEnds, rules);
+			return "";
+		}
+	}
+
+	vscode.window.showInputBox(inputOptions)
+		.then(function(input:string) {
+			currentSelection = insertNewSequence(editor, currentSelection, input, orgTextSelections, orgMultiCursorEnds, rules);
+		})
+}
+
+function getRegExpressions(): RuleTemplate {
+
+	const matchRules: RuleTemplate = {
+		start_decimal: '',
+		start_alpha: '',
+		start_dates: '',
+		start_own: '',
+		steps_decimal: '',
+		steps_other: '',
+		repeat: '',
+		frequency: '',
+		stopexpression: '',
+		expression: '',
+		outputOrder: '',
+		outputSort: ''
+	};
+
+	const ruleTemplate: RuleTemplate = {
+		delimiter_decimal: '(?:[$:#\\*~r@!]|$)',
+		delimiter_other: '(?:[$:#\\*~@!]|(?:\\s*$))',
+		integer: '(?:[1-9]\\d*|0)',
+		pointfloat: '(?:(?:[1-9]\\d*|0)?\\.\\d+)',
+		exponentfloat: '(?:(?:{{integer}} | {{pointfloat}}) [e] [+-]? \\d+)',
+		float: '(?:{{pointfloat}} | {{exponentfloat}})',
+		hexNum: '(?:0[x](?<hex>0|[1-9a-f][0-9a-f]*))',
+		octNum: '(?:0[o](?<oct>0|[1-7][0-7]*))',
+		binNum: '(?:0[b](?<bin>[01]+))',
+		numeric: '(?:(?<int>{{integer}}) | (?<float>{{float}}))',
+		signedInt: '(?<int>[+-]? {{integer}})',
+		signedNum: '(?:[+-]? (?:{{numeric}} | {{hexNum}} | {{octNum}} | {{binNum}}))',
+		start_decimal: '^(?:(?<lead_string (?<lead_char> [0\\s\\._])\\k<lead_char>*)?(?<start>(?:{{signedNum}})) (?= {{delimiter_decimal}} ))',
+		start_alpha: '^(?:(?<start>[a-z]+) (?= {{delimiter_other}} ))',
+		start_dates: '^(?:(?:%)(?<start>\\d{2}|\\d{4})(?:(?:-(?<month>0?[1-9]|10|11|12))(?:-(?<day>0?[1-9]|[12][0-9]|30|31))?)?(?![\\d-]) (?= {{delimiter_other}} ))',
+		start_own: '^(?:(?<start>(;)(?:(?:[\\d\\w]+(?:\\1[\\d\\w]+)*))|(?:(?:"(?:(?<=\\\\)"|[^"])+")(?:\\1(?:"(?:(?<=\\\\)"|[^"])+"))+)\'|(?:(?:\'(?:(?<=\\\\)\'|[^\'])+\')(?:\\1(?:\'(?:(?<=\\\\)\'|[^\'])+\'))+))) (?= {{delimiter_other}} ))',
+		steps_decimal: '(?:(?<!:)(?::)(?<steps> {{signedNum}}) (?= {{delimiter_other}} ))',
+		steps_other: '(?:(?<!:)(?::)(?<steps> {{signedInt}}) (?= {{delimiter_other}} ))',
+		repeat: '(?:(?<=#)(?<repeat>\\d+))',
+		frequency: '(?:(?<=\\*)(?<freq>\\d+))',
+		stopexpression: '(?:@(?:[^:@]+?)) (?=(?:::)|[!$]|$)',
+		expression: '(?:::(?:[^:@]+?)) (?:@|[!$]|$)',
+		outputOrder: '\$!? $',
+		outputSort: '!\$? $',
+	};
+
+	for (let [key, value] of Object.entries(ruleTemplate)) {
+		while (value.indexOf('{{') > -1) {
+			const start: number = value.indexOf('{{');
+			const ende: number = value.indexOf('}}', start + 2) + 2;
+			const replace: string = value.slice(start, ende);
+			const rule: string = replace.slice(2, replace.length - 2);
+			if (rule in ruleTemplate) {
+				value = value.replace(replace, ruleTemplate[rule]);
+			}
+		}
+		if (key in matchRules) {
+			matchRules[key] = value.replace(/\s/gi, '');
+		}
+	}
+
+	return matchRules
+}
+
+// get Config-Information and return
+function getConfig(crit: string, def : string = ''): string {
+	return vscode.workspace.getConfiguration(appName).get(crit) ||
+	vscode.workspace.getConfiguration('insertnums').get(crit) || def;
 }
 
 // Create new Sequence based on Input
-function createNewSequence(
+function insertNewSequence(
 	editor: vscode.TextEditor,
 	currentSelection: string[] | null,
 	input: string | undefined,
 	textSelections: string[],
 	cursorSelections: vscode.Selection[],
-	defaultValues: TConfig,
+	matchRules: RuleTemplate,
 ): string[] | null {
 
 	if (input == undefined) { return null; };
 
-	const options = getOptions(input, defaultValues);
+	const inputType: TInputType = getInputType(input);
+	const currSequence = getCurrentSequence(inputtype);
 
-	return [""]
+	// const strList = selections.map((_, idx) => strGenerator(idx));
+	// editor.edit(
+	// 	function (builder) {
+	// 		selections.forEach(function (selection, index) {
+	// 			builder.replace(selection, strList[index]);
+	// 		});
+	// 	},
+	// 	{ undoStopBefore: false, undoStopAfter: false }
+	// );
+	// return strList;
+
+}
+
+function getInputType(input: string): TInputType | null {
+
+	let type: TInputType = null;
+
+// What kind of input is it (check regex from begin)
+	switch (true) {
+		// nummerische Zahl
+		case /^(?:([ _x0\.])\1*)?[+-]?\d/i.test(input):
+			type = "decimal";
+			break;
+		// HEX Zahl
+		case /^(?:([ _x0\.])\1*)?[+-]?0x[0-9a-f]+/i.test(input):
+			type = "hex";
+			break;
+		// Oktal Zahl
+		case /^(?:([ _x0\.])\1*)?[+-]?0o[0-7]+/i.test(input):
+			type = "octal";
+			break;
+		// binäre Zahl
+		case /^(?:([ _x0\.])\1*)?[+-]?0b[01]+/i.test(input):
+			type = "binary";
+			break;
+		case /^\|/i.test(input):
+			type = "expression";
+			break;
+		case /^[a-z]/ui.test(input):
+			type = "alpha";
+			break;
+		case /^%/i.test(input):
+			type = "date";
+			break;
+		case /^&/i.test(input):
+			type = "own";
+			break;
+		default:
+			type = null;
+	};
+
+	return type;
+}
+
+function getCurrentSequence(type: TInputType): string[] {
+
+	switch (inputType) {
+		case 'decimal':
+			return createDecimalSeq(input, 10);
+		case 'hex':
+			return createDecimalSeq(input, 16);
+		case 'octal':
+			return createDecimalSeq(input, 8);
+		case 'binary':
+			return createDecimalSeq(input, 2);
+		case 'alpha':
+			return createStringSeq(input);
+		case 'date':
+			return createDateSeq(input);
+		case 'expression':
+			return createExpressionSeq(input);
+		case 'own':
+			return createOwnSeq(input);
+		default:
+			return [""]
+	}
 }
 
 // Get Input-Options and return Object of TInput
-function getOptions(input: string, defaultValue: TConfig): TInput | {} {
+function getInput(input: string): IInput | {} {
 
 	let type: TInputType = null;
 	let match = null;
 
-// What kind of input is it (check regex from begin)
 	switch (true) {
 		// nummerische Zahl
 		case /^(?:([ _x0\.])\1*)?[+-]?\d/i.test(input):
@@ -156,9 +318,9 @@ function getOptions(input: string, defaultValue: TConfig): TInput | {} {
 			// Optional ein Vorzeichen [ _x0.] (zur Formatierung der Zahl), einmal oder mehrmals, dann optional ein + oder - Zeichen und dann die Zahl, mit optional Nachkommastellen
 			match = input.match(/^(?:(?<sub>([ _x0\.])\2*))?0b(?<start>[01]+)(?!\.)/ui);
 			break;
-		case /^[isfb]?|/i.test(input):
+		case /^\|/i.test(input):
 			type = "expression";
-			match = input.match(/^(?:[isfb])|(?:.+)/ui);
+			match = input.match(/^\|(?:.+)/ui);
 			break;
 		case /^[a-z]/ui.test(input):
 			type = "alpha";
@@ -175,8 +337,8 @@ function getOptions(input: string, defaultValue: TConfig): TInput | {} {
 			break;
 		default:
 			type = null;
+			match = ''
 	};
-
 // Step after : - could be hex, octal or decimal/number
 	match = input.match(/(?<!:)(?::)0x(?<steps>[a-f0-9]+)/i);
 	let temp = defaultValue.step || 1;
@@ -270,3 +432,88 @@ function getOptions(input: string, defaultValue: TConfig): TInput | {} {
 
 
 }
+
+
+
+
+
+
+
+
+/*
+		
+		
+		
+
+		function hasKey(obj: RuleTemplate, key: string): boolean {
+			return key in obj;
+		}
+
+		const ruleTemplate: RuleTemplate = {
+			integer: '[1-9]\\d* | 0',
+			hexdigits: '[1-9a-fA-F][0-9a-fA-F]*',
+			signedint: '[+-]? {{integer}}',
+			pointfloat: '({{integer}})? \\. \\d+ | {{integer}} \\.',
+			exponentfloat: '(?:{{integer}} | {{pointfloat}}) [eE] [+-]? \\d+',
+			float: '{{pointfloat}} | {{exponentfloat}}',
+			hexNum: '0[xX]{{hexdigits}}',
+			numeric: '{{integer}} | {{float}}',
+			signedNum: '([+-]? {{numeric}})|{{hexNum}}',
+			startNum:
+				'([+-]? (?<lead_char1> 0+|\\s+|\\.+|_+)? {{numeric}})|((?<lead_char2> 0+|\\s+|\\.+|_+)? [+-]? {{numeric}})|{{hexNum}}',
+			format:
+				'((?<format_padding> [^}}])? (?<format_align> [<>^=]))? (?<format_sign> [-+ ])? #? (?<format_filled> 0)? (?<format_integer> {{integer}})? (\\.(?<format_precision> \\d+))? (?<format_type> [bcdeEfFgGnoxX%])?',
+			alphastart: '[a-z]+ | [A-Z]+',
+			alphaformat:
+				'((?<alphaformat_padding>[^}}])? (?<alphaformat_align>[<>^])(?<alphaformat_correct> [lr])?)? ((?<alphaformat_integer>{{integer}}))?',
+			dateformat:
+				'(?:G{1,5}|y{1,5}|R{1,5}|u{1,5}|Q{1,5}|q{1,5}|M{1,5}|L{1,5}|w{1,2}|l{1,2}|d{1,2}|E{1,6}|i{1,5}|e{1,6}|c{1,6}|a{1,5}|b{1,5}|B{1,5}|h{1,2}|H{1,2}|k{1,2}|K{1,2}|m{1,2}|s{1,2}|S{1,4}|X{1,5}|x{1,5}|O{1,4}|z{1,4}|t{1,2}|T{1,2}|P{1,4}|p{1,4}|yo|qo|Qo|Mo|lo|Lo|wo|do|io|eo|co|ho|Ho|Ko|ko|mo|so|Pp|PPpp|PPPppp|PPPPpppp|.)*',
+			monthtxt: '[\\p{L}\\p{M}]+|\\d{1,2}',
+			monthformat: '(?:l(ong)?|s(hort)?)\\b',
+			year: '(?:\\d{1,4})',
+			month: '(?:12|11|10|0?[1-9])',
+			day: '(?:3[012]|[12]\\d|0?[1-9])',
+			date: '(?<date> (?<year> {{year}}?)(?:(?<datedelimiter>[-.])(?<month>{{month}})(?:\\k<datedelimiter>(?<day>{{day}}))?)?)?',
+			datestep: '(?:(?<datestepunit>[dwmy])(?<datestepvalue>{{signedint}}))?',
+			cast: '[ifsbm]',
+			expr: '.+?',
+			stopExpr: '.+?',
+			exprMode:
+				'^(?<cast> {{cast}})?\\|(~(?:(?<monthformat> {{monthformat}})|(?<format> {{format}}))::)? (?<expr> {{expr}}) (@(?<stopExpr> {{stopExpr}}))? (?<sort_selections> \\$)? (\\[(?<lang> [\\w-]+)\\])? (?<reverse> !)?$',
+			insertNum:
+				'^(?<start> {{startNum}})? (:(?<step> {{signedNum}}))? (r(?<random> \\+?[1-9]\\d*))? (\\*(?<frequency> {{integer}}))? (#(?<repeat> {{integer}}))? (~(?<format> {{format}}))? (::(?<expr> {{expr}}))? (@(?<stopExpr> {{stopExpr}}))? (?<sort_selections> \\$)? (?<reverse> !)?$',
+			insertAlpha:
+				'^(?<start> {{alphastart}}) (:(?<step> {{signedint}}))? (\\*(?<frequency> {{integer}}))? (#(?<repeat> {{integer}}))? (~(?<format> {{alphaformat}})(?<wrap> w)?)? (@(?<stopExpr> {{stopExpr}}))? (?<sort_selections> \\$)? (?<reverse> !)?$',
+			insertMonth:
+				'^(;(?<start> {{monthtxt}}))(:(?<step> {{signedint}}))? (\\*(?<frequency> {{integer}}))? (#(?<repeat> {{integer}}))? (~(?<monthformat> {{monthformat}}))? (@(?<stopExpr> {{stopExpr}}))? (\\[(?<lang> [\\w-]+)\\])? (?<sort_selections> \\$)? (?<reverse> !)?$',
+			insertDate:
+				'^(%(?<start> {{date}}|{{integer}})) (:(?<step> {{datestep}}))? (\\*(?<frequency> {{integer}}))? (#(?<repeat> {{integer}}))? (~(?<dateformat> {{dateformat}}))? (?<sort_selections> \\$)? (?<reverse> !)?$',
+		};
+
+		// TODO - linesplit einfügen (?:\\|(?<line_split>[^\\|]+)\\|)?
+		const result: RuleTemplate = {
+			exprMode: '',
+			insertNum: '',
+			insertAlpha: '',
+			insertMonth: '',
+			insertDate: '',
+		};
+
+		for (let [key, value] of Object.entries(ruleTemplate)) {
+			while (value.indexOf('{{') > -1) {
+				const start: number = value.indexOf('{{');
+				const ende: number = value.indexOf('}}', start + 2) + 2;
+				const replace: string = value.slice(start, ende);
+				const rule: string = replace.slice(2, replace.length - 2);
+				if (hasKey(ruleTemplate, rule)) {
+					value = value.replace(replace, ruleTemplate[rule]); // works fine!
+				}
+			}
+			if (hasKey(result, key)) {
+				result[key] = value.replace(/\s/gi, '');
+			}
+		}
+
+		return { result };
+	
+*/
