@@ -1,23 +1,19 @@
 /*
-The extension "InsertSequences" (previous InsertNums) based on a plugin for sublimecode from James Brooks but is written completely new for VSCode
+The idea of the extension "InsertSeq" (previous InsertNums) based on the plugin insertnums 
+for sublimecode from James Brooks
 Original sublimecode extension: https://github.com/jbrooksuk/InsertNums
 
-All errors are in my own responsibility and are solely done by
-myself.
-
-If you want to contact me, send an E-Mail to
-insertsequences.extension@dobler-online.com
+Version 1.0 is completely new written and additional features are added.
 
 Volker Dobler
 original from May 2020
-rewritten July 2025
+rewritten August 2025
  */
 
 const debug = false;
 
 import * as vscode from 'vscode';
-import assert = require('assert');
-import { Interface } from 'readline';
+import * as assert from 'assert';
 
 function printToConsole(str: string): void {
 	if (debug) console.log('Debugging: ' + str);
@@ -25,7 +21,7 @@ function printToConsole(str: string): void {
 
 export function activate(context: vscode.ExtensionContext) {
 
-	context.subscriptions.push(vscode.commands.registerCommand('extension.insertsequences', (value: string) => {
+	context.subscriptions.push(vscode.commands.registerCommand('extension.insertseq', (value: string) => {
 		const editor = vscode.window.activeTextEditor;
 		if (!editor) { return; }
 
@@ -44,35 +40,40 @@ interface RuleTemplate {
 
 type TInputType = "decimal" | "hex" | "octal" | "binary" | "alpha" | "date" | "expression" | "own" | null;
 
+// eingetippte Optionen (alles, was syntax erlaubt + zusätzlich der Type, der anhand des ersten Zeichens ermittelt wird)
 interface IInput {
 	type: TInputType,
 	start: string,
 	step: string,
-	repeat: string,
+	repetition: string,
 	frequency: string,
 	expr: string,
 	stopexpr: string,
-	ownsequence: string[],
-	format: {
-		format: string,
-		padding?: string,
-		align?: string,
-		sign?: string,
-		leading?: string,
-		length: string,
-		precision?: string
-	}
+	ownsequence: string,
+	format: string;
 }
 
+/*
+// alle konfigurierbaren Kriterien
 interface IConfig {
 	start: string,
 	step: string,
-	repeat: string,
 	frequency: string,
-	withSort: string,
-	withRevert: string,
-	ownsequences: string,
+	repetition: string,
+	numberFormat: string,
+	stringFormat: string,
+	dateFormat: string,
+	insertOrder: string,
+	language: string,
+	century: string,
+	centerString: string,
+	dateStepUnit: string,
+	delimiter: string,
+	alphabet: string,
+	ownsequences: (string[] | number[] | ((i:number) => string))[],
 };
+*/
+
 
 
 async function InsertSeqCommand(
@@ -86,86 +87,98 @@ async function InsertSeqCommand(
 // expressions: [<cast>]|[~<format>::]<expr>[@<stopexpr>][$][!]
 // own (war "months"): ;<start>[:<step>][#<repeat>][\*<frequency>][~<format>][@<stopexpr>][$][!]
 
-// alles innerhalb von Strings
-// :(?:(?:"(?:(?:(?<=\\)")|[^"])+")|(?:'(?:(?:(?<=\\)')|[^'])+')|[^~#*@]+)
-
-// alles innerhalb von Klammern
-// :((?:\((?:(?:(?<=\\)\))|[^)])+\))|[^~#*@]+)
-
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) { return; }
 
-	const rules = getRegExpressions();
+	// read regular Expression for input string
+	const inputSegments = getRegExpressions();
 
-	const config: IConfig = {
-		start: getConfig('start', "0"),
-		step: getConfig('step', "1"),
-		repeat: getConfig('repeat', "0"),
-		frequency: getConfig('frequency', "0"),
-		withSort: getConfig('sort', ""),
-		withRevert: getConfig('revert', ""),
-		ownsequences: getConfig('ownsequences', ""),
-	};
+	// read config file - insertnums as of history reason (extension previously was named insertnums) and 'appName' as of current config file. 
+	// config entries in appName overwrites same config entries in "insertnums"
+	const config = Object.assign(vscode.workspace.getConfiguration('insertnums'), vscode.workspace.getConfiguration(appName));
 
+	// get current selected Text
 	const origTextSelections = editor.selections.map(selection => editor.document.getText(selection));
-	const origMultiCursorEnds = editor.selections.map(selection => new vscode.Selection(selection.end, selection.end));
+	// get current (multi-)cursor positions
+	const origCursorPositions = editor.selections.map(selection => new vscode.Selection(selection.end, selection.end));
 
+	// start with current selected Text which will be overwritten
 	let currentSelection: string[] | null = origTextSelections;
 
 	const inputOptions: vscode.InputBoxOptions = {
-		placeHolder: "",
+		placeHolder: "[<start>][:<step>][#<repetition>][*<frequency>][~<format>][[<ownselection>]][r[+]<random>][::<expr>][@<stopexpr>][$][!]",
 		validateInput: function(input) {
-			currentSelection = insertNewSequence(editor, currentSelection, input, origTextSelections, origMultiCursorEnds, rules);
+			currentSelection = insertNewSequence(editor, currentSelection, input, origTextSelections, origCursorPositions, inputSegments);
 			return "";
 		}
 	}
 
 	vscode.window.showInputBox(inputOptions)
-		.then(function(input:string) {
-			currentSelection = insertNewSequence(editor, currentSelection, input, orgTextSelections, orgMultiCursorEnds, rules);
+		.then(function(input:string | undefined) {
+			currentSelection = insertNewSequence(editor, currentSelection, input, origTextSelections, origCursorPositions, inputSegments);
 		})
 }
 
 function getRegExpressions(): RuleTemplate {
 
-	const matchRules: RuleTemplate = {
+	const matchRule: RuleTemplate = {
 		start_decimal: '',
 		start_alpha: '',
 		start_dates: '',
 		start_own: '',
 		steps_decimal: '',
 		steps_other: '',
-		repeat: '',
+		repetition: '',
 		frequency: '',
+		ownsequence: '',
 		stopexpression: '',
 		expression: '',
 		outputOrder: '',
 		outputSort: ''
 	};
 
+// String-Eingabe: (?:"(?:(?:(?<!\\\\)\\\\")|[^"])+")
+// String-Eingabe: (?:\'(?:(?:(?<!\\\\)\\\\\')|[^\'])+\')
+// Klammer-Eingabe: (?:\\((?:(?:(?<!\\\\)\\\\\\))|[^)])+\\))
+
+// Special Chars in Expressions:
+// _ ::= current value (before expression or value under current selection)
+// s ::= value of <step>
+// n ::= number of selections
+// p ::= previous value (last inserted)
+// c ::= current value (only within expressions, includes value after expression)
+// a ::= value of <start>
+// i ::= counter, starting with 0 and increasing with each insertion
 	const ruleTemplate: RuleTemplate = {
-		delimiter_decimal: '(?:[$:#\\*~r@!]|$)',
-		delimiter_other: '(?:[$:#\\*~@!]|(?:\\s*$))',
+		delimiter: '(?:\\s*(?:[$:#\\*~@!\\[]|$))',
+		specialchars: '[_snpcai]',
 		integer: '(?:[1-9]\\d*|0)',
 		pointfloat: '(?:(?:[1-9]\\d*|0)?\\.\\d+)',
+		doublestring: '(?:"(?:(?:(?<!\\\\)\\\\")|[^"])+")',
+		singlestring: '(?:\'(?:(?:(?<!\\\\)\\\\\')|[^\'])+\')',
+		bracketedexpression: '(?:\\((?:(?:(?<!\\\\)\\\\\\))|[^)])+\\))',
 		exponentfloat: '(?:(?:{{integer}} | {{pointfloat}}) [e] [+-]? \\d+)',
 		float: '(?:{{pointfloat}} | {{exponentfloat}})',
 		hexNum: '(?:0[x](?<hex>0|[1-9a-f][0-9a-f]*))',
 		octNum: '(?:0[o](?<oct>0|[1-7][0-7]*))',
 		binNum: '(?:0[b](?<bin>[01]+))',
+		exproperator: '(?: \\s* (?:\\+|-|\\*|\\/|\\*\\*|mod|div) \\s* )',
+		exprcompare: '(?:<=|<|>=|>|===|==)',
 		numeric: '(?:(?<int>{{integer}}) | (?<float>{{float}}))',
 		signedInt: '(?<int>[+-]? {{integer}})',
 		signedNum: '(?:[+-]? (?:{{numeric}} | {{hexNum}} | {{octNum}} | {{binNum}}))',
-		start_decimal: '^(?:(?<lead_string (?<lead_char> [0\\s\\._])\\k<lead_char>*)?(?<start>(?:{{signedNum}})) (?= {{delimiter_decimal}} ))',
-		start_alpha: '^(?:(?<start>[a-z]+) (?= {{delimiter_other}} ))',
-		start_dates: '^(?:(?:%)(?<start>\\d{2}|\\d{4})(?:(?:-(?<month>0?[1-9]|10|11|12))(?:-(?<day>0?[1-9]|[12][0-9]|30|31))?)?(?![\\d-]) (?= {{delimiter_other}} ))',
-		start_own: '^(?:(?<start>(;)(?:(?:[\\d\\w]+(?:\\1[\\d\\w]+)*))|(?:(?:"(?:(?<=\\\\)"|[^"])+")(?:\\1(?:"(?:(?<=\\\\)"|[^"])+"))+)\'|(?:(?:\'(?:(?<=\\\\)\'|[^\'])+\')(?:\\1(?:\'(?:(?<=\\\\)\'|[^\'])+\'))+))) (?= {{delimiter_other}} ))',
-		steps_decimal: '(?:(?<!:)(?::)(?<steps> {{signedNum}}) (?= {{delimiter_other}} ))',
-		steps_other: '(?:(?<!:)(?::)(?<steps> {{signedInt}}) (?= {{delimiter_other}} ))',
-		repeat: '(?:(?<=#)(?<repeat>\\d+))',
-		frequency: '(?:(?<=\\*)(?<freq>\\d+))',
-		stopexpression: '(?:@(?:[^:@]+?)) (?=(?:::)|[!$]|$)',
-		expression: '(?:::(?:[^:@]+?)) (?:@|[!$]|$)',
+		singexpr: '(?: \\s* (?: (?: [+-]? (?: {{integer}} | {{float}} ) ) | {{specialchars}} ) \\s* )',
+		start_decimal: '^(?:(?<lead_string> (?<lead_char> [0\\s\\._])\\k<lead_char>*)?(?<start>(?:{{signedNum}})) (?= {{delimiter}} ))',
+		start_alpha: '^(?:(?<start>[a-z]+) (?= {{delimiter}} ))',
+		start_dates: '^(?:(?:%)(?<start>\\d{2}|\\d{4})(?:(?:-(?<month>0?[1-9]|10|11|12))(?:-(?<day>0?[1-9]|[12][0-9]|30|31))?)?(?![\\d-]) (?= {{delimiter}} ))',
+		start_own: '^(?:(?<start> (;) (?:(?:[\\d\\w]+(?:\\2[\\d\\w]+)*) | {{doublestring}} | {{singlestring}} )) (?= {{delimiter}} ))',
+		steps_decimal: '(?:(?<!:)(?::)(?<steps> {{signedNum}}) (?= {{delimiter}} ))',
+		steps_other: '(?:(?<!:)(?::)(?<steps> {{signedInt}}) (?= {{delimiter}} ))',
+		repetition: '(?:(?<=#)(?<repeat>\\d+) (?= {{delimiter}} ))',
+		frequency: '(?:(?<=\\*)(?<freq>\\d+) (?= {{delimiter}} ))',
+		ownsequence: '(?:(?<ownseq> \\[(?:(?:(?<!\\\\)\\\\\\])|[^\\]])*\\] (?= {{delimiter}} ))',
+		expression: '(?: \\s* :: \\s* (?<expr> (?: {{singexpr}} (?: {{exproperator}} {{singexpr}} )* {{exprcompare}} {{singexpr}} (?: {{exproperator}} {{singexpr}} )* ) | {{bracketedexpression}} | {{doublestring}} | {{singlestring}}) (?= {{delimiter}} ))',
+		stopexpression: '(?: \\s* @ \\s* (?<stopexpr> (?: {{singexpr}} (?: {{exproperator}} {{singexpr}} )* {{exprcompare}} {{singexpr}} (?: {{exproperator}} {{singexpr}} )* ) | {{bracketedexpression}} | {{doublestring}} | {{singlestring}}) (?= {{delimiter}} ))',
 		outputOrder: '\$!? $',
 		outputSort: '!\$? $',
 	};
@@ -180,12 +193,12 @@ function getRegExpressions(): RuleTemplate {
 				value = value.replace(replace, ruleTemplate[rule]);
 			}
 		}
-		if (key in matchRules) {
-			matchRules[key] = value.replace(/\s/gi, '');
+		if (key in matchRule) {
+			matchRule[key] = value.replace(/\s/gi, '');
 		}
 	}
 
-	return matchRules
+	return matchRule
 }
 
 // get Config-Information and return

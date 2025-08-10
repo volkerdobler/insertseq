@@ -1,5 +1,5 @@
 {
-	"name": "insertsequence",
+	"name": "insertseq",
 	"version": "1.0.0",
 	"publisher": "volkerdobler",
 	"displayName": "Insert Sequences",
@@ -12,6 +12,7 @@
 		"expressions",
 		"frequencies",
 		"insertnums",
+		"insertseq",
 		"insertsequences"
 	],
 	"license": "MIT",
@@ -33,7 +34,7 @@
 	"main": "./dist/extension.js",
 	"contributes": {
 		"configuration": {
-			"title": "insertsequences",
+			"title": "insertseq",
 			"properties": {
 				"start": {
 					"type": "string",
@@ -45,10 +46,30 @@
 					"default": "1",
 					"description": "Default increment"
 				},
-				"language": {
+				"frequency": {
 					"type": "string",
-					"default": "de",
-					"description": "Default language format for months"
+					"default": "0",
+					"description": "Default frequency"
+				},
+				"repetition": {
+					"type": "string",
+					"default": "0",
+					"description": "Default repetition"
+				},
+				"stringFormat": {
+					"type": "string",
+					"default": "",
+					"description": "Default output format for strings"
+				},
+				"numberFormat": {
+					"type": "string",
+					"default": "",
+					"description": "Default output format for numbers"
+				},
+				"dateFormat": {
+					"type": "string",
+					"default": "dd.MM.yyyy",
+					"description": "Default output format for dates"
 				},
 				"insertOrder": {
 					"type": "string",
@@ -65,9 +86,14 @@
 						"reverse: insertion is from bottom most click up"
 					]
 				},
+				"language": {
+					"type": "string",
+					"default": "de",
+					"description": "Default language format for dates"
+				},
 				"century": {
-					"type": "number",
-					"default": 20,
+					"type": "string",
+					"default": "20",
 					"description": "Default century if year has only 2 digits - default: 20"
 				},
 				"centerString": {
@@ -99,11 +125,6 @@
 						"y: years"
 					]
 				},
-				"dateFormat": {
-					"type": "string",
-					"default": "dd.MM.yyyy",
-					"description": "Default date format"
-				},
 				"delimiter": {
 					"type": "string",
 					"default": " ",
@@ -113,18 +134,43 @@
 					"type": "string",
 					"default": "abcdefghijklmnopqrstuvwxyz",
 					"description": "Alphabet, for string successors"
+				},
+				"ownsequences": {
+					"type": "array",
+					"default": [
+						[
+							"Jan",
+							"Feb",
+							"Mar",
+							"Apr",
+							"May",
+							"Jun",
+							"Jul",
+							"Aug",
+							"Sep",
+							"Oct",
+							"Nov",
+							"Dec"
+						],
+						[
+							"foo",
+							"bar",
+							"foz"
+						]
+					],
+					"description": "Own defined Sequences (Array)"
 				}
 			}
 		},
 		"commands": [
 			{
-				"command": "extension.insertSequence",
+				"command": "extension.insertSeq",
 				"title": "Insert Sequences"
 			}
 		],
 		"keybindings": [
 			{
-				"command": "extension.insertSequence",
+				"command": "extension.insertSeq",
 				"key": "ctrl+alt+.",
 				"mac": "cmd+alt+.",
 				"when": "editorTextFocus"
@@ -132,14 +178,17 @@
 		]
 	},
 	"scripts": {
-		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p ./",
+		"check-types": "tsc --noEmit",
 		"lint": "eslint src --ext ts",
+		"compile": "tsc -p",
 		"pretest": "npm run compile && npm run lint",
-		"publish": "echo 'Publish fehlt noch'"
+		"package": "npm run check-types && node esbuild.js --production",
+		"vscode:prepublish": "npm run compile"
 	},
 	"devDependencies": {
+		"@types/assert": "^1.5.11",
 		"@types/vscode": "^1.89.0",
+		"assert": "^2.1.0",
 		"eslint": "^9.2.0",
 		"prettier": "^3.2.5"
 	},
@@ -147,7 +196,5 @@
 	"galleryBanner": {
 		"color": "#5757ff",
 		"theme": "dark"
-	},
-	"dependencies": {
 	}
 }
