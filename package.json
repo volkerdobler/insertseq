@@ -46,15 +46,15 @@
 					"default": "1",
 					"description": "Default increment"
 				},
-				"frequency": {
-					"type": "string",
-					"default": "0",
-					"description": "Default frequency"
-				},
 				"repetition": {
 					"type": "string",
 					"default": "0",
 					"description": "Default repetition"
+				},
+				"frequency": {
+					"type": "string",
+					"default": "0",
+					"description": "Default frequency"
 				},
 				"stringFormat": {
 					"type": "string",
@@ -190,7 +190,8 @@
 		"@types/vscode": "^1.89.0",
 		"assert": "^2.1.0",
 		"eslint": "^9.2.0",
-		"prettier": "^3.2.5"
+		"prettier": "^3.2.5",
+		"temporal-polyfill": "^0.3.0"
 	},
 	"icon": "insertsequences.png",
 	"galleryBanner": {
