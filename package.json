@@ -31,7 +31,7 @@
 	"categories": [
 		"Other"
 	],
-	"main": "./dist/extension.js",
+	"main": "./out/extension.js",
 	"contributes": {
 		"configuration": {
 			"title": "insertseq",
@@ -164,13 +164,13 @@
 		},
 		"commands": [
 			{
-				"command": "extension.insertSeq",
+				"command": "extension.insertseq",
 				"title": "Insert Sequences"
 			}
 		],
 		"keybindings": [
 			{
-				"command": "extension.insertSeq",
+				"command": "extension.insertseq",
 				"key": "ctrl+alt+.",
 				"mac": "cmd+alt+.",
 				"when": "editorTextFocus"
@@ -179,21 +179,24 @@
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
-		"lint": "eslint src --ext ts",
-		"compile": "tsc -p",
-		"pretest": "npm run compile && npm run lint",
+		"compile": "tsc -p ./",
+		"pretest": "npm run compile",
 		"package": "npm run check-types && node esbuild.js --production",
 		"vscode:prepublish": "npm run compile"
 	},
+	"dependencies": {
+		"d3-format": "^3.1.0"
+	},
 	"devDependencies": {
 		"@types/assert": "^1.5.11",
+		"@types/d3-format": "^3.0.4",
 		"@types/vscode": "^1.89.0",
 		"assert": "^2.1.0",
 		"eslint": "^9.2.0",
 		"prettier": "^3.2.5",
 		"temporal-polyfill": "^0.3.0"
 	},
-	"icon": "insertsequences.png",
+	"icon": "insertnums.png",
 	"galleryBanner": {
 		"color": "#5757ff",
 		"theme": "dark"
