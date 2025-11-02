@@ -1,13 +1,18 @@
 {
 	"compilerOptions": {
-		"module": "es2022",
-		"target": "ES2022",
-		"outDir": "out",
+		"target": "es2020",
+		"module": "commonjs",
 		"lib": ["ES2022", "DOM"],
-		"moduleResolution": "node",
-		"sourceMap": true,
+		"outDir": "out",
 		"rootDir": "src",
+		"sourceMap": true,
 		"strict": true
 	},
-	"exclude": ["node_modules"]
+	"include": [
+		"src/**/*.ts"
+	],
+	"exclude": [
+		"node_modules",
+		"**/*.spec.ts"
+	]
 }
