@@ -15,7 +15,7 @@ const debug = true;
 import * as vscode from 'vscode';
 // import * as assert from 'assert';
 import { Temporal } from 'temporal-polyfill';
-import { formatNumber } from './formatting';
+import * as formatting from './formatting';
 
 function printToConsole(str: string): void {
 	if (debug) console.log('Debugging: ' + str);
@@ -43,11 +43,13 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {}
 
 const appName: string = 'insertseq';
+const maxIterations = 1000000;
 
 interface RuleTemplate {
 	[key: string]: string;
 }
 
+// Input type based on the beginning of the input string
 type TInputType =
 	| 'decimal'
 	| 'hex'
@@ -59,58 +61,26 @@ type TInputType =
 	| 'own'
 	| null;
 
+// Parameter for the sequence creation functions
 type TParameter = {
 	origCursorPos: vscode.Selection[];
 	origTextSel: string[];
 	segments: RuleTemplate;
 	config: vscode.WorkspaceConfiguration;
-	currentAlphabet: string;
 };
 
-type TSpecialChars = {
-	origValue: string;
-	newValue: string;
-	previousValue: string;
-	start: string;
-	step: string;
-	number: string;
-	index: string;
+// Special replacements within expressions
+type TSpecialReplacementValues = {
+	origTextStr: string;
+	currentValueStr: string;
+	previousValueStr: string;
+	startStr: string;
+	stepStr: string;
+	numberOfSelectionsStr: string;
+	currentIndexStr: string;
 };
 
-// eingetippte Optionen (alles, was syntax erlaubt + zusätzlich der Type, der anhand des ersten Zeichens ermittelt wird)
-interface IInput {
-	type: TInputType;
-	start: string;
-	step: string;
-	repetition: string;
-	frequency: string;
-	expr: string;
-	stopexpr: string;
-	ownsequence: string;
-	format: string;
-}
-
-/*
-// alle konfigurierbaren Kriterien
-interface IConfig {
-	start: string,
-	step: string,
-	frequency: string,
-	repetition: string,
-	numberFormat: string,
-	stringFormat: string,
-	dateFormat: string,
-	insertOrder: string,
-	language: string,
-	century: string,
-	centerString: string,
-	dateStepUnit: string,
-	delimiter: string,
-	alphabet: string,
-	ownsequences: (string[] | number[] | ((i:number) => string))[],
-};
-*/
-
+// Default configuration values (will be overwritten by user settings)
 let previewDecorationType: vscode.TextEditorDecorationType | null = null;
 
 async function InsertSeqCommand(
@@ -123,6 +93,7 @@ async function InsertSeqCommand(
 	// expressions: [<cast>]|[~<format>::]<expr>[@<stopexpr>][$][!]
 	// own (war "months"): ;<start>[:<step>][#<repeat>][\*<frequency>][~<format>][@<stopexpr>][$][!]
 
+	// get active editor
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
 		return;
@@ -132,34 +103,31 @@ async function InsertSeqCommand(
 	// config entries in appName overwrites same config entries in "insertnums"
 	const config = Object.assign(
 		{},
-		vscode.workspace.getConfiguration('insertnums'),
 		vscode.workspace.getConfiguration(appName),
 	);
 
-	// read regular Expression for input string
-	const inputSegments = getRegExpressions();
+	// read regular Expression for segmenting the input string
+	const regexpInputSegments = getRegExpressions();
 
-	const currentAlphabet: string =
-		config.get('alphabet') || 'abcdefghijklmnopqrstuvwxyz';
-
-	// replace placeholder in regex with current alphabet
-	inputSegments['start_alpha'] = inputSegments['start_alpha'].replace(
-		'\\w',
-		`${currentAlphabet}`,
-	);
+	// get current alphabet from configuration and replace placeholder in regex
+	const currentAlphabet: string = config.get('alphabet') || '\u{0}';
+	regexpInputSegments['start_alpha'] = regexpInputSegments[
+		'start_alpha'
+	].replace('\\w', `${currentAlphabet}`);
 
 	// get current selected Text
 	const origTextSelections = editor.selections.map((selection) =>
 		editor.document.getText(selection),
 	);
 
-	editor.edit((builder) => {
+	// delete current selected Text (will be inserted later when input is cancelled). Wait for edit to finish because of the following cursor position reading.
+	await editor.edit((builder) => {
 		editor.selections.forEach((selection) => {
 			builder.replace(selection, '');
 		});
 	});
 
-	// get current (multi-)cursor positions
+	// get current (multi-)cursor positions (without original selected Text)
 	const origCursorPositions = editor.selections.map(
 		(selection) => new vscode.Selection(selection.start, selection.start),
 	);
@@ -178,11 +146,10 @@ async function InsertSeqCommand(
 				{
 					origCursorPos: origCursorPositions,
 					origTextSel: origTextSelections,
-					segments: inputSegments,
+					segments: regexpInputSegments,
 					config: config,
-					currentAlphabet: currentAlphabet,
 				},
-				false,
+				'preview',
 			);
 			return '';
 		},
@@ -198,153 +165,12 @@ async function InsertSeqCommand(
 			{
 				origCursorPos: origCursorPositions,
 				origTextSel: origTextSelections,
-				segments: inputSegments,
+				segments: regexpInputSegments,
 				config: config,
-				currentAlphabet: currentAlphabet,
 			},
-			true,
+			'final',
 		);
 	});
-}
-
-function getRegExpressions(): RuleTemplate {
-	const matchRule: RuleTemplate = {
-		start_decimal: '', // start Wert bei Zahlen
-		start_alpha: '', // Start-Wert bei Buchstaben
-		start_date: '', // Start-Wert bei Datumseingabe
-		start_own: '', // Start-Wert bei eigenen Listen (string)
-		steps_decimal: '', // Schritte bei Zahlen (auch mit Nachkommastellen möglich)
-		steps_date: '', // Schritte bei einem Datum (es wird d, w, m oder y davor geschrieben, um zu sagen, welche Einheit die Steps sind)
-		steps_other: '', // Schritte bei anderen Typen (nur Ganzzahl)
-		format_decimal: '', // Formatierung der Zahlen
-		format_alpha: '',
-		format_date: '',
-		language: '',
-		repetition: '',
-		frequency: '',
-		startover: '', // startet von vorne, unabhängig von repetition und frequency
-		random: '',
-		ownsequence: '',
-		expression: '',
-		stopexpression: '',
-		outputOrder: '',
-		outputSort: '',
-	};
-
-	// String-Eingabe: (?:"(?:(?:(?<!\\\\)\\\\")|[^"])+")
-	// String-Eingabe: (?:\'(?:(?:(?<!\\\\)\\\\\')|[^\'])+\')
-	// Klammer-Eingabe: (?:\\((?:(?:(?<!\\\\)\\\\\\))|[^)])+\\))
-
-	// Special Chars in Expressions:
-	// _ ::= current value (before expression or value under current selection)
-	// s ::= value of <step>
-	// n ::= number of selections
-	// p ::= previous value se(last inserted)
-	// c ::= current value (only within expressions, includes value after expression)
-	// a ::= value of <start>
-	// i ::= counter, starting with 0 and increasing with each insertion
-	const ruleTemplate: RuleTemplate = {};
-	ruleTemplate.charStartDate = `%`;
-	ruleTemplate.charStartOwn = `;`;
-	ruleTemplate.charStartExpr = `|`;
-	ruleTemplate.charStartSteps = `:`;
-	ruleTemplate.charStartFormat = `~`;
-	ruleTemplate.charStartFrequency = `\\*`;
-	ruleTemplate.charStartRepetition = `#`;
-	ruleTemplate.charStartStartover = `##`;
-	ruleTemplate.charStartOwnSequence = `\\[`;
-	ruleTemplate.charStartExpression = `::`;
-	ruleTemplate.charStartStopExpression = `@`;
-	ruleTemplate.specialchars = `[_snpcai]`;
-	ruleTemplate.integer = `(?:[1-9]\\d*|0)`;
-	ruleTemplate.pointfloat = `(?: (?: [1-9]\\d*|0 )? \\. \\d+ )`;
-	ruleTemplate.doublestring = `(?:"
-												(?:
-														(?:
-															(?<!\\\\) \\\\"
-														)
-														|[^"]
-													)+" 
-												)`;
-	ruleTemplate.singlestring = `(?:\'(?:(?:(?<!\\\\)\\\\\')|[^\'])+\')`;
-	ruleTemplate.bracketedexpression = `(?:\\((?:(?:(?<!\\\\)\\\\\\))|[^)])+\\))`;
-	ruleTemplate.leadchars = `[0x\\s\\._]`;
-	ruleTemplate.delimiter = `(?:\\s*(?:[ {{charStartSteps}} {{charStartFormat}} {{charStartRepetition}} {{charStartFrequency}} {{charStartOwnSequence}} {{charStartStopExpression}} $ ! ] | $))`;
-	ruleTemplate.exponentfloat = `(?:(?:{{integer}} | {{pointfloat}}) [e] [+-]? \\d+)`;
-	ruleTemplate.float = `(?:{{pointfloat}} | {{exponentfloat}})`;
-	ruleTemplate.hexNum = `(?:0[x](?<hex>0|[1-9a-f][0-9a-f]*))`;
-	ruleTemplate.octNum = `(?:0[o](?<oct>0|[1-7][0-7]*))`;
-	ruleTemplate.binNum = `(?:0[b](?<bin>[01]+))`;
-	ruleTemplate.numeric = `(?:(?<int>{{integer}}) | (?<float>{{float}}))`;
-	ruleTemplate.exprtoken = `(?: \\s* (?: (?: [+-]? (?: {{integer}} | {{float}} ) ) | {{specialchars}} ) \\s* )`;
-	ruleTemplate.exproperator = `(?: \\s* (?:\\+|-|\\*|\\/|\\*\\*|mod|div) \\s* )`;
-	ruleTemplate.exprcompare = `(?:<=|<|>=|>|===|==)`;
-	ruleTemplate.language = `(?: (?<language> \\w{2,3}(?:-?\\w{2,3})? )`;
-	ruleTemplate.signedInt = `(?<int>[+-]? {{integer}})`;
-	ruleTemplate.signedNum = `(?:[+-]? (?:{{numeric}} | {{hexNum}} | {{octNum}} | {{binNum}}))`;
-	ruleTemplate.start_decimal = `^(?:(?<lead_string> (?<lead_char> {{leadchars}})\\k<lead_char>*)?(?<start>(?:{{signedNum}})) (?= {{delimiter}} ))`;
-	ruleTemplate.start_alpha = `^(?:(?<start>[\\w]+) (?= {{delimiter}} ))`;
-	ruleTemplate.start_date = `^(?:
-									(?:{{charStartDate}})
-									\\s*
-									(?<start>
-										(?<year>\\d{2}|\\d{4})
-										(?:
-											(?:-
-												(?<month>0?[1-9]|10|11|12)
-											)
-											(?:-
-												(?<day>0?[1-9]|[12][0-9]|30|31)
-											)?
-										)?
-									)
-									(?![\\d-])
-									(?:{{language}})? )
-									(?= {{delimiter}} )
-								)`;
-	ruleTemplate.start_expression = `^(?:(?:{{charStartExpr}})  \\s* (?= {{delimiter}} ))`;
-	ruleTemplate.start_own = `^(?: ({{charStartOwn}})  \\s* (?<start> (?:(?:[\\d\\w]+(?:\\1[\\d\\w]+)*) | {{doublestring}} | {{singlestring}} )) (?= {{delimiter}} ))`;
-	ruleTemplate.steps_decimal = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedNum}}) (?= {{delimiter}} ))`;
-	ruleTemplate.steps_date = `(?:
-									(?<!{{charStartSteps}})
-									(?:{{charStartSteps}})
-									\\s*
-									(?<date_unit>[dwmy])?
-									(?<steps> {{signedNum}})
-									(?= {{delimiter}} )
-								)`;
-	ruleTemplate.steps_other = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedInt}}) (?= {{delimiter}} ))`;
-	ruleTemplate.format_decimal = `(?: {{charStartFormat}} (?<format_decimal> (?<padding> {{leadchars}} )? (?<align> [<>^=] )? (?<sign> [ +-] )? (?<length> \\d+ ) (?<precision>\\.\\d+)? (?<type>[bcdeEfFgGnoxX%])? ) (?= {{delimiter}} ) )`;
-	ruleTemplate.format_alpha = `(?: {{charStartFormat}} (?<padding> {{leadchars}} )? (?<align> [<>^=] )? (?<length> \\d+ ) (?= {{delimiter}} ) )`;
-	ruleTemplate.format_date = `(?: {{charStartFormat}} (?<dateformat> .+) (?= {{delimiter}} ) )`;
-	ruleTemplate.frequency = `(?:(?:{{charStartFrequency}}) \\s* (?<freq>\\d+) (?= {{delimiter}} ))`;
-	ruleTemplate.repetition = `(?:(?<!{{charStartRepetition}})(?:{{charStartRepetition}}) \\s* (?<repeat>\\d+) (?= {{delimiter}} ))`;
-	ruleTemplate.startover = `(?:(?:{{charStartStartover}}) \\s* (?<startover>\\d+) (?= {{delimiter}} ))`;
-	ruleTemplate.random = `(: (:r \\s* (?<rndNumber> [+-]? \\d+)) (?= {{delimiter}}) )`;
-	ruleTemplate.ownsequence = `(?:(?:{{charStartOwnSequence}}) \\s* (?<ownseq> (?:(?:(?<!\\\\)\\\\\\])|[^\\]])*)\\] (?= {{delimiter}} ))`;
-	ruleTemplate.expression = `(?: {{charStartExpression}} \\s* (?<expr> (?: {{exprtoken}} (?: {{exproperator}} {{exprtoken}} )* {{exprcompare}} {{exprtoken}} (?: {{exproperator}} {{exprtoken}} )* ) | {{bracketedexpression}} | {{doublestring}} | {{singlestring}}) (?= {{delimiter}} ))`;
-	ruleTemplate.stopexpression = `(?: {{charStartStopExpression}} \\s* (?<stopexpr> (?: {{exprtoken}} (?: {{exproperator}} {{exprtoken}} )* {{exprcompare}} {{exprtoken}} (?: {{exproperator}} {{exprtoken}} )* ) | {{bracketedexpression}} | {{doublestring}} | {{singlestring}}) (?= {{delimiter}} ))`;
-	ruleTemplate.outputOrder = `\$!? $`;
-	ruleTemplate.outputSort = `!\$? $`;
-
-	for (let [key, value] of Object.entries(ruleTemplate)) {
-		while (value.indexOf('{{') > -1) {
-			const start: number = value.indexOf('{{');
-			const ende: number = value.indexOf('}}', start + 2) + 2;
-			const replace: string = value.slice(start, ende);
-			const rule: string = replace.slice(2, replace.length - 2);
-			if (rule in ruleTemplate) {
-				value = value.replace(replace, ruleTemplate[rule]);
-			} else {
-				value = value.replace(replace, '§NIX§');
-			}
-		}
-		if (key in matchRule) {
-			matchRule[key] = value.replace(/\s/gi, '');
-		}
-	}
-
-	return matchRule;
 }
 
 // Create new Sequence based on Input
@@ -353,162 +179,256 @@ function insertNewSequence(
 	input: string | undefined, // der eingegebene Text
 	currentSelection: string[] | null,
 	parameter: TParameter,
-	final: Boolean = true,
+	status: 'preview' | 'final' = 'final',
 ): string[] | null {
 	const currSeqFunction = getSequenceFunction(input, parameter);
 
-	const strList = currentSelection
-		? currentSelection.map((_, idx) => currSeqFunction(idx))
-		: [];
+	const strList: string[] = [];
+
+	for (let i = 0; i < maxIterations; i++) {
+		const res = currSeqFunction(i);
+		if (res.stopFunction) break;
+		strList.push(res.stringFunction);
+	}
 
 	// Verwende die gemeinsame previewDecorationType statt bei jeder Aufruf eine neue zu erstellen
 	if (!previewDecorationType) {
 		previewDecorationType = vscode.window.createTextEditorDecorationType({
-			after: { color: '#888', margin: '0 0 0 0' },
+			after: { color: parameter.config.previewColor, margin: '0 0 0 0' },
 		});
 	}
 
 	editor.setDecorations(previewDecorationType, []);
 
-	if (final) {
-		editor.setDecorations(previewDecorationType, []);
-		try {
-			previewDecorationType.dispose();
-		} catch {}
-		previewDecorationType = null;
-
-		editor
-			.edit(
+	switch (status) {
+		case 'preview':
+			// Vorschau mit Decorations
+			const decorations: vscode.DecorationOptions[] = [];
+			editor.edit(
 				function (builder) {
-					let selections: vscode.Selection[] = [];
 					currentSelection &&
-						currentSelection.forEach(function (selection, index) {
-							// new Selection(anchorLine: number, anchorCharacter: number, activeLine: number, activeCharacter: number)
-							let laenge = 0;
-							if (input != null) {
-								const currSel = new vscode.Selection(
-									parameter.origCursorPos[index].anchor.line,
-									parameter.origCursorPos[
-										index
-									].anchor.character,
-									parameter.origCursorPos[index].active.line,
-									parameter.origCursorPos[
-										index
-									].active.character,
-								);
-								builder.replace(currSel, strList[index]);
-								laenge = strList[index].length;
-							} else {
-								const currSel = new vscode.Selection(
-									parameter.origCursorPos[index].anchor.line,
-									parameter.origCursorPos[
-										index
-									].anchor.character,
-									parameter.origCursorPos[index].anchor.line,
-									parameter.origCursorPos[
-										index
-									].anchor.character,
-								);
-								builder.replace(
-									currSel,
-									parameter.origTextSel[index],
-								);
-								laenge = parameter.origTextSel[index].length;
-							}
-							// // Multi selection / multiple cursors
-							// selections.push(
-							// 	new vscode.Selection(
-							// 		new vscode.Position(
-							// 			parameter.origCursorPos[
-							// 				index
-							// 			].anchor.line,
-							// 			parameter.origCursorPos[
-							// 				index
-							// 			].anchor.character,
-							// 		),
-							// 		new vscode.Position(
-							// 			parameter.origCursorPos[
-							// 				index
-							// 			].anchor.line,
-							// 			parameter.origCursorPos[
-							// 				index
-							// 			].anchor.character,
-							// 		),
-							// 	),
-							// );
-						});
-					// optional: sichtbaren Bereich an erste Auswahl anpassen
-					// editor.selections = selections;
+						currentSelection.forEach(
+							function (selection, index, selections) {
+								if (index >= strList.length) return;
 
-					// editor.revealRange(
-					// 	editor.selections[0],
-					// 	vscode.TextEditorRevealType.InCenterIfOutsideViewport,
-					// );
+								let decoration: vscode.DecorationOptions = {
+									range: new vscode.Range(
+										parameter.origCursorPos[
+											index
+										].anchor.line,
+										parameter.origCursorPos[index].anchor
+											.character -
+											parameter.origTextSel[index].length,
+										parameter.origCursorPos[
+											index
+										].active.line,
+										parameter.origCursorPos[
+											index
+										].active.character,
+									),
+									renderOptions: {
+										after: {
+											contentText: strList[index].replace(
+												/\s/g,
+												'\u00A0',
+											),
+										},
+									},
+								};
+								if (
+									index === selections.length - 1 &&
+									strList.length > selections.length
+								) {
+									decoration = {
+										range: new vscode.Range(
+											parameter.origCursorPos[
+												index
+											].anchor.line,
+											parameter.origCursorPos[index]
+												.anchor.character -
+												parameter.origTextSel[index]
+													.length,
+											parameter.origCursorPos[
+												index
+											].active.line,
+											parameter.origCursorPos[
+												index
+											].active.character,
+										),
+										renderOptions: {
+											after: {
+												contentText: strList
+													.slice(index)
+													.join(
+														parameter.config
+															.delimiter,
+													)
+													.replace(/\s/g, '\u00A0'),
+											},
+										},
+									};
+								}
+								decorations.push(decoration);
+							},
+						);
 				},
 				{ undoStopBefore: false, undoStopAfter: false },
-			)
-			.then(
-				() => {
-					// defensive cleanup wenn edit erfolgreich war
-					try {
-						if (previewDecorationType) {
-							editor.setDecorations(previewDecorationType, []);
-							previewDecorationType.dispose();
-							previewDecorationType = null;
-						}
-					} catch {}
-				},
-				() => {
-					// in case of error also dispose to avoid leaking decoration types
-					try {
-						if (previewDecorationType) {
-							editor.setDecorations(previewDecorationType, []);
-							previewDecorationType.dispose();
-							previewDecorationType = null;
-						}
-					} catch {}
-				},
 			);
-	} else {
-		// Vorschau mit Decorations
-		const decorations: vscode.DecorationOptions[] = [];
-		editor.edit(
-			function (builder) {
-				currentSelection &&
-					currentSelection.forEach(function (selection, index) {
-						decorations.push({
-							range: new vscode.Range(
-								parameter.origCursorPos[index].anchor.line,
-								parameter.origCursorPos[index].anchor
-									.character -
-									parameter.origTextSel[index].length,
-								parameter.origCursorPos[index].active.line,
-								parameter.origCursorPos[index].active.character,
-							),
-							renderOptions: {
-								after: {
-									contentText: strList[index].replace(
-										/\s/g,
-										'\u00A0',
-									),
+			editor.setDecorations(previewDecorationType, decorations);
+			break;
+		case 'final':
+			editor.setDecorations(previewDecorationType, []);
+			try {
+				previewDecorationType.dispose();
+			} catch {}
+			previewDecorationType = null;
+
+			editor
+				.edit(
+					function (builder) {
+						currentSelection &&
+							currentSelection.forEach(
+								function (selection, index, selections) {
+									if (input != null) {
+										// Nur wenn Eingabe nicht abgebrochen wurde
+										if (index >= strList.length) return; // stop expression triggered
+
+										const currSel = new vscode.Selection(
+											parameter.origCursorPos[
+												index
+											].anchor.line,
+											parameter.origCursorPos[
+												index
+											].anchor.character,
+											parameter.origCursorPos[
+												index
+											].active.line,
+											parameter.origCursorPos[
+												index
+											].active.character,
+										);
+										let currentString = strList[index];
+
+										if (
+											index === selections.length - 1 &&
+											strList.length > selections.length
+										) {
+											builder.replace(
+												currSel,
+												strList
+													.slice(index)
+													.join(
+														parameter.config
+															.delimiter,
+													)
+													.replace(/\s/g, '\u00A0'),
+											);
+										} else {
+											builder.replace(
+												currSel,
+												strList[index],
+											);
+										}
+									} else {
+										// bei Abbruch der Eingabe: ursprünglichen Text wiederherstellen
+										const currSel = new vscode.Selection(
+											parameter.origCursorPos[
+												index
+											].anchor.line,
+											parameter.origCursorPos[
+												index
+											].anchor.character,
+											parameter.origCursorPos[
+												index
+											].anchor.line,
+											parameter.origCursorPos[
+												index
+											].anchor.character,
+										);
+										builder.replace(
+											currSel,
+											parameter.origTextSel[index],
+										);
+									}
+									// // Multi selection / multiple cursors
+									// selections.push(
+									// 	new vscode.Selection(
+									// 		new vscode.Position(
+									// 			parameter.origCursorPos[
+									// 				index
+									// 			].anchor.line,
+									// 			parameter.origCursorPos[
+									// 				index
+									// 			].anchor.character,
+									// 		),
+									// 		new vscode.Position(
+									// 			parameter.origCursorPos[
+									// 				index
+									// 			].anchor.line,
+									// 			parameter.origCursorPos[
+									// 				index
+									// 			].anchor.character,
+									// 		),
+									// 	),
+									// );
 								},
-							},
-						});
-					});
-			},
-			{ undoStopBefore: false, undoStopAfter: false },
-		);
-		editor.setDecorations(previewDecorationType, decorations);
+							);
+						// optional: sichtbaren Bereich an erste Auswahl anpassen
+						// editor.selections = selections;
+
+						// editor.revealRange(
+						// 	editor.selections[0],
+						// 	vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+						// );
+					},
+					{ undoStopBefore: false, undoStopAfter: false },
+				)
+				.then(
+					() => {
+						// defensive cleanup wenn edit erfolgreich war
+						try {
+							if (previewDecorationType) {
+								editor.setDecorations(
+									previewDecorationType,
+									[],
+								);
+								previewDecorationType.dispose();
+								previewDecorationType = null;
+							}
+						} catch {}
+					},
+					() => {
+						// in case of error also dispose to avoid leaking decoration types
+						try {
+							if (previewDecorationType) {
+								editor.setDecorations(
+									previewDecorationType,
+									[],
+								);
+								previewDecorationType.dispose();
+								previewDecorationType = null;
+							}
+						} catch {}
+					},
+				);
+			break;
 	}
+
 	return strList;
 }
 
 function getSequenceFunction(
 	input: string | undefined,
 	p: TParameter,
-): (i: number) => string {
+): (i: number) => {
+	stringFunction: string;
+	stopFunction: boolean;
+} {
 	// bei "undefined" wurde die Eingabe abgebrochen - überschreibe die bisherig (temporären) Eingaben
-	if (input == null) return (i) => '';
+	if (input == null) {
+		const retStr = { stringFunction: '', stopFunction: true };
+		return (i) => retStr;
+	}
 
 	const inputType: TInputType = getInputType(input, p);
 
@@ -530,29 +450,27 @@ function getSequenceFunction(
 		case 'own':
 			return createOwnSeq(input, p);
 		default:
-			return (i) => '';
+			const retStr = { stringFunction: '', stopFunction: true };
+			return (i) => retStr;
 	}
 }
 
 function getInputType(input: string, p: TParameter): TInputType | null {
 	let type: TInputType = null;
 
-	const alphabet = p.currentAlphabet || '';
+	const alphabet: string = p.config.get('start') || '';
 
 	// helper: regex-escape
 	const escapeForRegex = (s: string) =>
 		s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 
-	// Beispiel 1: alphabet als Prefix-String (matcht genau diese Buchstabenfolge)
-	// const reAlphabet = new RegExp('^' + escapeForRegex(alphabet), 'iu');
-
-	// Beispiel 2 (empfohlen wenn alphabet eine Menge von Ein-Zeichen-Einträgen ist):
 	// matcht, wenn das Input mit einem der Zeichen aus `alphabet` beginnt
 	const chars = Array.from(alphabet).map(escapeForRegex).join('');
 	const reAlphabetCharClass = new RegExp('^[' + chars + ']', 'iu');
 
 	// What kind of input is it (check regex from begin)
 	switch (true) {
+		// Hexadezimale Zahl
 		case /^(?:([x0\\s\\._])\1*)?[+-]?0x[0-9a-f]+/i.test(input):
 			type = 'hex';
 			break;
@@ -569,19 +487,23 @@ function getInputType(input: string, p: TParameter): TInputType | null {
 		case /^$/i.test(input):
 			type = 'decimal';
 			break;
-		// HEX Zahl
+		// Expression
 		case /^\|/i.test(input):
 			type = 'expression';
 			break;
+		// Alphabetische Zeichen
 		case reAlphabetCharClass.test(input):
 			type = 'alpha';
 			break;
+		// Datum
 		case /^%/i.test(input):
 			type = 'date';
 			break;
+		// eigene Sequenz
 		case /^&/i.test(input):
 			type = 'own';
 			break;
+		// kein Typ erkennbar
 		default:
 			type = null;
 	}
@@ -593,7 +515,7 @@ function createDecimalSeq(
 	input: string,
 	parameter: TParameter,
 	base: number,
-): (i: number) => string {
+): (i: number) => { stringFunction: string; stopFunction: boolean } {
 	// rules: RuleTemplate, selections: vscode.Selection[], config: vscode.WorkspaceConfiguration, base: number): (i : number) => string {
 
 	const start =
@@ -638,64 +560,84 @@ function createDecimalSeq(
 			parameter.config.get('format') ??
 			'');
 
-	const specialValues: TSpecialChars = {
-		origValue: '',
-		newValue: '',
-		previousValue: '',
-		start: '1', // start.toString(),
-		step: '1', // steps.toString(),
-		number: parameter.origCursorPos.length.toString(),
-		index: '',
+	const replacableValues: TSpecialReplacementValues = {
+		origTextStr: '',
+		currentValueStr: '',
+		previousValueStr: '',
+		startStr: parameter.config.get('start') || '1',
+		stepStr: parameter.config.get('step') || '1',
+		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
+		currentIndexStr: '',
 	};
 
 	return (i) => {
-		specialValues.origValue = parameter.origTextSel[i];
-		specialValues.index = i.toString();
-		const value =
+		let stopExpressionTriggered = false;
+
+		let value =
 			start +
 			steps * Math.trunc(((i % startover) % (freq * repe)) / freq);
-		// apply formatting if format string is given
-		if (format !== '') {
-			specialValues.newValue = formatNumber(value, format);
-		} else {
-			specialValues.newValue = value.toString(base);
-		}
 
-		// specialValues.newValue = String(1 + (1 * parseInt(((( i % 1) % (0 * 0)) / 0).toString(), base)));
+		replacableValues.origTextStr = parameter.origTextSel[i];
+		replacableValues.currentIndexStr = i.toString();
+		replacableValues.currentValueStr = value.toString(base);
+		replacableValues.previousValueStr =
+			i > 0
+				? (
+						start +
+						steps *
+							Math.trunc(
+								(((i - 1) % startover) % (freq * repe)) / freq,
+							)
+					).toString()
+				: '0';
 
 		// if expression exists, evaluate expression with current Value and replace newValue with result of expression.
 		// if expression does not lead to a number, the current / new value will not be changed
 		try {
-			let value = runExpression(replaceSpecialChars(expr, specialValues));
-			if (typeof value === 'number') {
-				specialValues.newValue = value.toString();
-			}
+			value =
+				Number(
+					runExpression(replaceSpecialChars(expr, replacableValues)),
+				) || value;
 		} catch {}
 
-		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
-		try {
-			let value = runExpression(
-				replaceSpecialChars(stopexpr, specialValues),
-			);
-			if (typeof value === 'boolean' && value === true) {
-				specialValues.newValue = '\u{0}';
+		if (stopexpr.length > 0) {
+			// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
+			try {
+				stopExpressionTriggered = Boolean(
+					runExpression(
+						replaceSpecialChars(stopexpr, replacableValues),
+					),
+				);
+			} catch {
+				stopExpressionTriggered = i >= parameter.origCursorPos.length;
 			}
-		} catch {}
+		} else {
+			stopExpressionTriggered = i >= parameter.origCursorPos.length;
+		}
 
-		// previous Value wird auf den aktuellen Wert gesetzt
-		specialValues.previousValue = specialValues.newValue;
-
-		return specialValues.newValue;
+		// apply formatting if format string is given and return formatted value
+		if (format !== '') {
+			return {
+				stringFunction: formatting.formatNumber(value, format),
+				stopFunction: stopExpressionTriggered,
+			};
+		} else {
+			return {
+				stringFunction: value.toString(base),
+				stopFunction: stopExpressionTriggered,
+			};
+		}
 	};
 }
 
 function createStringSeq(
 	input: string,
 	parameter: TParameter,
-): (i: number) => string {
+): (i: number) => { stringFunction: string; stopFunction: boolean } {
 	const start =
 		input.match(parameter.segments['start_alpha'])?.groups?.start || '';
-	if (start === '') return (i) => '\u{0}';
+	const defaultReturn = { stringFunction: '', stopFunction: true };
+	if (start === '') return (i) => defaultReturn;
 
 	const steps =
 		Number(input.match(parameter.segments['steps_other'])?.groups?.steps) ||
@@ -720,6 +662,9 @@ function createStringSeq(
 		'';
 	const expr =
 		input.match(parameter.segments['expression'])?.groups?.expr || '';
+	const format =
+		input.match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
+		'';
 
 	// support string or array in configuration
 	const alphabetRaw =
@@ -751,14 +696,14 @@ function createStringSeq(
 	});
 	const alphabetLen = alphabetArr.length;
 
-	const specialValues: TSpecialChars = {
-		origValue: '',
-		newValue: '',
-		previousValue: '',
-		start: start.toString(),
-		step: steps.toString(),
-		number: parameter.origCursorPos.length.toString(),
-		index: '',
+	const replacableValues: TSpecialReplacementValues = {
+		origTextStr: '',
+		currentValueStr: '',
+		previousValueStr: '',
+		startStr: parameter.config.get('start') || '1',
+		stepStr: parameter.config.get('step') || '1',
+		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
+		currentIndexStr: '',
 	};
 
 	// Unicode sichere Umwandlung von String zu Index
@@ -811,52 +756,71 @@ function createStringSeq(
 	const currentIndex = stringToIndex(start);
 
 	return (i) => {
-		specialValues.origValue = parameter.origTextSel[i];
-		specialValues.index = i.toString();
-		let out = indexToString(
-			Math.trunc(
-				currentIndex +
-					steps * (((i % startover) % (freq * repe)) / freq),
-			),
+		replacableValues.origTextStr = parameter.origTextSel[i];
+		replacableValues.currentIndexStr = i.toString();
+		replacableValues.currentValueStr = indexToString(
+			currentIndex +
+				steps * Math.trunc(((i % startover) % (freq * repe)) / freq),
 		);
+		replacableValues.previousValueStr =
+			i > 0
+				? indexToString(
+						currentIndex +
+							steps *
+								Math.trunc(
+									(((i - 1) % startover) % (freq * repe)) /
+										freq,
+								),
+					)
+				: '';
+
+		let value = indexToString(
+			currentIndex +
+				steps * Math.trunc(((i % startover) % (freq * repe)) / freq),
+		);
+		let stopExpr = false;
 
 		// if expression does not lead to a string, the current / new value will not be changed
 		try {
-			let value = runExpression(replaceSpecialChars(expr, specialValues));
-			if (typeof value === 'string') {
-				out = value;
-			}
+			value = String(
+				runExpression(replaceSpecialChars(expr, replacableValues)),
+			);
 		} catch {}
 
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
-		try {
-			let value = runExpression(
-				replaceSpecialChars(stopexpr, specialValues),
-			);
-			if (typeof value === 'boolean' && value === true) {
-				out = '\u{0}';
+		if (stopexpr.length > 0) {
+			try {
+				stopExpr = Boolean(
+					runExpression(
+						replaceSpecialChars(stopexpr, replacableValues),
+					),
+				);
+			} catch {
+				stopExpr = i >= parameter.origCursorPos.length;
 			}
-		} catch {}
-
-		// Wenn der Start komplett groß war -> Ausgabe in GROSS
-		if (startIsAllUpper && out !== '\u{0}') {
-			out = out.toUpperCase();
+		} else {
+			stopExpr = i >= parameter.origCursorPos.length;
 		}
 
-		specialValues.newValue = out;
-		// previous Value wird auf den aktuellen Wert gesetzt
-		specialValues.previousValue = specialValues.newValue;
+		// Wenn der Start komplett groß war -> Ausgabe in GROSS
+		if (startIsAllUpper && value !== '') {
+			value = value.toUpperCase();
+		}
 
-		return specialValues.newValue;
+		return {
+			stringFunction: formatting.formatString(value, format),
+			stopFunction: stopExpr,
+		};
 	};
 }
 
 function createDateSeq(
 	input: string,
 	parameter: TParameter,
-): (i: number) => string {
+): (i: number) => { stringFunction: string; stopFunction: boolean } {
 	const start = input.match(parameter.segments['start_date'])?.groups?.start;
-	if (!start) return (i) => '\u{0}';
+	const defaultReturn = { stringFunction: '', stopFunction: true };
+	if (!start) return (i) => defaultReturn;
 
 	let yearStr =
 		input.match(parameter.segments['start_date'])?.groups?.year ||
@@ -870,6 +834,7 @@ function createDateSeq(
 	const day =
 		Number(input.match(parameter.segments['start_date'])?.groups?.day) ||
 		Temporal.Now.plainDateISO().day;
+
 	const language =
 		input.match(parameter.segments['start_date'])?.groups?.language ||
 		parameter.config.get('language') ||
@@ -900,100 +865,259 @@ function createDateSeq(
 	const stopexpr =
 		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
 		'';
+	const format =
+		input.match(parameter.segments['format_date'])?.groups?.format_date ||
+		parameter.config.get('format') ||
+		'dd.MM.yyyy';
 
-	const instant = Temporal.PlainDate.from({
+	const instant = Temporal.PlainDateTime.from({
 		year: year,
 		month: month,
 		day: day,
+		hour: 0,
+		minute: 0,
+		second: 0,
+		millisecond: 0,
+		microsecond: 0,
+		nanosecond: 0,
 	});
 
-	const specialValues: TSpecialChars = {
-		origValue: '',
-		newValue: '',
-		previousValue: '',
-		start: start.toString(),
-		step: steps.toString(),
-		number: parameter.origCursorPos.length.toString(),
-		index: '',
+	const replacableValues: TSpecialReplacementValues = {
+		origTextStr: '',
+		currentValueStr: '',
+		previousValueStr: '',
+		startStr: parameter.config.get('start') || '1',
+		stepStr: parameter.config.get('step') || '1',
+		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
+		currentIndexStr: '',
 	};
 
 	return (i) => {
-		specialValues.origValue = parameter.origTextSel[i];
-		specialValues.index = i.toString();
+		replacableValues.origTextStr = parameter.origTextSel[i];
+		replacableValues.currentIndexStr = i.toString();
+		replacableValues.currentValueStr = '1';
+		replacableValues.previousValueStr = '1';
 
-		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
-		try {
-			let value = runExpression(
-				replaceSpecialChars(stopexpr, specialValues),
-			);
-			if (typeof value === 'boolean' && value === true) {
-				specialValues.newValue = '\u{0}';
-			}
-		} catch {}
-
-		let idx = Math.trunc(
-			steps * (((i % startover) % (freq * repe)) / freq),
-		);
+		let idx = steps * Math.trunc(((i % startover) % (freq * repe)) / freq);
 
 		if (idx >= 0) {
 			switch (unit) {
 				case 'w':
-					return instant.add({ weeks: idx }).toLocaleString(language);
-					break;
+					return {
+						stringFunction: formatting.formatTemporalDateTime(
+							instant.add({ weeks: idx }),
+							format,
+							language,
+						),
+						stopFunction: i >= parameter.origCursorPos.length,
+					};
 				case 'm':
-					return instant
-						.add({ months: idx })
-						.toLocaleString(language);
-					break;
+					return {
+						stringFunction: formatting.formatTemporalDateTime(
+							instant.add({ months: idx }),
+							format,
+							language,
+						),
+						stopFunction: i >= parameter.origCursorPos.length,
+					};
 				case 'y':
-					return instant.add({ years: idx }).toLocaleString(language);
-					break;
+					return {
+						stringFunction: formatting.formatTemporalDateTime(
+							instant.add({ years: idx }),
+							format,
+							language,
+						),
+						stopFunction: i >= parameter.origCursorPos.length,
+					};
 				default:
-					return instant.add({ days: idx }).toLocaleString(language);
+					return {
+						stringFunction: formatting.formatTemporalDateTime(
+							instant.add({ days: idx }),
+							format,
+							language,
+						),
+						stopFunction: i >= parameter.origCursorPos.length,
+					};
 			}
 		} else {
 			switch (unit) {
 				case 'w':
-					return instant
-						.subtract({ weeks: Math.abs(idx) })
-						.toLocaleString(language);
-					break;
+					return {
+						stringFunction: formatting.formatTemporalDateTime(
+							instant.subtract({ weeks: Math.abs(idx) }),
+							format,
+							language,
+						),
+						stopFunction: i >= parameter.origCursorPos.length,
+					};
 				case 'm':
-					return instant
-						.subtract({ months: Math.abs(idx) })
-						.toLocaleString(language);
-					break;
+					return {
+						stringFunction: formatting.formatTemporalDateTime(
+							instant.subtract({ months: Math.abs(idx) }),
+							format,
+							language,
+						),
+						stopFunction: i >= parameter.origCursorPos.length,
+					};
 				case 'y':
-					return instant
-						.subtract({ years: Math.abs(idx) })
-						.toLocaleString(language);
-					break;
+					return {
+						stringFunction: formatting.formatTemporalDateTime(
+							instant.subtract({ years: Math.abs(idx) }),
+							format,
+							language,
+						),
+						stopFunction: i >= parameter.origCursorPos.length,
+					};
 				default:
-					return instant
-						.subtract({ days: Math.abs(idx) })
-						.toLocaleString(language);
+					return {
+						stringFunction: formatting.formatTemporalDateTime(
+							instant.subtract({ days: Math.abs(idx) }),
+							format,
+							language,
+						),
+						stopFunction: i >= parameter.origCursorPos.length,
+					};
 			}
 		}
-
-		return '\u{0}';
 	};
 }
 
 function createExpressionSeq(
 	input: string,
 	parameter: TParameter,
-): (i: number) => string {
-	return (i) => '';
+): (i: number) => { stringFunction: string; stopFunction: boolean } {
+	// const retFunction = { stringFunction: '', stopFunction: true };
+	// return (i) => retFunction;
+
+	const expr =
+		input.match(parameter.segments['expression'])?.groups?.expr || '';
+	const stopexpr =
+		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
+		'';
+
+	const replacableValues: TSpecialReplacementValues = {
+		origTextStr: '',
+		currentValueStr: '',
+		previousValueStr: '',
+		startStr: parameter.config.get('start') || '1',
+		stepStr: parameter.config.get('step') || '1',
+		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
+		currentIndexStr: '',
+	};
+
+	return (i) => {
+		replacableValues.origTextStr = parameter.origTextSel[i];
+		replacableValues.previousValueStr = '';
+
+		if (i > 0) {
+			try {
+				replacableValues.currentIndexStr = (i - 1).toString();
+				replacableValues.previousValueStr = String(
+					runExpression(replaceSpecialChars(expr, replacableValues)),
+				);
+			} catch {
+				replacableValues.previousValueStr = '';
+			}
+		}
+
+		try {
+			replacableValues.currentIndexStr = i.toString();
+			replacableValues.currentValueStr = String(
+				runExpression(replaceSpecialChars(expr, replacableValues)),
+			);
+		} catch {
+			replacableValues.currentValueStr = '';
+		}
+
+		let stopExpr = false;
+
+		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
+		if (stopexpr.length > 0) {
+			try {
+				stopExpr = Boolean(
+					runExpression(
+						replaceSpecialChars(stopexpr, replacableValues),
+					),
+				);
+			} catch {
+				stopExpr = i >= parameter.origCursorPos.length;
+			}
+		} else {
+			stopExpr = i >= parameter.origCursorPos.length;
+		}
+
+		return {
+			stringFunction: replacableValues.currentValueStr,
+			stopFunction: stopExpr,
+		};
+	};
 }
 
 function createOwnSeq(
 	input: string,
 	parameter: TParameter,
-): (i: number) => string {
-	return (i) => '';
+): (i: number) => { stringFunction: string; stopFunction: boolean } {
+	type StartsOptions = {
+		/** Case-insensitive comparison (default: false) */
+		ignoreCase?: boolean;
+		/** Wenn true, gilt '' (leerer x) als Match für den ersten Eintrag; default: false ('' -> kein Match) */
+		emptyMatchesAll?: boolean;
+	};
+
+	function arrayStartsWithString(
+		x: string,
+		a: string[],
+		options?: StartsOptions,
+	): number {
+		const { ignoreCase = false, emptyMatchesAll = false } = options || {};
+
+		if (x == null) return -1;
+		if (x.length === 0 && !emptyMatchesAll) return -1;
+
+		if (ignoreCase) {
+			const lx = x.toLocaleLowerCase();
+			return a.findIndex((s) => s.toLocaleLowerCase().startsWith(lx));
+		} else {
+			return a.findIndex((s) => s.startsWith(x));
+		}
+	}
+
+	const ownSequences: string[][] = parameter.config.get('ownSequences') || [
+		[],
+	];
+
+	const sequenceInput =
+		input.match(parameter.segments['ownsequence'])?.groups?.ownseq || '';
+
+	let ownSeq: string[] = [];
+	let start = 0;
+
+	for (let i = 0; i < ownSequences.length; i++) {
+		let l = arrayStartsWithString(sequenceInput, ownSequences[i]);
+		if (l > -1) {
+			ownSeq = ownSequences[i];
+			start = l;
+			break;
+		}
+	}
+
+	return (i) => {
+		if (ownSeq.length === 0) {
+			return { stringFunction: '', stopFunction: true };
+		} else {
+			return {
+				stringFunction:
+					ownSeq[(start + i) % ownSeq.values.length] || '',
+				stopFunction: i >= parameter.origCursorPos.length,
+			};
+		}
+	};
 }
 
-function replaceSpecialChars(st: string, para: TSpecialChars): string {
+function replaceSpecialChars(
+	st: string,
+	para: TSpecialReplacementValues,
+): string {
 	// _ ::= current value (before expression or value under current selection)
 	// c ::= current value (only within expressions, includes value after expression)
 	// p ::= previous value (last inserted)
@@ -1003,17 +1127,209 @@ function replaceSpecialChars(st: string, para: TSpecialChars): string {
 	// i ::= counter, starting with 0 and increasing with each insertion
 
 	return st
-		.replace(/\b_\b/gi, para.origValue)
-		.replace(/\bc\b/gi, para.newValue)
-		.replace(/\bp\b/gi, para.previousValue)
-		.replace(/\ba\b/gi, para.start)
-		.replace(/\bs\b/gi, para.step)
-		.replace(/\bn\b/gi, para.number)
-		.replace(/\bi\b/gi, para.index);
+		.replace(/\b_\b/gi, para.origTextStr)
+		.replace(/\bc\b/gi, para.currentValueStr)
+		.replace(/\bp\b/gi, para.previousValueStr)
+		.replace(/\ba\b/gi, para.startStr)
+		.replace(/\bs\b/gi, para.stepStr)
+		.replace(/\bn\b/gi, para.numberOfSelectionsStr)
+		.replace(/\bi\b/gi, para.currentIndexStr);
 }
 
 function runExpression(str: string): any {
-	return new Function('return ' + str)();
+	printToConsole('Running expression: ' + str);
+	if (str[0] === '"' && str[str.length - 1] === '"') {
+		str = str.slice(1, -1);
+	}
+	if (str[0] === "'" && str[str.length - 1] === "'") {
+		str = str.slice(1, -1);
+	}
+	printToConsole('Stripped expression: ' + str);
+	printToConsole(
+		'Calculated expression: ' + new Function('return (' + str + ')')(),
+	);
+	return new Function('return (' + str + ')')();
+}
+
+// Get regular expressions for segmenting the input string
+function getRegExpressions(): RuleTemplate {
+	const matchRule: RuleTemplate = {
+		start_decimal: '', // start Wert bei Zahlen
+		start_alpha: '', // Start-Wert bei Buchstaben
+		start_date: '', // Start-Wert bei Datumseingabe
+		start_own: '', // Start-Wert bei eigenen Listen (string)
+		steps_decimal: '', // Schritte bei Zahlen (auch mit Nachkommastellen möglich)
+		steps_date: '', // Schritte bei einem Datum (es wird d, w, m oder y davor geschrieben, um zu sagen, welche Einheit die Steps sind)
+		steps_other: '', // Schritte bei anderen Typen (nur Ganzzahl)
+		format_decimal: '', // Formatierung der Zahlen
+		format_alpha: '',
+		format_date: '',
+		language: '',
+		repetition: '',
+		frequency: '',
+		startover: '', // startet von vorne, unabhängig von repetition und frequency
+		random: '',
+		ownsequence: '',
+		expression: '',
+		stopexpression: '',
+		outputOrder: '',
+		outputSort: '',
+	};
+
+	// String-Eingabe: (?:"(?:(?:(?<!\\\\)\\\\")|[^"])+")
+	// String-Eingabe: (?:\'(?:(?:(?<!\\\\)\\\\\')|[^\'])+\')
+	// Klammer-Eingabe: (?:\\((?:(?:(?<!\\\\)\\\\\\))|[^)])+\\))
+
+	// Special Chars in Expressions:
+	// _ ::= current value (before expression or value under current selection)
+	// s ::= value of <step>
+	// n ::= number of selections
+	// p ::= previous value se(last inserted)
+	// c ::= current value (only within expressions, includes value after expression)
+	// a ::= value of <start>
+	// i ::= counter, starting with 0 and increasing with each insertion
+	const ruleTemplate: RuleTemplate = {};
+	ruleTemplate.charStartDate = `%`;
+	ruleTemplate.charStartOwn = `;`;
+	ruleTemplate.charStartExpr = `|`;
+	ruleTemplate.charStartSteps = `:`;
+	ruleTemplate.charStartFormat = `~`;
+	ruleTemplate.charStartFrequency = `\\*`;
+	ruleTemplate.charStartRepetition = `#`;
+	ruleTemplate.charStartStartover = `##`;
+	ruleTemplate.charStartOwnSequence = `\\[`;
+	ruleTemplate.charStartExpression = `::`;
+	ruleTemplate.charStartStopExpression = `@`;
+	ruleTemplate.specialchars = `[_snpcai]`;
+	ruleTemplate.integer = `(?:[1-9]\\d*|0)`;
+	ruleTemplate.pointfloat = `(?: (?: [1-9]\\d*|0 )? \\. \\d+ )`;
+	ruleTemplate.doublestring = `(?:"
+									(?:
+										(?:
+											(?<!\\\\) \\\\"
+										)
+										|[^"]
+									)+" 
+								)`;
+	ruleTemplate.singlestring = `(?:\'
+									(?:
+										(?:
+											(?<!\\\\)\\\\\'
+										)
+										|[^\']
+									)+\'
+								)`;
+	ruleTemplate.bracketedexpression = `(?:\\(
+											(?:
+												(?:
+													(?<!\\\\)\\\\\\)
+												)
+												|[^)]
+											)+\\)
+										)`;
+	ruleTemplate.leadchars = `[0x\\s\\._]`;
+	ruleTemplate.delimiterChars = `{{charStartSteps}} {{charStartFormat}} {{charStartRepetition}} {{charStartFrequency}} {{charStartOwnSequence}} {{charStartStopExpression}} $ !`;
+	ruleTemplate.delimiter = `(?:\\s*(?:[ {{delimiterChars}} ] | $))`;
+	ruleTemplate.exponentfloat = `(?:(?:{{integer}} | {{pointfloat}}) [e] [+-]? \\d+)`;
+	ruleTemplate.float = `(?:{{pointfloat}} | {{exponentfloat}})`;
+	ruleTemplate.hexNum = `(?:0[x](?<hex>0|[1-9a-f][0-9a-f]*))`;
+	ruleTemplate.octNum = `(?:0[o](?<oct>0|[1-7][0-7]*))`;
+	ruleTemplate.binNum = `(?:0[b](?<bin>[01]+))`;
+	ruleTemplate.numeric = `(?:(?<int>{{integer}}) | (?<float>{{float}}))`;
+	ruleTemplate.exprtoken = `(?: 
+								\\s*\\b
+								(?:
+									(?: [+-]?
+										(?: {{integer}} | {{float}} )
+									)
+									| {{specialchars}}
+								)
+								\\b\\s*
+							)`;
+	ruleTemplate.exproperator = `(?: \\s* (?:\\+|-|\\*|\\/|\\*\\*|mod|div) \\s* )`;
+	ruleTemplate.exprcompare = `(?:<=|<|>=|>|===|==)`;
+	ruleTemplate.language = `(?: (?<language> \\w{2,3}(?:-?\\w{2,3})? )`;
+	ruleTemplate.signedInt = `(?<int>[+-]? {{integer}})`;
+	ruleTemplate.signedNum = `(?:[+-]? (?:{{numeric}} | {{hexNum}} | {{octNum}} | {{binNum}}))`;
+	ruleTemplate.start_decimal = `^(?:(?<lead_string> (?<lead_char> {{leadchars}})\\k<lead_char>*)?(?<start>(?:{{signedNum}})) (?= {{delimiter}} ))`;
+	ruleTemplate.start_alpha = `^(?:(?<start>[\\w]+) (?= {{delimiter}} ))`;
+	ruleTemplate.start_date = `^(?:
+									(?:{{charStartDate}})
+									\\s*
+									(?<start>
+										(?<year>\\d{2}|\\d{4})
+										(?:
+											(?:-
+												(?<month>0?[1-9]|10|11|12)
+											)
+											(?:-
+												(?<day>0?[1-9]|[12][0-9]|30|31)
+											)?
+										)?
+									)
+									(?![\\d-])
+									(?:{{language}})? )
+									(?= {{delimiter}} )
+								)`;
+	ruleTemplate.start_expression = `^(?:(?:{{charStartExpr}}) \\s* (?= {{delimiter}} ))`;
+	ruleTemplate.start_own = `^(?: ({{charStartOwn}})  \\s* (?<start> (?:(?:[\\d\\w]+(?:\\1[\\d\\w]+)*) | {{doublestring}} | {{singlestring}} )) (?= {{delimiter}} ))`;
+	ruleTemplate.steps_decimal = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedNum}}) (?= {{delimiter}} ))`;
+	ruleTemplate.steps_date = `(?:
+									(?<!{{charStartSteps}})
+									(?:{{charStartSteps}})
+									\\s*
+									(?<date_unit>[dwmy])?
+									(?<steps> {{signedNum}})
+									(?= {{delimiter}} )
+								)`;
+	ruleTemplate.steps_other = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedInt}}) (?= {{delimiter}} ))`;
+	ruleTemplate.format_decimal = `(?: {{charStartFormat}} (?<format_decimal> (?<padding> {{leadchars}} )? (?<align> [<>^=] )? (?<sign> [ +-] )? (?<length> \\d+ ) (?<precision>\\.\\d+)? (?<type>[bcdeEfFgGnoxX%])? ) (?= {{delimiter}} ) )`;
+	ruleTemplate.format_alpha = `(?: {{charStartFormat}} (?<padding> {{leadchars}} )? (?<align> [<>^=] )? (?<length> \\d+ ) (?= {{delimiter}} ) )`;
+	ruleTemplate.format_date = `(?: {{charStartFormat}} (?<dateformat> .+) (?= {{delimiter}} ) )`;
+	ruleTemplate.frequency = `(?:(?:{{charStartFrequency}}) \\s* (?<freq>\\d+) (?= {{delimiter}} ))`;
+	ruleTemplate.repetition = `(?:(?<!{{charStartRepetition}})(?:{{charStartRepetition}}) \\s* (?<repeat>\\d+) (?= {{delimiter}} ))`;
+	ruleTemplate.startover = `(?:(?:{{charStartStartover}}) \\s* (?<startover>\\d+) (?= {{delimiter}} ))`;
+	ruleTemplate.random = `(?: (?: r \\s* (?<rndNumber> [+-]? \\d+)) (?= {{delimiter}}) )`;
+	ruleTemplate.ownsequence = `(?:(?:{{charStartOwnSequence}}) \\s* (?<ownseq> (?:(?:(?<!\\\\)\\\\\\])|[^\\]])*)\\] (?= {{delimiter}} ))`;
+	ruleTemplate.expression = `(?: {{charStartExpression}} \\s* 
+								(?<expr>
+									(.+)
+									| ".+"
+									| '.+'
+									| .+
+								)
+								(?= {{delimiter}} )
+							)`;
+	ruleTemplate.stopexpression = `(?: {{charStartStopExpression}} \\s* 
+									(?<stopexpr>
+										(.+)
+										| ".+"
+										| '.+'
+										| .+
+									)
+									(?= {{delimiter}} )
+								)`;
+	ruleTemplate.outputOrder = `\$!? $`;
+	ruleTemplate.outputSort = `!\$? $`;
+
+	for (let [key, value] of Object.entries(ruleTemplate)) {
+		while (value.indexOf('{{') > -1) {
+			const start: number = value.indexOf('{{');
+			const ende: number = value.indexOf('}}', start + 2) + 2;
+			const replace: string = value.slice(start, ende);
+			const rule: string = replace.slice(2, replace.length - 2);
+			if (rule in ruleTemplate) {
+				value = value.replace(replace, ruleTemplate[rule]);
+			} else {
+				value = value.replace(replace, '§NIX§');
+			}
+		}
+		if (key in matchRule) {
+			matchRule[key] = value.replace(/\s/gi, '');
+		}
+	}
+
+	return matchRule;
 }
 
 /*

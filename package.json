@@ -36,42 +36,47 @@
 		"configuration": {
 			"title": "insertseq",
 			"properties": {
-				"start": {
+				"insertseq.start": {
 					"type": "string",
 					"default": "1",
 					"description": "Default start"
 				},
-				"step": {
+				"insertseq.step": {
 					"type": "string",
 					"default": "1",
 					"description": "Default increment"
 				},
-				"repetition": {
+				"insertseq.repetition": {
 					"type": "string",
-					"default": "0",
+					"default": "",
 					"description": "Default repetition"
 				},
-				"frequency": {
+				"insertseq.frequency": {
 					"type": "string",
-					"default": "0",
+					"default": "1",
 					"description": "Default frequency"
 				},
-				"stringFormat": {
+				"insertseq.startover": {
+					"type": "string",
+					"default": "",
+					"description": "Start sequence from beginning, independent of repetition and frequency"
+				},
+				"insertseq.stringFormat": {
 					"type": "string",
 					"default": "",
 					"description": "Default output format for strings"
 				},
-				"numberFormat": {
+				"insertseq.numberFormat": {
 					"type": "string",
 					"default": "",
 					"description": "Default output format for numbers"
 				},
-				"dateFormat": {
+				"insertseq.dateFormat": {
 					"type": "string",
 					"default": "dd.MM.yyyy",
 					"description": "Default output format for dates"
 				},
-				"insertOrder": {
+				"insertseq.insertOrder": {
 					"type": "string",
 					"default": "cursor",
 					"description": "Default order of insertion",
@@ -86,17 +91,17 @@
 						"reverse: insertion is from bottom most click up"
 					]
 				},
-				"language": {
+				"insertseq.language": {
 					"type": "string",
 					"default": "de",
 					"description": "Default language format for dates"
 				},
-				"century": {
+				"insertseq.century": {
 					"type": "string",
 					"default": "20",
 					"description": "Default century if year has only 2 digits - default: 20"
 				},
-				"centerString": {
+				"insertseq.centerString": {
 					"type": "string",
 					"default": "l",
 					"enum": [
@@ -108,7 +113,7 @@
 						"r: e.g. a 1 char string centered in a 4 char field is right oriented (placed at position 3)"
 					]
 				},
-				"dateStepUnit": {
+				"insertseq.dateStepUnit": {
 					"type": "string",
 					"default": "d",
 					"description": "Default unit as date step",
@@ -125,17 +130,22 @@
 						"y: years"
 					]
 				},
-				"delimiter": {
+				"insertseq.delimiter": {
 					"type": "string",
-					"default": " ",
-					"description": "Delimiter, if no newlines should be inserted"
+					"default": "\n",
+					"description": "Delimiter, for additional insertations"
 				},
-				"alphabet": {
+				"insertseq.previewColor": {
+					"type": "string",
+					"default": "#888888",
+					"description": "Color of preview decoration"
+				},
+				"insertseq.alphabet": {
 					"type": "string",
 					"default": "abcdefghijklmnopqrstuvwxyz",
 					"description": "Alphabet, for string successors"
 				},
-				"ownsequences": {
+				"insertseq.ownsequences": {
 					"type": "array",
 					"default": [
 						[
