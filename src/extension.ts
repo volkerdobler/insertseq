@@ -7,13 +7,12 @@ Version 1.0 is completely new written and additional features are added.
 
 Volker Dobler
 original from May 2020
-rewritten August 2025
+rewritten November 2025
 */
 
 const debug = true;
 
 import * as vscode from 'vscode';
-// import * as assert from 'assert';
 import { Temporal } from 'temporal-polyfill';
 import * as formatting from './formatting';
 
@@ -43,7 +42,6 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {}
 
 const appName: string = 'insertseq';
-const maxIterations = 1000000;
 
 interface RuleTemplate {
 	[key: string]: string;
@@ -61,8 +59,11 @@ type TInputType =
 	| 'own'
 	| null;
 
+type TStatus = 'preview' | 'final';
+
 // Parameter for the sequence creation functions
 type TParameter = {
+	editor: vscode.TextEditor;
 	origCursorPos: vscode.Selection[];
 	origTextSel: string[];
 	segments: RuleTemplate;
@@ -132,25 +133,20 @@ async function InsertSeqCommand(
 		(selection) => new vscode.Selection(selection.start, selection.start),
 	);
 
-	// start with current selected Text which will be overwritten
-	let currentSelection: string[] | null = origTextSelections;
+	// global parameter for sequence creation which will be passed to insertNewSequence()
+	const parameter: TParameter = {
+		editor: editor,
+		origCursorPos: origCursorPositions,
+		origTextSel: origTextSelections,
+		segments: regexpInputSegments,
+		config: config,
+	};
 
 	const inputOptions: vscode.InputBoxOptions = {
 		placeHolder:
-			'[<start>][:<step>][#<repetition>][*<frequency>][~<format>][[<ownselection>]][r[+]<random>][::<expr>][@<stopexpr>][$][!]',
+			'[<start>][:<step>][*<frequency>][#<repeat>][##startover][~<format>][;predefinedText|[<ownselection>]][r[+]<random>][::<expr>][@<stopexpr>][$][!]',
 		validateInput: function (input) {
-			currentSelection = insertNewSequence(
-				editor,
-				input,
-				currentSelection,
-				{
-					origCursorPos: origCursorPositions,
-					origTextSel: origTextSelections,
-					segments: regexpInputSegments,
-					config: config,
-				},
-				'preview',
-			);
+			insertNewSequence(input, parameter, 'preview');
 			return '';
 		},
 	};
@@ -158,263 +154,333 @@ async function InsertSeqCommand(
 	vscode.window.showInputBox(inputOptions).then(function (
 		input: string | undefined,
 	) {
-		currentSelection = insertNewSequence(
-			editor,
-			input,
-			currentSelection,
-			{
-				origCursorPos: origCursorPositions,
-				origTextSel: origTextSelections,
-				segments: regexpInputSegments,
-				config: config,
-			},
-			'final',
-		);
+		insertNewSequence(input, parameter, 'final');
 	});
 }
 
 // Create new Sequence based on Input
 function insertNewSequence(
-	editor: vscode.TextEditor,
 	input: string | undefined, // der eingegebene Text
-	currentSelection: string[] | null,
 	parameter: TParameter,
-	status: 'preview' | 'final' = 'final',
-): string[] | null {
+	status: TStatus,
+): void {
+	// get current sequence function based on input type
 	const currSeqFunction = getSequenceFunction(input, parameter);
 
+	// generate new sequence strings (up to stop expression or maxInsertions)
 	const strList: string[] = [];
-
-	for (let i = 0; i < maxIterations; i++) {
+	for (
+		let i = 0;
+		i < (Number(parameter.config.get('maxInsertions')) || 1000);
+		i++
+	) {
 		const res = currSeqFunction(i);
 		if (res.stopFunction) break;
 		strList.push(res.stringFunction);
 	}
 
-	// Verwende die gemeinsame previewDecorationType statt bei jeder Aufruf eine neue zu erstellen
+	const delimiter: string = parameter.config.get('delimiter') || '';
+	const newLine: boolean = delimiter === '';
+	const eolString =
+		parameter.editor.document.eol === vscode.EndOfLine.LF ? '\n' : '\r\n';
+
+	// define preview decoration type if not yet done
 	if (!previewDecorationType) {
 		previewDecorationType = vscode.window.createTextEditorDecorationType({
-			after: { color: parameter.config.previewColor, margin: '0 0 0 0' },
+			after: {
+				color: parameter.config.previewColor,
+				margin: '0 0 0 0',
+			},
 		});
 	}
-
-	editor.setDecorations(previewDecorationType, []);
+	parameter.editor.setDecorations(previewDecorationType, []);
 
 	switch (status) {
 		case 'preview':
 			// Vorschau mit Decorations
 			const decorations: vscode.DecorationOptions[] = [];
-			editor.edit(
-				function (builder) {
-					currentSelection &&
-						currentSelection.forEach(
-							function (selection, index, selections) {
-								if (index >= strList.length) return;
+			let addStr = '';
 
-								let decoration: vscode.DecorationOptions = {
-									range: new vscode.Range(
-										parameter.origCursorPos[
-											index
-										].anchor.line,
-										parameter.origCursorPos[index].anchor
-											.character -
-											parameter.origTextSel[index].length,
-										parameter.origCursorPos[
-											index
-										].active.line,
-										parameter.origCursorPos[
-											index
-										].active.character,
-									),
-									renderOptions: {
-										after: {
-											contentText: strList[index].replace(
-												/\s/g,
-												'\u00A0',
-											),
-										},
-									},
-								};
-								if (
-									index === selections.length - 1 &&
-									strList.length > selections.length
-								) {
-									decoration = {
-										range: new vscode.Range(
-											parameter.origCursorPos[
-												index
-											].anchor.line,
-											parameter.origCursorPos[index]
-												.anchor.character -
-												parameter.origTextSel[index]
-													.length,
-											parameter.origCursorPos[
-												index
-											].active.line,
-											parameter.origCursorPos[
-												index
-											].active.character,
-										),
-										renderOptions: {
-											after: {
-												contentText: strList
-													.slice(index)
-													.join(
-														parameter.config
-															.delimiter,
-													)
-													.replace(/\s/g, '\u00A0'),
-											},
-										},
-									};
-								}
-								decorations.push(decoration);
+			// for each created string, create a decoration. If the number of created strings is higher than the number of original cursors, new lines will be inserted.
+			strList.forEach((str, index) => {
+				// create decoration at original cursor position as far as original cursor positions exist
+				if (index < parameter.origCursorPos.length) {
+					let decoration = {
+						range: new vscode.Range(
+							parameter.origCursorPos[index].start.line,
+							parameter.origCursorPos[index].start.character,
+							parameter.origCursorPos[index].end.line,
+							parameter.origCursorPos[index].end.character,
+						),
+						renderOptions: {
+							after: {
+								contentText: str.replace(/\s/g, '\u00A0'),
 							},
-						);
-				},
-				{ undoStopBefore: false, undoStopAfter: false },
-			);
-			editor.setDecorations(previewDecorationType, decorations);
+						},
+					};
+					decorations.push(decoration);
+					addStr = str;
+					// decorations are only visible in previous selected multi-cursors
+					//
+					//				} else {
+					//					// insert additional decorations outside of selection
+					//					const lastPos =
+					//						parameter.origCursorPos[
+					//							parameter.origCursorPos.length - 1
+					//						];
+					//					const addIndex = index - parameter.origCursorPos.length + 1;
+					//
+					//					if (newLine) {
+					//						// insert decoration at new line as long as not end of document
+					//						if (
+					//							lastPos.start.line + addIndex <
+					//							parameter.editor.document.lineCount
+					//						) {
+					//							let decoration = {
+					//								range: new vscode.Range(
+					//									lastPos.start.line + addIndex,
+					//									0,
+					//									lastPos.start.line + addIndex,
+					//									0,
+					//								),
+					//								renderOptions: {
+					//									after: {
+					//										contentText: str.replace(
+					//											/\s/g,
+					//											'\u00A0',
+					//										),
+					//									},
+					//								},
+					//							};
+					//							decorations.push(decoration);
+					//						}
+					//					} else {
+					//						addStr += delimiter + str;
+					//					}
+				}
+			});
+			if (strList.length > parameter.origCursorPos.length && !newLine) {
+				const lastPos =
+					parameter.origCursorPos[parameter.origCursorPos.length - 1];
+
+				let decoration = {
+					range: new vscode.Range(
+						lastPos.start.line,
+						0,
+						lastPos.start.line,
+						0,
+					),
+					renderOptions: {
+						after: {
+							contentText: addStr.replace(/\s/g, '\u00A0'),
+						},
+					},
+				};
+				decorations[decorations.length - 1] = decoration;
+			}
+			parameter.editor.setDecorations(previewDecorationType, decorations);
 			break;
 		case 'final':
-			editor.setDecorations(previewDecorationType, []);
+			parameter.editor.setDecorations(previewDecorationType, []);
 			try {
 				previewDecorationType.dispose();
 			} catch {}
 			previewDecorationType = null;
 
-			editor
-				.edit(
-					function (builder) {
-						currentSelection &&
-							currentSelection.forEach(
-								function (selection, index, selections) {
-									if (input != null) {
-										// Nur wenn Eingabe nicht abgebrochen wurde
-										if (index >= strList.length) return; // stop expression triggered
+			parameter.editor.edit((builder) => {
+				let addStr = '';
 
-										const currSel = new vscode.Selection(
-											parameter.origCursorPos[
-												index
-											].anchor.line,
-											parameter.origCursorPos[
-												index
-											].anchor.character,
-											parameter.origCursorPos[
-												index
-											].active.line,
-											parameter.origCursorPos[
-												index
-											].active.character,
-										);
-										let currentString = strList[index];
+				strList.forEach((str, index) => {
+					// insert strings in original Selection
+					const maxIndex = newLine
+						? parameter.origCursorPos.length
+						: parameter.origCursorPos.length - 1;
+					if (index < maxIndex) {
+						const currSel = new vscode.Selection(
+							parameter.origCursorPos[index].start.line,
+							parameter.origCursorPos[index].start.character,
+							parameter.origCursorPos[index].end.line,
+							parameter.origCursorPos[index].end.character,
+						);
+						builder.replace(currSel, str.replace(/\s/g, '\u00A0'));
+					} else {
+						// insert additional insertions as newlines
+						if (newLine) {
+							// insert decoration at new line as long as not end of document
 
-										if (
-											index === selections.length - 1 &&
-											strList.length > selections.length
-										) {
-											builder.replace(
-												currSel,
-												strList
-													.slice(index)
-													.join(
-														parameter.config
-															.delimiter,
-													)
-													.replace(/\s/g, '\u00A0'),
-											);
-										} else {
-											builder.replace(
-												currSel,
-												strList[index],
-											);
-										}
-									} else {
-										// bei Abbruch der Eingabe: ursprünglichen Text wiederherstellen
-										const currSel = new vscode.Selection(
-											parameter.origCursorPos[
-												index
-											].anchor.line,
-											parameter.origCursorPos[
-												index
-											].anchor.character,
-											parameter.origCursorPos[
-												index
-											].anchor.line,
-											parameter.origCursorPos[
-												index
-											].anchor.character,
-										);
-										builder.replace(
-											currSel,
-											parameter.origTextSel[index],
-										);
-									}
-									// // Multi selection / multiple cursors
-									// selections.push(
-									// 	new vscode.Selection(
-									// 		new vscode.Position(
-									// 			parameter.origCursorPos[
-									// 				index
-									// 			].anchor.line,
-									// 			parameter.origCursorPos[
-									// 				index
-									// 			].anchor.character,
-									// 		),
-									// 		new vscode.Position(
-									// 			parameter.origCursorPos[
-									// 				index
-									// 			].anchor.line,
-									// 			parameter.origCursorPos[
-									// 				index
-									// 			].anchor.character,
-									// 		),
-									// 	),
-									// );
-								},
+							// at the end of document, insert additional lines
+							const currSel = new vscode.Position(
+								parameter.origCursorPos[maxIndex - 1].start
+									.line + 1,
+								0,
 							);
-						// optional: sichtbaren Bereich an erste Auswahl anpassen
-						// editor.selections = selections;
-
-						// editor.revealRange(
-						// 	editor.selections[0],
-						// 	vscode.TextEditorRevealType.InCenterIfOutsideViewport,
-						// );
-					},
-					{ undoStopBefore: false, undoStopAfter: false },
-				)
-				.then(
-					() => {
-						// defensive cleanup wenn edit erfolgreich war
-						try {
-							if (previewDecorationType) {
-								editor.setDecorations(
-									previewDecorationType,
-									[],
-								);
-								previewDecorationType.dispose();
-								previewDecorationType = null;
-							}
-						} catch {}
-					},
-					() => {
-						// in case of error also dispose to avoid leaking decoration types
-						try {
-							if (previewDecorationType) {
-								editor.setDecorations(
-									previewDecorationType,
-									[],
-								);
-								previewDecorationType.dispose();
-								previewDecorationType = null;
-							}
-						} catch {}
-					},
-				);
+							builder.insert(
+								currSel,
+								str.replace(/\s/g, '\u00A0') + eolString,
+							);
+						} else {
+							// insert additional strings with "delimiter"
+							addStr += str + delimiter;
+						}
+					}
+				});
+				if (addStr.length > 0) {
+					const lastPos =
+						parameter.origCursorPos[
+							parameter.origCursorPos.length - 1
+						];
+					const currSel = new vscode.Range(
+						lastPos.start.line,
+						lastPos.start.character,
+						lastPos.end.line,
+						lastPos.end.character,
+					);
+					builder.replace(
+						currSel,
+						addStr.slice(0, -1).replace(/\s/g, '\u00A0'),
+					);
+				}
+			});
+			//			editor
+			//				.edit(
+			//					function (builder) {
+			//						currentSequence &&
+			//							currentSequence.forEach(
+			//								function (selection, index, selections) {
+			//									if (input != null) {
+			//										// Nur wenn Eingabe nicht abgebrochen wurde
+			//										if (index >= strList.length) return; // stop expression triggered
+			//
+			//										const curPos =
+			//											index <
+			//											parameter.origCursorPos.length
+			//												? index
+			//												: parameter.origCursorPos
+			//														.length - 1;
+			//
+			//										const currSel = new vscode.Selection(
+			//											parameter.origCursorPos[
+			//												curPos
+			//											].anchor.line,
+			//											parameter.origCursorPos[
+			//												curPos
+			//											].anchor.character,
+			//											parameter.origCursorPos[
+			//												curPos
+			//											].active.line,
+			//											parameter.origCursorPos[
+			//												curPos
+			//											].active.character,
+			//										);
+			//
+			//										if (
+			//											index === selections.length - 1 &&
+			//											strList.length > selections.length
+			//										) {
+			//											builder.replace(
+			//												currSel,
+			//												strList
+			//													.slice(index)
+			//													.join(delimiter)
+			//													.replace(/\s/g, '\u00A0'),
+			//											);
+			//										} else {
+			//											builder.replace(
+			//												currSel,
+			//												strList[index],
+			//											);
+			//										}
+			//									} else {
+			//										// bei Abbruch der Eingabe: ursprünglichen Text wiederherstellen
+			//										printToConsole('Abbruch');
+			//										printToConsole(
+			//											`Selections: ${selections.join(', ')}`,
+			//										);
+			//										printToConsole(
+			//											`strList: ${strList.join(', ')}`,
+			//										);
+			//										const currSel = new vscode.Selection(
+			//											parameter.origCursorPos[
+			//												index
+			//											].anchor.line,
+			//											parameter.origCursorPos[
+			//												index
+			//											].anchor.character,
+			//											parameter.origCursorPos[
+			//												index
+			//											].anchor.line,
+			//											parameter.origCursorPos[
+			//												index
+			//											].anchor.character,
+			//										);
+			//										builder.replace(
+			//											currSel,
+			//											parameter.origTextSel[index],
+			//										);
+			//									}
+			//									// // Multi selection / multiple cursors
+			//									// selections.push(
+			//									// 	new vscode.Selection(
+			//									// 		new vscode.Position(
+			//									// 			parameter.origCursorPos[
+			//									// 				index
+			//									// 			].anchor.line,
+			//									// 			parameter.origCursorPos[
+			//									// 				index
+			//									// 			].anchor.character,
+			//									// 		),
+			//									// 		new vscode.Position(
+			//									// 			parameter.origCursorPos[
+			//									// 				index
+			//									// 			].anchor.line,
+			//									// 			parameter.origCursorPos[
+			//									// 				index
+			//									// 			].anchor.character,
+			//									// 		),
+			//									// 	),
+			//									// );
+			//								},
+			//							);
+			//						// optional: sichtbaren Bereich an erste Auswahl anpassen
+			//						// editor.selections = selections;
+			//
+			//						// editor.revealRange(
+			//						// 	editor.selections[0],
+			//						// 	vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+			//						// );
+			//					},
+			//					{ undoStopBefore: false, undoStopAfter: false },
+			//				)
+			//				.then(
+			//					() => {
+			//						// defensive cleanup wenn edit erfolgreich war
+			//						try {
+			//							if (previewDecorationType) {
+			//								editor.setDecorations(
+			//									previewDecorationType,
+			//									[],
+			//								);
+			//								previewDecorationType.dispose();
+			//								previewDecorationType = null;
+			//							}
+			//						} catch {}
+			//					},
+			//					() => {
+			//						// in case of error also dispose to avoid leaking decoration types
+			//						try {
+			//							if (previewDecorationType) {
+			//								editor.setDecorations(
+			//									previewDecorationType,
+			//									[],
+			//								);
+			//								previewDecorationType.dispose();
+			//								previewDecorationType = null;
+			//							}
+			//						} catch {}
+			//					},
+			//				);
 			break;
 	}
-
-	return strList;
 }
 
 function getSequenceFunction(
@@ -500,12 +566,12 @@ function getInputType(input: string, p: TParameter): TInputType | null {
 			type = 'date';
 			break;
 		// eigene Sequenz
-		case /^&/i.test(input):
+		case /^;/i.test(input):
 			type = 'own';
 			break;
-		// kein Typ erkennbar
+		// kein Typ erkennbar, dann nehme ich Dezimal an
 		default:
-			type = null;
+			type = 'decimal';
 	}
 
 	return type;
@@ -990,7 +1056,8 @@ function createExpressionSeq(
 	// return (i) => retFunction;
 
 	const expr =
-		input.match(parameter.segments['expression'])?.groups?.expr || '';
+		input.match(parameter.segments['start_expression'])?.groups?.start ||
+		'';
 	const stopexpr =
 		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
 		'';
@@ -1062,6 +1129,7 @@ function createOwnSeq(
 		ignoreCase?: boolean;
 		/** Wenn true, gilt '' (leerer x) als Match für den ersten Eintrag; default: false ('' -> kein Match) */
 		emptyMatchesAll?: boolean;
+		fullMatch?: boolean;
 	};
 
 	function arrayStartsWithString(
@@ -1069,36 +1137,70 @@ function createOwnSeq(
 		a: string[],
 		options?: StartsOptions,
 	): number {
-		const { ignoreCase = false, emptyMatchesAll = false } = options || {};
+		const {
+			ignoreCase = false,
+			emptyMatchesAll = false,
+			fullMatch = false,
+		} = options || {};
 
 		if (x == null) return -1;
 		if (x.length === 0 && !emptyMatchesAll) return -1;
 
-		if (ignoreCase) {
-			const lx = x.toLocaleLowerCase();
-			return a.findIndex((s) => s.toLocaleLowerCase().startsWith(lx));
-		} else {
-			return a.findIndex((s) => s.startsWith(x));
+		switch (true) {
+			case fullMatch && ignoreCase:
+				return a.findIndex(
+					(s) => s.toLocaleLowerCase() === x.toLocaleLowerCase(),
+				);
+			case ignoreCase:
+				return a.findIndex((s) =>
+					s.toLocaleLowerCase().startsWith(x.toLocaleLowerCase()),
+				);
+			case fullMatch:
+				return a.findIndex((s) => s === x);
+			default:
+				return a.findIndex((s) => s.startsWith(x));
 		}
 	}
 
-	const ownSequences: string[][] = parameter.config.get('ownSequences') || [
+	const ownSequences: string[][] = parameter.config.get('ownsequences') || [
 		[],
 	];
 
-	const sequenceInput =
-		input.match(parameter.segments['ownsequence'])?.groups?.ownseq || '';
+	const sequenceText =
+		input.match(parameter.segments['start_own'])?.groups?.start_own || '';
+	const sequenceSet =
+		input.match(parameter.segments['start_own'])?.groups?.ownseq || '';
+	const sequenceOptions =
+		input.match(parameter.segments['start_own'])?.groups?.ownoptions || '';
+
+	const searchOptions: StartsOptions = {
+		ignoreCase: sequenceOptions.toLocaleLowerCase().indexOf('i') > -1,
+		fullMatch: sequenceOptions.toLocaleLowerCase().indexOf('f') > -1,
+	};
 
 	let ownSeq: string[] = [];
 	let start = 0;
 
-	for (let i = 0; i < ownSequences.length; i++) {
-		let l = arrayStartsWithString(sequenceInput, ownSequences[i]);
-		if (l > -1) {
-			ownSeq = ownSequences[i];
-			start = l;
-			break;
+	if (sequenceText.length > 0) {
+		for (let i = 0; i < ownSequences.length; i++) {
+			let l = arrayStartsWithString(
+				sequenceText,
+				ownSequences[i],
+				searchOptions,
+			);
+			if (l > -1) {
+				ownSeq = ownSequences[i];
+				start = l;
+				break;
+			}
 		}
+	}
+	if (sequenceSet.length > 0) {
+		ownSeq = sequenceSet
+			.split(/\s*[;,]\s*/) // Split an Komma oder Semikolon mit optionalen Leerzeichen davor und danach
+			.filter(Boolean); // Entfernt leere Strings, falls vorhanden
+
+		start = 0;
 	}
 
 	return (i) => {
@@ -1106,8 +1208,7 @@ function createOwnSeq(
 			return { stringFunction: '', stopFunction: true };
 		} else {
 			return {
-				stringFunction:
-					ownSeq[(start + i) % ownSeq.values.length] || '',
+				stringFunction: ownSeq[(start + i) % ownSeq.length] || '',
 				stopFunction: i >= parameter.origCursorPos.length,
 			};
 		}
@@ -1137,17 +1238,12 @@ function replaceSpecialChars(
 }
 
 function runExpression(str: string): any {
-	printToConsole('Running expression: ' + str);
 	if (str[0] === '"' && str[str.length - 1] === '"') {
 		str = str.slice(1, -1);
 	}
 	if (str[0] === "'" && str[str.length - 1] === "'") {
 		str = str.slice(1, -1);
 	}
-	printToConsole('Stripped expression: ' + str);
-	printToConsole(
-		'Calculated expression: ' + new Function('return (' + str + ')')(),
-	);
 	return new Function('return (' + str + ')')();
 }
 
@@ -1158,6 +1254,7 @@ function getRegExpressions(): RuleTemplate {
 		start_alpha: '', // Start-Wert bei Buchstaben
 		start_date: '', // Start-Wert bei Datumseingabe
 		start_own: '', // Start-Wert bei eigenen Listen (string)
+		start_expression: '', // Start-Wert bei Ausdrücken
 		steps_decimal: '', // Schritte bei Zahlen (auch mit Nachkommastellen möglich)
 		steps_date: '', // Schritte bei einem Datum (es wird d, w, m oder y davor geschrieben, um zu sagen, welche Einheit die Steps sind)
 		steps_other: '', // Schritte bei anderen Typen (nur Ganzzahl)
@@ -1169,7 +1266,6 @@ function getRegExpressions(): RuleTemplate {
 		frequency: '',
 		startover: '', // startet von vorne, unabhängig von repetition und frequency
 		random: '',
-		ownsequence: '',
 		expression: '',
 		stopexpression: '',
 		outputOrder: '',
@@ -1191,7 +1287,7 @@ function getRegExpressions(): RuleTemplate {
 	const ruleTemplate: RuleTemplate = {};
 	ruleTemplate.charStartDate = `%`;
 	ruleTemplate.charStartOwn = `;`;
-	ruleTemplate.charStartExpr = `|`;
+	ruleTemplate.charStartExpr = `\\|`;
 	ruleTemplate.charStartSteps = `:`;
 	ruleTemplate.charStartFormat = `~`;
 	ruleTemplate.charStartFrequency = `\\*`;
@@ -1251,6 +1347,21 @@ function getRegExpressions(): RuleTemplate {
 	ruleTemplate.language = `(?: (?<language> \\w{2,3}(?:-?\\w{2,3})? )`;
 	ruleTemplate.signedInt = `(?<int>[+-]? {{integer}})`;
 	ruleTemplate.signedNum = `(?:[+-]? (?:{{numeric}} | {{hexNum}} | {{octNum}} | {{binNum}}))`;
+	ruleTemplate.ownsequence = `(?:
+									(?: {{charStartOwnSequence}} )
+									\\s*
+									(?<ownseq> 
+										(?:
+											(?:
+												(?<!\\\\)
+												\\\\\\]
+											)
+											|
+											[^\\]]
+										)*
+									)
+									\\]
+								)`;
 	ruleTemplate.start_decimal = `^(?:(?<lead_string> (?<lead_char> {{leadchars}})\\k<lead_char>*)?(?<start>(?:{{signedNum}})) (?= {{delimiter}} ))`;
 	ruleTemplate.start_alpha = `^(?:(?<start>[\\w]+) (?= {{delimiter}} ))`;
 	ruleTemplate.start_date = `^(?:
@@ -1271,8 +1382,30 @@ function getRegExpressions(): RuleTemplate {
 									(?:{{language}})? )
 									(?= {{delimiter}} )
 								)`;
-	ruleTemplate.start_expression = `^(?:(?:{{charStartExpr}}) \\s* (?= {{delimiter}} ))`;
-	ruleTemplate.start_own = `^(?: ({{charStartOwn}})  \\s* (?<start> (?:(?:[\\d\\w]+(?:\\1[\\d\\w]+)*) | {{doublestring}} | {{singlestring}} )) (?= {{delimiter}} ))`;
+	ruleTemplate.start_expression = `^(?:
+										(?:{{charStartExpr}})
+										\\s*
+										(?<start>.+)
+										(?= {{delimiter}} )
+									)`;
+	ruleTemplate.start_own = `^(?: 
+								( {{charStartOwn}} )
+								\\s*
+								(?:
+									(?:
+										(?:
+											(?<ownoptions>
+												(?: i|f|if|fi|I|F|IF|FI)
+											)
+											:
+										)?
+										(?<start_own> \\w+ | {{doublestring}} | {{singlestring}} )
+									)
+									|
+									(?: {{ownsequence}} )
+								)
+								(?= {{delimiter}} )
+							)`;
 	ruleTemplate.steps_decimal = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedNum}}) (?= {{delimiter}} ))`;
 	ruleTemplate.steps_date = `(?:
 									(?<!{{charStartSteps}})
@@ -1290,7 +1423,6 @@ function getRegExpressions(): RuleTemplate {
 	ruleTemplate.repetition = `(?:(?<!{{charStartRepetition}})(?:{{charStartRepetition}}) \\s* (?<repeat>\\d+) (?= {{delimiter}} ))`;
 	ruleTemplate.startover = `(?:(?:{{charStartStartover}}) \\s* (?<startover>\\d+) (?= {{delimiter}} ))`;
 	ruleTemplate.random = `(?: (?: r \\s* (?<rndNumber> [+-]? \\d+)) (?= {{delimiter}}) )`;
-	ruleTemplate.ownsequence = `(?:(?:{{charStartOwnSequence}}) \\s* (?<ownseq> (?:(?:(?<!\\\\)\\\\\\])|[^\\]])*)\\] (?= {{delimiter}} ))`;
 	ruleTemplate.expression = `(?: {{charStartExpression}} \\s* 
 								(?<expr>
 									(.+)

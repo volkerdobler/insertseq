@@ -32,6 +32,7 @@
 		"Other"
 	],
 	"main": "./out/extension.js",
+	"build": "./dist/extension.js",
 	"contributes": {
 		"configuration": {
 			"title": "insertseq",
@@ -132,13 +133,8 @@
 				},
 				"insertseq.delimiter": {
 					"type": "string",
-					"default": "\n",
+					"default": "",
 					"description": "Delimiter, for additional insertations"
-				},
-				"insertseq.previewColor": {
-					"type": "string",
-					"default": "#888888",
-					"description": "Color of preview decoration"
 				},
 				"insertseq.alphabet": {
 					"type": "string",
@@ -153,14 +149,14 @@
 							"Feb",
 							"Mar",
 							"Apr",
-							"May",
+							"Mai",
 							"Jun",
 							"Jul",
 							"Aug",
 							"Sep",
-							"Oct",
+							"Okt",
 							"Nov",
-							"Dec"
+							"Dez"
 						],
 						[
 							"foo",
@@ -168,7 +164,17 @@
 							"foz"
 						]
 					],
-					"description": "Own defined Sequences (Array)"
+					"description": "Own defined Sequences (Array of arrays)"
+				},
+				"insertseq.previewColor": {
+					"type": "string",
+					"default": "#888888",
+					"description": "Color of preview decoration"
+				},
+				"insertseq.maxInsertions": {
+					"type": "number",
+					"default": 10000,
+					"description": "Maximum number of insertions to avoid performance issues - internal variable, be aware what you are doing if you change it"
 				}
 			}
 		},
@@ -192,10 +198,12 @@
 		"compile": "tsc -p ./",
 		"pretest": "npm run compile",
 		"package": "npm run check-types && node esbuild.js --production",
-		"vscode:prepublish": "npm run compile"
+		"vscode:prepublish": "npm run compile",
+		"watch": "tsc -watch -p ./"
 	},
 	"dependencies": {
-		"d3-format": "^3.1.0"
+		"d3-format": "^3.1.0",
+		"temporal-polyfill": "^0.3.0"
 	},
 	"devDependencies": {
 		"@types/assert": "^1.5.11",
@@ -203,8 +211,7 @@
 		"@types/vscode": "^1.89.0",
 		"assert": "^2.1.0",
 		"eslint": "^9.2.0",
-		"prettier": "^3.2.5",
-		"temporal-polyfill": "^0.3.0"
+		"prettier": "^3.2.5"
 	},
 	"icon": "insertnums.png",
 	"galleryBanner": {
