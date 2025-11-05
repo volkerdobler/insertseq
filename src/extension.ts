@@ -15,6 +15,12 @@ const debug = true;
 import * as vscode from 'vscode';
 import { Temporal } from 'temporal-polyfill';
 import * as formatting from './formatting';
+import {
+	getHistory,
+	saveToHistory,
+	clearHistory,
+	deleteFromHistory,
+} from './history';
 
 function printToConsole(str: string): void {
 	if (debug) console.log('Debugging: ' + str);
@@ -25,15 +31,66 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand(
 			'extension.insertseq',
 			(value: string) => {
-				const editor = vscode.window.activeTextEditor;
-				if (!editor) {
-					return;
-				}
-
 				InsertSeqCommand(context, value);
 				printToConsole(
 					'Congratulations, extension "insertseq" is now active!',
 				);
+			},
+		),
+	);
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			'extension.insertseq.history',
+			(value: string) => {
+				InsertSeqHistory(context, value);
+				printToConsole(
+					'Congratulations, extension "insertseq.history" is now active!',
+				);
+			},
+		),
+	);
+
+	// Internal commands (not contributed in package.json) to allow keybindings while QuickPick is open
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			'insertseq._history.deleteActive',
+			async () => {
+				const qp = currentHistoryQuickPick;
+				if (!qp) return;
+				const active = qp.activeItems[0] as
+					| (vscode.QuickPickItem & { cmd?: string })
+					| undefined;
+
+				if (!active || !active.cmd) return;
+				await deleteFromHistory(context, active.cmd);
+				qp.items = qp.items.filter(
+					(i) => (i as any).cmd !== active.cmd,
+				);
+			},
+		),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			'insertseq._history.clearAll',
+			async () => {
+				const qp = currentHistoryQuickPick;
+				// Confirm before clearing
+				const ans = await vscode.window.showWarningMessage(
+					'Clear entire sequence history?',
+					{ modal: true },
+					'Clear',
+				);
+				if (ans !== 'Clear') return;
+				await clearHistory(context);
+				if (qp)
+					qp.items = [
+						{
+							label: '$(add) New sequence',
+							description: 'Start a new sequence',
+							cmd: '',
+						},
+					];
 			},
 		),
 	);
@@ -72,17 +129,22 @@ type TParameter = {
 
 // Special replacements within expressions
 type TSpecialReplacementValues = {
-	origTextStr: string;
 	currentValueStr: string;
+	valueAfterExpressionStr: string;
 	previousValueStr: string;
 	startStr: string;
 	stepStr: string;
 	numberOfSelectionsStr: string;
 	currentIndexStr: string;
+	origTextStr: string;
 };
 
 // Default configuration values (will be overwritten by user settings)
 let previewDecorationType: vscode.TextEditorDecorationType | null = null;
+// current shown history quickpick (if any) - used by delete/clear commands
+let currentHistoryQuickPick: vscode.QuickPick<
+	vscode.QuickPickItem & { cmd?: string }
+> | null = null;
 
 async function InsertSeqCommand(
 	context: vscode.ExtensionContext,
@@ -97,6 +159,84 @@ async function InsertSeqCommand(
 	// get active editor
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
+		vscode.window.showInformationMessage('No active editor!');
+		return;
+	}
+
+	// read config file
+	// config entries in appName overwrites same config entries in "insertnums"
+	const config = Object.assign(
+		{},
+		vscode.workspace.getConfiguration(appName),
+	);
+
+	// read regular Expression for segmenting the input string
+	const regexpInputSegments = getRegExpressions();
+
+	// get current alphabet from configuration and replace placeholder in regex
+	const currentAlphabet: string = config.get('alphabet') || '\u{0}';
+	regexpInputSegments['start_alpha'] = regexpInputSegments[
+		'start_alpha'
+	].replace('\\w', `${currentAlphabet}`);
+
+	// get current selected Text
+	const origTextSelections = editor.selections.map((selection) =>
+		editor.document.getText(selection),
+	);
+
+	// delete current selected Text (will be inserted later when input is cancelled). Wait for edit to finish because of the following cursor position reading.
+	await editor.edit((builder) => {
+		editor.selections.forEach((selection) => {
+			builder.replace(selection, '');
+		});
+	});
+
+	// get current (multi-)cursor positions (without original selected Text)
+	const origCursorPositions = editor.selections.map(
+		(selection) => new vscode.Selection(selection.start, selection.start),
+	);
+
+	// global parameter for sequence creation which will be passed to insertNewSequence()
+	const parameter: TParameter = {
+		editor: editor,
+		origCursorPos: origCursorPositions,
+		origTextSel: origTextSelections,
+		segments: regexpInputSegments,
+		config: config,
+	};
+
+	const inputOptions: vscode.InputBoxOptions = {
+		placeHolder:
+			'[<start>][:<step>][*<frequency>][#<repeat>][##startover][~<format>][;predefinedText|[<ownselection>]][r[+]<random>][::<expr>][@<stopexpr>][$][!]',
+		value: value,
+		validateInput: function (input) {
+			insertNewSequence(input, parameter, 'preview');
+			return '';
+		},
+	};
+
+	vscode.window.showInputBox(inputOptions).then(function (
+		input: string | undefined,
+	) {
+		insertNewSequence(input, parameter, 'final');
+		saveToHistory(context, input);
+	});
+}
+
+async function InsertSeqHistory(
+	context: vscode.ExtensionContext,
+	value: string,
+) {
+	// get active editor
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) {
+		return;
+	}
+
+	const history = getHistory(context);
+
+	if (history.length === 0) {
+		InsertSeqCommand(context, '');
 		return;
 	}
 
@@ -142,20 +282,147 @@ async function InsertSeqCommand(
 		config: config,
 	};
 
-	const inputOptions: vscode.InputBoxOptions = {
-		placeHolder:
-			'[<start>][:<step>][*<frequency>][#<repeat>][##startover][~<format>][;predefinedText|[<ownselection>]][r[+]<random>][::<expr>][@<stopexpr>][$][!]',
-		validateInput: function (input) {
-			insertNewSequence(input, parameter, 'preview');
-			return '';
-		},
-	};
-
-	vscode.window.showInputBox(inputOptions).then(function (
-		input: string | undefined,
-	) {
-		insertNewSequence(input, parameter, 'final');
+	// build QuickPick items: top 'New sequence', then history newest-first
+	const qp = vscode.window.createQuickPick<
+		vscode.QuickPickItem & { cmd: string }
+	>();
+	// expose current quickpick so internal commands (DEL / CTRL+DEL) can access it
+	currentHistoryQuickPick = qp;
+	const items: Array<
+		vscode.QuickPickItem & {
+			cmd: string;
+			buttons?: vscode.QuickInputButton[];
+		}
+	> = [];
+	items.push({
+		label: '$(add) New sequence',
+		description: 'Start a new sequence',
+		cmd: '',
 	});
+
+	// create items with a delete button each (trash icon)
+	for (const h of history) {
+		items.push({
+			label: h,
+			description: '',
+			cmd: h,
+			buttons: [
+				{
+					iconPath: new vscode.ThemeIcon('trash'),
+					tooltip: 'Delete this history entry',
+				} as any,
+			],
+		});
+	}
+
+	qp.items = items;
+	qp.placeholder = 'Choose "New sequence" or any of the last entries';
+	qp.matchOnDescription = true;
+
+	function schedulePreview(cmd: string | undefined) {
+		if (!cmd) {
+			// clear preview decorations
+			if (previewDecorationType)
+				parameter.editor.setDecorations(previewDecorationType, []);
+		} else {
+			// call preview
+			try {
+				insertNewSequence(cmd, parameter, 'preview');
+			} catch (e) {
+				console.error('preview error', e);
+			}
+		}
+	}
+
+	qp.onDidChangeActive((activeItems) => {
+		const active = activeItems[0];
+		if (!active || !active.cmd) {
+			schedulePreview(undefined);
+			return;
+		}
+		schedulePreview(active.cmd);
+	});
+
+	// handle clicking the per-item delete button
+	qp.onDidTriggerItemButton(async (e) => {
+		const item = e.item as vscode.QuickPickItem & { cmd?: string };
+		if (!item || !item.cmd) return;
+		// delete from storage
+		await deleteFromHistory(context, item.cmd);
+		// remove from quickpick items
+		qp.items = qp.items.filter((i) => (i as any).cmd !== item.cmd);
+		// clear preview if the deleted item was active
+		const active = qp.activeItems[0];
+		if (!active || !active.cmd) {
+			schedulePreview(undefined);
+		} else {
+			schedulePreview(active.cmd);
+		}
+	});
+
+	// add a toolbar Clear button to clear all history
+	qp.buttons = [
+		{
+			iconPath: new vscode.ThemeIcon('trash'),
+			tooltip: 'Clear all history',
+		} as any,
+	];
+	qp.onDidTriggerButton(async (button) => {
+		// Confirm
+		const ans = await vscode.window.showWarningMessage(
+			'Clear entire history?',
+			{ modal: true },
+			'Clear',
+		);
+		if (ans !== 'Clear') return;
+		await clearHistory(context);
+		// reset quickpick items to only New sequence
+		qp.items = [
+			{
+				label: '$(add) New sequence',
+				description: 'Start a new sequence',
+				cmd: '',
+			},
+		];
+		schedulePreview(undefined);
+	});
+
+	qp.onDidAccept(async () => {
+		const chosen = qp.activeItems[0];
+		if (!chosen) {
+			qp.hide();
+			return;
+		}
+
+		if (!chosen.cmd) {
+			// New sequence selected -> delegate to InsertSeqCommand
+			qp.hide();
+			await InsertSeqCommand(context, '');
+			return;
+		}
+
+		// history item selected -> final execution
+		qp.busy = true;
+		try {
+			insertNewSequence(chosen.cmd, parameter, 'final');
+			// save to history (will no-op if already present)
+			await saveToHistory(context, chosen.cmd);
+		} finally {
+			qp.busy = false;
+			qp.hide();
+		}
+	});
+
+	qp.onDidHide(() => {
+		// clear preview decorations
+		if (previewDecorationType)
+			parameter.editor.setDecorations(previewDecorationType, []);
+		qp.dispose();
+		// clear global reference
+		if (currentHistoryQuickPick === qp) currentHistoryQuickPick = null;
+	});
+
+	qp.show();
 }
 
 // Create new Sequence based on Input
@@ -627,13 +894,14 @@ function createDecimalSeq(
 			'');
 
 	const replacableValues: TSpecialReplacementValues = {
-		origTextStr: '',
 		currentValueStr: '',
+		valueAfterExpressionStr: '',
 		previousValueStr: '',
 		startStr: parameter.config.get('start') || '1',
 		stepStr: parameter.config.get('step') || '1',
 		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
 		currentIndexStr: '',
+		origTextStr: '',
 	};
 
 	return (i) => {
@@ -763,13 +1031,14 @@ function createStringSeq(
 	const alphabetLen = alphabetArr.length;
 
 	const replacableValues: TSpecialReplacementValues = {
-		origTextStr: '',
 		currentValueStr: '',
+		valueAfterExpressionStr: '',
 		previousValueStr: '',
 		startStr: parameter.config.get('start') || '1',
 		stepStr: parameter.config.get('step') || '1',
 		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
 		currentIndexStr: '',
+		origTextStr: '',
 	};
 
 	// Unicode sichere Umwandlung von String zu Index
@@ -949,13 +1218,14 @@ function createDateSeq(
 	});
 
 	const replacableValues: TSpecialReplacementValues = {
-		origTextStr: '',
 		currentValueStr: '',
+		valueAfterExpressionStr: '',
 		previousValueStr: '',
 		startStr: parameter.config.get('start') || '1',
 		stepStr: parameter.config.get('step') || '1',
 		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
 		currentIndexStr: '',
+		origTextStr: '',
 	};
 
 	return (i) => {
@@ -1063,13 +1333,14 @@ function createExpressionSeq(
 		'';
 
 	const replacableValues: TSpecialReplacementValues = {
-		origTextStr: '',
 		currentValueStr: '',
+		valueAfterExpressionStr: '', // only for stopexpression
 		previousValueStr: '',
 		startStr: parameter.config.get('start') || '1',
 		stepStr: parameter.config.get('step') || '1',
 		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
 		currentIndexStr: '',
+		origTextStr: '',
 	};
 
 	return (i) => {
@@ -1220,16 +1491,16 @@ function replaceSpecialChars(
 	para: TSpecialReplacementValues,
 ): string {
 	// _ ::= current value (before expression or value under current selection)
-	// c ::= current value (only within expressions, includes value after expression)
-	// p ::= previous value (last inserted)
+	// c ::= current value (only within stopexpression, includes value after expression)
+	// p ::= previous value (only for decimal, alpha, date and own sequences)
 	// a ::= value of <start>
 	// s ::= value of <step>
 	// n ::= number of selections
 	// i ::= counter, starting with 0 and increasing with each insertion
 
 	return st
-		.replace(/\b_\b/gi, para.origTextStr)
-		.replace(/\bc\b/gi, para.currentValueStr)
+		.replace(/\b_\b/gi, para.currentValueStr)
+		.replace(/\be\b/gi, para.currentValueStr)
 		.replace(/\bp\b/gi, para.previousValueStr)
 		.replace(/\ba\b/gi, para.startStr)
 		.replace(/\bs\b/gi, para.stepStr)
@@ -1296,7 +1567,7 @@ function getRegExpressions(): RuleTemplate {
 	ruleTemplate.charStartOwnSequence = `\\[`;
 	ruleTemplate.charStartExpression = `::`;
 	ruleTemplate.charStartStopExpression = `@`;
-	ruleTemplate.specialchars = `[_snpcai]`;
+	ruleTemplate.specialchars = `[_epasni]`;
 	ruleTemplate.integer = `(?:[1-9]\\d*|0)`;
 	ruleTemplate.pointfloat = `(?: (?: [1-9]\\d*|0 )? \\. \\d+ )`;
 	ruleTemplate.doublestring = `(?:"
@@ -1463,81 +1734,3 @@ function getRegExpressions(): RuleTemplate {
 
 	return matchRule;
 }
-
-/*
-		
-		
-		
-
-		function hasKey(obj: RuleTemplate, key: string): boolean {
-			return key in obj;
-		}
-
-		const ruleTemplate: RuleTemplate = {
-			integer: '[1-9]\\d* | 0',
-			hexdigits: '[1-9a-fA-F][0-9a-fA-F]*',
-			signedint: '[+-]? {{integer}}',
-			pointfloat: '({{integer}})? \\. \\d+ | {{integer}} \\.',
-			exponentfloat: '(?:{{integer}} | {{pointfloat}}) [eE] [+-]? \\d+',
-			float: '{{pointfloat}} | {{exponentfloat}}',
-			hexNum: '0[xX]{{hexdigits}}',
-			numeric: '{{integer}} | {{float}}',
-			signedNum: '([+-]? {{numeric}})|{{hexNum}}',
-			startNum:
-				'([+-]? (?<lead_char1> 0+|\\s+|\\.+|_+)? {{numeric}})|((?<lead_char2> 0+|\\s+|\\.+|_+)? [+-]? {{numeric}})|{{hexNum}}',
-			format:
-				'((?<format_padding> [^}}])? (?<format_align> [<>^=]))? (?<format_sign> [-+ ])? #? (?<format_filled> 0)? (?<format_integer> {{integer}})? (\\.(?<format_precision> \\d+))? (?<format_type> [bcdeEfFgGnoxX%])?',
-			alphastart: '[a-z]+ | [A-Z]+',
-			alphaformat:
-				'((?<alphaformat_padding>[^}}])? (?<alphaformat_align>[<>^])(?<alphaformat_correct> [lr])?)? ((?<alphaformat_integer>{{integer}}))?',
-			dateformat:
-				'(?:G{1,5}|y{1,5}|R{1,5}|u{1,5}|Q{1,5}|q{1,5}|M{1,5}|L{1,5}|w{1,2}|l{1,2}|d{1,2}|E{1,6}|i{1,5}|e{1,6}|c{1,6}|a{1,5}|b{1,5}|B{1,5}|h{1,2}|H{1,2}|k{1,2}|K{1,2}|m{1,2}|s{1,2}|S{1,4}|X{1,5}|x{1,5}|O{1,4}|z{1,4}|t{1,2}|T{1,2}|P{1,4}|p{1,4}|yo|qo|Qo|Mo|lo|Lo|wo|do|io|eo|co|ho|Ho|Ko|ko|mo|so|Pp|PPpp|PPPppp|PPPPpppp|.)*',
-			monthtxt: '[\\p{L}\\p{M}]+|\\d{1,2}',
-			monthformat: '(?:l(ong)?|s(hort)?)\\b',
-			year: '(?:\\d{1,4})',
-			month: '(?:12|11|10|0?[1-9])',
-			day: '(?:3[012]|[12]\\d|0?[1-9])',
-			date: '(?<date> (?<year> {{year}}?)(?:(?<datedelimiter>[-.])(?<month>{{month}})(?:\\k<datedelimiter>(?<day>{{day}}))?)?)?',
-			datestep: '(?:(?<datestepunit>[dwmy])(?<datestepvalue>{{signedint}}))?',
-			cast: '[ifsbm]',
-			expr: '.+?',
-			stopExpr: '.+?',
-			exprMode:
-				'^(?<cast> {{cast}})?\\|(~(?:(?<monthformat> {{monthformat}})|(?<format> {{format}}))::)? (?<expr> {{expr}}) (@(?<stopExpr> {{stopExpr}}))? (?<sort_selections> \\$)? (\\[(?<lang> [\\w-]+)\\])? (?<reverse> !)?$',
-			insertNum:
-				'^(?<start> {{startNum}})? (:(?<step> {{signedNum}}))? (r(?<random> \\+?[1-9]\\d*))? (\\*(?<frequency> {{integer}}))? (#(?<repeat> {{integer}}))? (~(?<format> {{format}}))? (::(?<expr> {{expr}}))? (@(?<stopExpr> {{stopExpr}}))? (?<sort_selections> \\$)? (?<reverse> !)?$',
-			insertAlpha:
-				'^(?<start> {{alphastart}}) (:(?<step> {{signedint}}))? (\\*(?<frequency> {{integer}}))? (#(?<repeat> {{integer}}))? (~(?<format> {{alphaformat}})(?<wrap> w)?)? (@(?<stopExpr> {{stopExpr}}))? (?<sort_selections> \\$)? (?<reverse> !)?$',
-			insertMonth:
-				'^(;(?<start> {{monthtxt}}))(:(?<step> {{signedint}}))? (\\*(?<frequency> {{integer}}))? (#(?<repeat> {{integer}}))? (~(?<monthformat> {{monthformat}}))? (@(?<stopExpr> {{stopExpr}}))? (\\[(?<lang> [\\w-]+)\\])? (?<sort_selections> \\$)? (?<reverse> !)?$',
-			insertDate:
-				'^(%(?<start> {{date}}|{{integer}})) (:(?<step> {{datestep}}))? (\\*(?<frequency> {{integer}}))? (#(?<repeat> {{integer}}))? (~(?<dateformat> {{dateformat}}))? (?<sort_selections> \\$)? (?<reverse> !)?$',
-		};
-
-		// TODO - linesplit einfügen (?:\\|(?<line_split>[^\\|]+)\\|)?
-		const result: RuleTemplate = {
-			exprMode: '',
-			insertNum: '',
-			insertAlpha: '',
-			insertMonth: '',
-			insertDate: '',
-		};
-
-		for (let [key, value] of Object.entries(ruleTemplate)) {
-			while (value.indexOf('{{') > -1) {
-				const start: number = value.indexOf('{{');
-				const ende: number = value.indexOf('}}', start + 2) + 2;
-				const replace: string = value.slice(start, ende);
-				const rule: string = replace.slice(2, replace.length - 2);
-				if (hasKey(ruleTemplate, rule)) {
-					value = value.replace(replace, ruleTemplate[rule]); // works fine!
-				}
-			}
-			if (hasKey(result, key)) {
-				result[key] = value.replace(/\s/gi, '');
-			}
-		}
-
-		return { result };
-	
-*/

@@ -399,6 +399,28 @@ The history is stored independently of the currently opened workspace in globalS
 With the command 'insertseq.showHistory' (default keyboard shortcut is CTRL+ALT+,) you can see the previously typed commands. Select one of them to run this command directly a second time.
 Two config items can be used:
 
+## History: deleting entries and keybindings
+
+You can delete history entries directly from the history QuickPick. When you open the history (Insert Sequences → History), each entry has a small trash icon at the right — click it to remove this entry. There is also a trash icon in the QuickPick toolbar to clear the entire history (it asks for confirmation).
+
+If you prefer keyboard shortcuts, you can bind keys to the internal commands that the extension registers. These commands are intentionally not shown in the Command Palette; bind them in your personal Keybindings (Preferences → Keyboard Shortcuts (JSON)). Example entries you can add:
+
+```json
+{
+  "key": "delete",
+  "command": "insertseq._history.deleteActive",
+  "when": "inQuickPick"
+},
+{
+  "key": "ctrl+delete",
+  "command": "insertseq._history.clearAll",
+  "when": "inQuickPick"
+}
+```
+
+After adding these, pressing DEL while the history QuickPick is focused will delete the currently highlighted entry, and CTRL+DEL will clear the whole history (with confirmation).
+
+
 - 'insertseq.historyLimit' (default: 30) limit the number of entries in the history. If you don't want to limit the history size, use 0 as unlimited history.
 - 'insertseq.editHistory' (default: false) defines if you have to edit/confirm the selected command from the history or just run it directly.
   (special thanks to [(@codeyu)](https://github.com/codeyu) for the first version of the history command).

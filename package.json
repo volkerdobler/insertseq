@@ -175,6 +175,11 @@
 					"type": "number",
 					"default": 10000,
 					"description": "Maximum number of insertions to avoid performance issues - internal variable, be aware what you are doing if you change it"
+				},
+				"insertseq.history.maxItems": {
+					"type": "number",
+					"default": 100,
+					"description": "Maximum items stored in history"
 				}
 			}
 		},
@@ -182,6 +187,18 @@
 			{
 				"command": "extension.insertseq",
 				"title": "Insert Sequences"
+			},
+			{
+				"command": "extension.insertseq.history",
+				"title": "Insert Sequences-History"
+			},
+			{
+				"command": "insertseq._history.deleteActive",
+				"title": "InsertSeq: Delete active history item"
+			},
+			{
+				"command": "insertseq._history.clearAll",
+				"title": "InsertSeq: Clear history"
 			}
 		],
 		"keybindings": [
@@ -190,6 +207,43 @@
 				"key": "ctrl+alt+.",
 				"mac": "cmd+alt+.",
 				"when": "editorTextFocus"
+			},
+			{
+				"command": "extension.insertseq.history",
+				"key": "ctrl+alt+,",
+				"mac": "cmd+alt+,",
+				"when": "editorTextFocus"
+			},
+			{
+				"command": "insertseq._history.deleteActive",
+				"key": "delete",
+				"when": "inQuickPick"
+			},
+			{
+				"command": "insertseq._history.deleteActive",
+				"key": "delete",
+				"when": "inQuickInput"
+			},
+			{
+				"command": "insertseq._history.deleteActive",
+				"key": "delete",
+				"when": "inQuickOpen"
+			},
+			{
+				"command": "insertseq._history.clearAll",
+				"key": "ctrl+delete",
+				"when": "inQuickPick"
+			}
+			,
+			{
+				"command": "insertseq._history.clearAll",
+				"key": "ctrl+delete",
+				"when": "inQuickInput"
+			},
+			{
+				"command": "insertseq._history.clearAll",
+				"key": "ctrl+delete",
+				"when": "inQuickOpen"
 			}
 		]
 	},
