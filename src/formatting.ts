@@ -90,48 +90,34 @@ export function formatDateStr(value: string, template: string): string {
 		M: month.toString(),
 		dd: day.toString().padStart(2, '0'),
 		d: day.toString(),
+		HH: date.getHours().toString().padStart(2, '0'),
+		H: date.getHours().toString(),
+		mm: date.getMinutes().toString().padStart(2, '0'),
+		m: date.getMinutes().toString(),
+		ss: date.getSeconds().toString().padStart(2, '0'),
+		s: date.getSeconds().toString(),
 	};
 
-	// Replace longer tokens first to avoid partial replacement (e.g. YYYY before YY)
-	const keys = Object.keys(tokens).sort((a, b) => b.length - a.length);
-	let out = template;
-	for (const k of keys) {
-		out = out.split(k).join(tokens[k]);
-	}
-
+	// Replace tokens in a single pass using a regex built from the keys.
+	// This avoids replacing characters inside already-inserted replacements
+	// (e.g. MMMM -> 'Mai' later being touched by 'M').
+	const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const keys = Object.keys(tokens)
+		.sort((a, b) => b.length - a.length)
+		.map(escapeRegex);
+	const reg = new RegExp('(?:' + keys.join('|') + ')', 'g');
+	const out = template.replace(reg, (m) => tokens[m] ?? m);
 	return out;
 }
 
 export function formatTemporalDateTime(
-	dateLike: unknown,
-	template: string,
-	locale = 'default',
+	temporalDate: Temporal.PlainDateTime,
+	template: string = '',
+	locale: string | undefined = undefined,
 ): string {
-	// Versuche, ein PlainDateTime (Datum mit Zeitzone) zu bekommen.
-	let plainDateTime;
-	try {
-		// Many acceptable inputs (Temporal objects, ISO strings, plain objects) are handled by .from
-		plainDateTime = Temporal.PlainDateTime.from(dateLike as any);
-	} catch (e) {
-		// Falls Input native Date ist, konvertiere über ISO-String
-		if (dateLike instanceof Date) {
-			plainDateTime = Temporal.PlainDateTime.from(
-				dateLike.toISOString().slice(0, 10),
-			);
-		} else if (typeof dateLike === 'string') {
-			// Falls string kein reines Datum ist, versuchen wir ISO-Teil
-			const iso = dateLike.slice(0, 10);
-			plainDateTime = Temporal.PlainDateTime.from(iso);
-		} else {
-			throw new Error(
-				'Cannot convert provided value to a Temporal PlainDate',
-			);
-		}
-	}
-
-	const year = plainDateTime.year;
-	const month = plainDateTime.month; // 1..12
-	const day = plainDateTime.day;
+	const year = temporalDate.year;
+	const month = temporalDate.month; // 1..12
+	const day = temporalDate.day;
 
 	// Hilfswerte
 	const monthShort = new Intl.DateTimeFormat(locale, {
@@ -150,19 +136,23 @@ export function formatTemporalDateTime(
 		M: String(month),
 		dd: String(day).padStart(2, '0'),
 		d: String(day),
-		HH: String(plainDateTime.hour).padStart(2, '0'),
-		H: String(plainDateTime.hour),
-		mm: String(plainDateTime.minute).padStart(2, '0'),
-		m: String(plainDateTime.minute),
-		ss: String(plainDateTime.second).padStart(2, '0'),
-		s: String(plainDateTime.second),
+		HH: String(temporalDate.hour).padStart(2, '0'),
+		H: String(temporalDate.hour),
+		mm: String(temporalDate.minute).padStart(2, '0'),
+		m: String(temporalDate.minute),
+		ss: String(temporalDate.second).padStart(2, '0'),
+		s: String(temporalDate.second),
 	};
 
-	// Längere Keys zuerst ersetzen
-	const keys = Object.keys(tokens).sort((a, b) => b.length - a.length);
-	let out = template;
-	for (const k of keys) {
-		out = out.split(k).join(tokens[k]);
+	// Replace tokens in a single pass (match longest tokens first in regex)
+	const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const keys = Object.keys(tokens)
+		.sort((a, b) => b.length - a.length)
+		.map(escapeRegex);
+	const reg = new RegExp('(?:' + keys.join('|') + ')', 'g');
+	const out = template.replace(reg, (m) => tokens[m] ?? m);
+	if (out === template) {
+		return temporalDate.toPlainDate().toLocaleString(locale);
 	}
 	return out;
 }

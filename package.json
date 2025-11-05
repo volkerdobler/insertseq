@@ -74,8 +74,13 @@
 				},
 				"insertseq.dateFormat": {
 					"type": "string",
-					"default": "dd.MM.yyyy",
+					"default": "",
 					"description": "Default output format for dates"
+				},
+				"insertseq.language": {
+					"type": "string",
+					"default": "",
+					"description": "Default language format for dates"
 				},
 				"insertseq.insertOrder": {
 					"type": "string",
@@ -91,11 +96,6 @@
 						"sorted: insertion is from top most click down",
 						"reverse: insertion is from bottom most click up"
 					]
-				},
-				"insertseq.language": {
-					"type": "string",
-					"default": "de",
-					"description": "Default language format for dates"
 				},
 				"insertseq.century": {
 					"type": "string",
@@ -213,37 +213,6 @@
 				"key": "ctrl+alt+,",
 				"mac": "cmd+alt+,",
 				"when": "editorTextFocus"
-			},
-			{
-				"command": "insertseq._history.deleteActive",
-				"key": "delete",
-				"when": "inQuickPick"
-			},
-			{
-				"command": "insertseq._history.deleteActive",
-				"key": "delete",
-				"when": "inQuickInput"
-			},
-			{
-				"command": "insertseq._history.deleteActive",
-				"key": "delete",
-				"when": "inQuickOpen"
-			},
-			{
-				"command": "insertseq._history.clearAll",
-				"key": "ctrl+delete",
-				"when": "inQuickPick"
-			}
-			,
-			{
-				"command": "insertseq._history.clearAll",
-				"key": "ctrl+delete",
-				"when": "inQuickInput"
-			},
-			{
-				"command": "insertseq._history.clearAll",
-				"key": "ctrl+delete",
-				"when": "inQuickOpen"
 			}
 		]
 	},
