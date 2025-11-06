@@ -32,7 +32,7 @@
 		"Other"
 	],
 	"main": "./out/extension.js",
-	"build": "./dist/extension.js",
+	"browser": "./out/extension-web.js",
 	"contributes": {
 		"configuration": {
 			"title": "insertseq",
@@ -238,11 +238,16 @@
 		"compile": "tsc -p ./",
 		"pretest": "npm run compile",
 		"package": "npm run check-types && node esbuild.js --production",
+		"build:desk": "npm run package",
+		"build:web": "node esbuild-web.js",
+		"build:all": "npm run build:desk && npm run build:web",
+		"serve:web": "npx http-server ./out -p 8080",
 		"vscode:prepublish": "npm run compile",
 		"watch": "tsc -watch -p ./"
 	},
 	"dependencies": {
 		"d3-format": "^3.1.0",
+		"eval5": "^1.4.8",
 		"temporal-polyfill": "^0.3.0"
 	},
 	"devDependencies": {
@@ -250,6 +255,7 @@
 		"@types/d3-format": "^3.0.4",
 		"@types/vscode": "^1.89.0",
 		"assert": "^2.1.0",
+		"esbuild": "^0.25.12",
 		"eslint": "^9.2.0",
 		"prettier": "^3.2.5"
 	},

@@ -7,7 +7,7 @@
 		{
 			"name": "Run Extension",
 			"type": "extensionHost",
-			"request": "launch",
+			"request": "launch"
 		}
 	]
 }

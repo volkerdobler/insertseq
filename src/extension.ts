@@ -22,6 +22,7 @@ import {
 	clearHistory,
 	deleteFromHistory,
 } from './history';
+declare const require: any;
 
 function printToConsole(str: string): void {
 	if (debug) console.log('Debugging: ' + str);
@@ -831,8 +832,6 @@ function createDecimalSeq(
 	};
 
 	return (i) => {
-		let stopExpressionTriggered = false;
-
 		let value = start;
 
 		if (randomAvailable) {
@@ -878,14 +877,19 @@ function createDecimalSeq(
 
 		replacableValues.valueAfterExpressionStr = value.toString(base);
 
+		let stopExpressionTriggered = i >= parameter.origCursorPos.length;
+
 		if (stopexpr.length > 0) {
 			// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 			try {
-				stopExpressionTriggered = Boolean(
-					runExpression(
-						replaceSpecialChars(stopexpr, replacableValues),
-					),
+				const exprResult = runExpression(
+					replaceSpecialChars(stopexpr, replacableValues),
 				);
+				if (exprResult) {
+					stopExprResult = Boolean(exprResult);
+				} else {
+					stopExprResult = i >= parameter.origCursorPos.length;
+				}
 			} catch {
 				stopExpressionTriggered = i >= parameter.origCursorPos.length;
 			}
@@ -1110,11 +1114,14 @@ function createStringSeq(
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 		if (stopexpr.length > 0) {
 			try {
-				stopExprResult = Boolean(
-					runExpression(
-						replaceSpecialChars(stopexpr, replacableValues),
-					),
+				const exprResult = runExpression(
+					replaceSpecialChars(stopexpr, replacableValues),
 				);
+				if (exprResult) {
+					stopExprResult = Boolean(exprResult);
+				} else {
+					stopExprResult = i >= parameter.origCursorPos.length;
+				}
 			} catch {
 				stopExprResult = i >= parameter.origCursorPos.length;
 			}
@@ -1336,11 +1343,14 @@ function createDateSeq(
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 		if (stopexpr.length > 0) {
 			try {
-				stopExprResult = Boolean(
-					runExpression(
-						replaceSpecialChars(stopexpr, replacableValues),
-					),
+				const exprResult = runExpression(
+					replaceSpecialChars(stopexpr, replacableValues),
 				);
+				if (exprResult) {
+					stopExprResult = Boolean(exprResult);
+				} else {
+					stopExprResult = i >= parameter.origCursorPos.length;
+				}
 			} catch {
 				stopExprResult = i >= parameter.origCursorPos.length;
 			}
@@ -1397,9 +1407,19 @@ function createExpressionSeq(
 		replacableValues.currentIndexStr = i.toString();
 
 		try {
-			replacableValues.currentValueStr = String(
-				runExpression(replaceSpecialChars(expr, replacableValues)),
+			const exprResult = runExpression(
+				replaceSpecialChars(expr, replacableValues),
 			);
+			if (
+				typeof exprResult === 'string' ||
+				exprResult instanceof String
+			) {
+				replacableValues.currentValueStr = String(exprResult);
+			} else if (typeof exprResult === 'number') {
+				replacableValues.currentValueStr = exprResult.toString();
+			} else {
+				replacableValues.currentValueStr = '';
+			}
 		} catch {
 			replacableValues.currentValueStr = '';
 		}
@@ -1409,11 +1429,15 @@ function createExpressionSeq(
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 		if (stopexpr.length > 0) {
 			try {
-				stopExprResult = Boolean(
-					runExpression(
-						replaceSpecialChars(stopexpr, replacableValues),
-					),
+				const exprResult = runExpression(
+					replaceSpecialChars(stopexpr, replacableValues),
 				);
+				if (exprResult) {
+					stopExpressionTriggered = Boolean(exprResult);
+				} else {
+					stopExpressionTriggered =
+						i >= parameter.origCursorPos.length;
+				}
 			} catch {
 				stopExprResult = i >= parameter.origCursorPos.length;
 			}
@@ -1675,10 +1699,26 @@ function runExpression(str: string): any {
 	}
 
 	try {
-		const result = eval(str);
-		return result;
+		let res: any;
+		try {
+			// dynamically require the safeEval helper if available
+			// eslint-disable-next-line @typescript-eslint/no-var-requires
+			const se = require('./safeEval');
+			res = se.safeEvaluate ? se.safeEvaluate(str, 1000) : null;
+		} catch {
+			res = null;
+		}
+
+		if (res && typeof res === 'object') {
+			if (!res.ok) return null;
+			return res.value;
+		}
+		// // fallback to eval if safeEvaluate not available
+		// const result = eval(str);
+		// return result;
+		return null;
 	} catch {
-		return '';
+		return null;
 	}
 }
 
