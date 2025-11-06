@@ -14,6 +14,7 @@ const debug = true;
 
 import * as vscode from 'vscode';
 import { Temporal } from 'temporal-polyfill';
+
 import * as formatting from './formatting';
 import {
 	getHistory,
@@ -133,11 +134,11 @@ type TSpecialReplacementValues = {
 	currentValueStr: string;
 	valueAfterExpressionStr: string;
 	previousValueStr: string;
+	origTextStr: string;
 	startStr: string;
 	stepStr: string;
 	numberOfSelectionsStr: string;
 	currentIndexStr: string;
-	origTextStr: string;
 };
 
 // Default configuration values (will be overwritten by user settings)
@@ -583,6 +584,10 @@ function insertNewSequence(
 			parameter.editor.edit((builder) => {
 				let addStr = '';
 
+				if (strList.length === 0) {
+					parameter.origTextSel.map((s) => strList.push(s));
+				}
+
 				strList.forEach((str, index) => {
 					// insert strings in original Selection
 					const maxIndex = newLine
@@ -854,7 +859,9 @@ function createDecimalSeq(
 				steps * Math.trunc(((i % startover) % (freq * repe)) / freq);
 		}
 
-		replacableValues.origTextStr = parameter.origTextSel[i];
+		if (i <= parameter.origTextSel.length) {
+			replacableValues.origTextStr = parameter.origTextSel[i];
+		}
 		replacableValues.currentIndexStr = i.toString();
 		replacableValues.currentValueStr = value.toString(base);
 
@@ -868,6 +875,8 @@ function createDecimalSeq(
 		} catch {
 			// ignore errors in expression evaluation - keep current value;
 		}
+
+		replacableValues.valueAfterExpressionStr = value.toString(base);
 
 		if (stopexpr.length > 0) {
 			// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
@@ -912,6 +921,53 @@ function createStringSeq(
 	input: string,
 	parameter: TParameter,
 ): (i: number) => { stringFunction: string; stopFunction: boolean } {
+	// Unicode sichere Umwandlung von String zu Index
+	function stringToIndex(str: string): number {
+		const chars = Array.from(str); // Unicode-Graphem
+		let index = 0;
+
+		for (const ch of chars) {
+			const charIndex = charToIndex.get(ch);
+			if (charIndex === undefined) {
+				throw new Error(`Char "${ch}" not in alphabet.`);
+			}
+			index = index * alphabetLen + charIndex;
+		}
+
+		// Alle Kombinationen kürzerer Länge berücksichtigen
+		for (let len = 1; len < chars.length; len++) {
+			index += Math.pow(alphabetLen, len);
+		}
+
+		return index;
+	}
+
+	function indexToString(index: number): string {
+		if (index < 0) {
+			throw new Error('Index below possible values!');
+		}
+
+		let length = 1;
+		let count = 0;
+
+		while (true) {
+			const combinations = Math.pow(alphabetLen, length);
+			if (index < count + combinations) break;
+			count += combinations;
+			length++;
+		}
+
+		index -= count;
+
+		const chars: string[] = [];
+		for (let i = 0; i < length; i++) {
+			chars.unshift(alphabetArr[index % alphabetLen]);
+			index = Math.floor(index / alphabetLen);
+		}
+
+		return chars.join('');
+	}
+
 	const startRegEx = new RegExp(parameter.segments['start_alpha'], 'i');
 
 	const start = input.match(startRegEx)?.groups?.start || '';
@@ -1012,86 +1068,30 @@ function createStringSeq(
 		currentValueStr: '',
 		valueAfterExpressionStr: '',
 		previousValueStr: '',
+		currentIndexStr: '',
+		origTextStr: '',
 		startStr: parameter.config.get('start') || '1',
 		stepStr: parameter.config.get('step') || '1',
 		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
-		currentIndexStr: '',
-		origTextStr: '',
 	};
-
-	// Unicode sichere Umwandlung von String zu Index
-	function stringToIndex(str: string): number {
-		const chars = Array.from(str); // Unicode-Graphem
-		let index = 0;
-
-		for (const ch of chars) {
-			const charIndex = charToIndex.get(ch);
-			if (charIndex === undefined) {
-				throw new Error(`Char "${ch}" not in alphabet.`);
-			}
-			index = index * alphabetLen + charIndex;
-		}
-
-		// Alle Kombinationen kürzerer Länge berücksichtigen
-		for (let len = 1; len < chars.length; len++) {
-			index += Math.pow(alphabetLen, len);
-		}
-
-		return index;
-	}
-
-	function indexToString(index: number): string {
-		if (index < 0) {
-			throw new Error('Index below possible values!');
-		}
-
-		let length = 1;
-		let count = 0;
-
-		while (true) {
-			const combinations = Math.pow(alphabetLen, length);
-			if (index < count + combinations) break;
-			count += combinations;
-			length++;
-		}
-
-		index -= count;
-
-		const chars: string[] = [];
-		for (let i = 0; i < length; i++) {
-			chars.unshift(alphabetArr[index % alphabetLen]);
-			index = Math.floor(index / alphabetLen);
-		}
-
-		return chars.join('');
-	}
 
 	const currentIndex = stringToIndex(start);
 
 	return (i) => {
-		replacableValues.origTextStr = parameter.origTextSel[i];
+		if (i <= parameter.origTextSel.length) {
+			replacableValues.origTextStr = parameter.origTextSel[i];
+		} else {
+			replacableValues.origTextStr = '';
+		}
+
 		replacableValues.currentIndexStr = i.toString();
-		replacableValues.currentValueStr = indexToString(
-			currentIndex +
-				steps * Math.trunc(((i % startover) % (freq * repe)) / freq),
-		);
-		replacableValues.previousValueStr =
-			i > 0
-				? indexToString(
-						currentIndex +
-							steps *
-								Math.trunc(
-									(((i - 1) % startover) % (freq * repe)) /
-										freq,
-								),
-					)
-				: '';
 
 		let value = indexToString(
 			currentIndex +
 				steps * Math.trunc(((i % startover) % (freq * repe)) / freq),
 		);
-		let stopExpr = false;
+
+		replacableValues.currentValueStr = value;
 
 		// if expression does not lead to a string, the current / new value will not be changed
 		try {
@@ -1103,20 +1103,26 @@ function createStringSeq(
 			}
 		} catch {}
 
+		replacableValues.valueAfterExpressionStr = value;
+
+		let stopExprResult = false;
+
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 		if (stopexpr.length > 0) {
 			try {
-				stopExpr = Boolean(
+				stopExprResult = Boolean(
 					runExpression(
 						replaceSpecialChars(stopexpr, replacableValues),
 					),
 				);
 			} catch {
-				stopExpr = i >= parameter.origCursorPos.length;
+				stopExprResult = i >= parameter.origCursorPos.length;
 			}
 		} else {
-			stopExpr = i >= parameter.origCursorPos.length;
+			stopExprResult = i >= parameter.origCursorPos.length;
 		}
+
+		replacableValues.previousValueStr = value;
 
 		// change capitalization based on settings
 		switch (capital) {
@@ -1155,7 +1161,7 @@ function createStringSeq(
 
 		return {
 			stringFunction: formatting.formatString(value, format),
-			stopFunction: stopExpr,
+			stopFunction: stopExprResult,
 		};
 	};
 }
@@ -1253,11 +1259,11 @@ function createDateSeq(
 		currentValueStr: '',
 		valueAfterExpressionStr: '',
 		previousValueStr: '',
+		currentIndexStr: '',
+		origTextStr: '',
 		startStr: parameter.config.get('start') || '1',
 		stepStr: parameter.config.get('step') || '1',
 		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
-		currentIndexStr: '',
-		origTextStr: '',
 	};
 
 	return (i) => {
@@ -1313,21 +1319,15 @@ function createDateSeq(
 			return value;
 		}
 
-		replacableValues.origTextStr = parameter.origTextSel[i];
-		replacableValues.currentIndexStr = i.toString();
-		replacableValues.currentValueStr = '1';
-		replacableValues.previousValueStr = '';
-
-		if (i > 0) {
-			replacableValues.previousValueStr = calculateDateOffset(
-				instant,
-				i - 1,
-			).toLocaleString(language);
+		if (i <= parameter.origTextSel.length) {
+			replacableValues.origTextStr = parameter.origTextSel[i];
 		} else {
-			replacableValues.previousValueStr = '';
+			replacableValues.origTextStr = '';
 		}
+		replacableValues.currentIndexStr = i.toString();
 
 		let value = calculateDateOffset(instant, i);
+
 		replacableValues.currentValueStr = value
 			.toPlainDate()
 			.toLocaleString(language);
@@ -1347,6 +1347,10 @@ function createDateSeq(
 		} else {
 			stopExprResult = i >= parameter.origCursorPos.length;
 		}
+
+		replacableValues.previousValueStr = value
+			.toPlainDate()
+			.toLocaleString(language);
 
 		return {
 			stringFunction: formatting.formatTemporalDateTime(
@@ -1377,30 +1381,22 @@ function createExpressionSeq(
 		currentValueStr: '',
 		valueAfterExpressionStr: '', // only for stopexpression
 		previousValueStr: '',
+		currentIndexStr: '',
+		origTextStr: '',
 		startStr: parameter.config.get('start') || '1',
 		stepStr: parameter.config.get('step') || '1',
 		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
-		currentIndexStr: '',
-		origTextStr: '',
 	};
 
+	// return function for each index/item
 	return (i) => {
-		replacableValues.origTextStr = parameter.origTextSel[i];
-		replacableValues.previousValueStr = '';
-
-		if (i > 0) {
-			try {
-				replacableValues.currentIndexStr = (i - 1).toString();
-				replacableValues.previousValueStr = String(
-					runExpression(replaceSpecialChars(expr, replacableValues)),
-				);
-			} catch {
-				replacableValues.previousValueStr = '';
-			}
+		if (i <= parameter.origTextSel.length) {
+			replacableValues.origTextStr = parameter.origTextSel[i];
 		}
 
+		replacableValues.currentIndexStr = i.toString();
+
 		try {
-			replacableValues.currentIndexStr = i.toString();
 			replacableValues.currentValueStr = String(
 				runExpression(replaceSpecialChars(expr, replacableValues)),
 			);
@@ -1408,26 +1404,28 @@ function createExpressionSeq(
 			replacableValues.currentValueStr = '';
 		}
 
-		let stopExpr = false;
+		let stopExprResult = false;
 
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 		if (stopexpr.length > 0) {
 			try {
-				stopExpr = Boolean(
+				stopExprResult = Boolean(
 					runExpression(
 						replaceSpecialChars(stopexpr, replacableValues),
 					),
 				);
 			} catch {
-				stopExpr = i >= parameter.origCursorPos.length;
+				stopExprResult = i >= parameter.origCursorPos.length;
 			}
 		} else {
-			stopExpr = i >= parameter.origCursorPos.length;
+			stopExprResult = i >= parameter.origCursorPos.length;
 		}
+
+		replacableValues.previousValueStr = replacableValues.currentValueStr;
 
 		return {
 			stringFunction: replacableValues.currentValueStr,
-			stopFunction: stopExpr,
+			stopFunction: stopExprResult,
 		};
 	};
 }
@@ -1647,9 +1645,10 @@ function replaceSpecialChars(
 	st: string,
 	para: TSpecialReplacementValues,
 ): string {
-	// _ ::= current value (before expression or value under current selection)
-	// c ::= current value (only within stopexpression, includes value after expression)
-	// p ::= previous value (only for decimal, alpha, date and own sequences)
+	// _ ::= current value (before expression)
+	// o ::= original text under current selection
+	// c ::= current value (only for stopexpression, includes value after expression)
+	// p ::= previous value
 	// a ::= value of <start>
 	// s ::= value of <step>
 	// n ::= number of selections
@@ -1657,7 +1656,8 @@ function replaceSpecialChars(
 
 	return st
 		.replace(/\b_\b/gi, para.currentValueStr)
-		.replace(/\be\b/gi, para.currentValueStr)
+		.replace(/\bo\b/gi, para.origTextStr)
+		.replace(/\bc\b/gi, para.valueAfterExpressionStr)
 		.replace(/\bp\b/gi, para.previousValueStr)
 		.replace(/\ba\b/gi, para.startStr)
 		.replace(/\bs\b/gi, para.stepStr)
@@ -1666,13 +1666,20 @@ function replaceSpecialChars(
 }
 
 function runExpression(str: string): any {
+	// strip surrounding quotes
 	if (str[0] === '"' && str[str.length - 1] === '"') {
 		str = str.slice(1, -1);
 	}
 	if (str[0] === "'" && str[str.length - 1] === "'") {
 		str = str.slice(1, -1);
 	}
-	return new Function('return (' + str + ')')();
+
+	try {
+		const result = eval(str);
+		return result;
+	} catch {
+		return '';
+	}
 }
 
 // Get regular expressions for segmenting the input string
@@ -1937,7 +1944,7 @@ function getRegExpressions(): RuleTemplate {
 								)`;
 	ruleTemplate.steps_other = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedInt}}) (?= {{delimiter}} ))`;
 	ruleTemplate.format_decimal = `(?: {{charStartFormat}} (?<format_decimal> (?<padding> {{leadchars}} )? (?<align> [<>^=] )? (?<sign> [ +-] )? (?<length> \\d+ ) (?<precision>\\.\\d+)? (?<type>[bcdeEfFgGnoxX%])? ) (?= {{delimiter}} ) )`;
-	ruleTemplate.format_alpha = `(?: {{charStartFormat}} (?<padding> {{leadchars}} )? (?<align> [<>^=] )? (?<length> \\d+ ) (?= {{delimiter}} ) )`;
+	ruleTemplate.format_alpha = `(?: {{charStartFormat}} (?<format_alpha> (?<padding> {{leadchars}} )? (?<align> [<>^=] )? (?<length> \\d+ ) ) (?= {{delimiter}} ) )`;
 	ruleTemplate.format_date = `(?: 
 									{{charStartFormat}}
 									(?:
@@ -1949,7 +1956,7 @@ function getRegExpressions(): RuleTemplate {
 											{{doublestring}}
 											| {{singlestring}}
 											| {{bracketedexpression}}
-											| [^ {{delimiterChars}} ]+
+											| .+?
 										)
 									)?
 									(?= {{delimiter}} )
@@ -1962,7 +1969,7 @@ function getRegExpressions(): RuleTemplate {
 									{{doublestring}}
 									| {{singlestring}}
 									| {{bracketedexpression}}
-									| [^ {{delimiterChars}} ]+
+									| .+?
 								)
 								(?= {{delimiter}} )
 							)`;
