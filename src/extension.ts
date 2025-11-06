@@ -882,11 +882,11 @@ function createDecimalSeq(
 		if (stopexpr.length > 0) {
 			// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 			try {
-				const exprResult = runExpression(
+				let stopExprResult = runExpression(
 					replaceSpecialChars(stopexpr, replacableValues),
 				);
-				if (exprResult) {
-					stopExprResult = Boolean(exprResult);
+				if (stopExprResult) {
+					stopExprResult = Boolean(stopExprResult);
 				} else {
 					stopExprResult = i >= parameter.origCursorPos.length;
 				}
@@ -1429,14 +1429,13 @@ function createExpressionSeq(
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 		if (stopexpr.length > 0) {
 			try {
-				const exprResult = runExpression(
+				let stopExprResult = runExpression(
 					replaceSpecialChars(stopexpr, replacableValues),
 				);
-				if (exprResult) {
-					stopExpressionTriggered = Boolean(exprResult);
+				if (stopExprResult) {
+					stopExprResult = Boolean(stopExprResult);
 				} else {
-					stopExpressionTriggered =
-						i >= parameter.origCursorPos.length;
+					stopExprResult = i >= parameter.origCursorPos.length;
 				}
 			} catch {
 				stopExprResult = i >= parameter.origCursorPos.length;
