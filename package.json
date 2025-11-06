@@ -77,6 +77,23 @@
 					"default": "",
 					"description": "Default output format for dates"
 				},
+				"insertseq.alphaCapital": {
+					"type": "string",
+					"default": "preserve",
+					"enum": [
+						"preserve",
+						"upper",
+						"lower",
+						"pascal"
+					],
+					"enumDescriptions": [
+						"preserve (default): preserve chars as insert",
+						"upper: output all chars as upper letters",
+						"lower: output all chars as lower letters",
+						"pascal: output first letter as upper letter, rest as lower letters"
+					],
+					"description": "Default output in alpha sequences"
+				},
 				"insertseq.language": {
 					"type": "string",
 					"default": "",

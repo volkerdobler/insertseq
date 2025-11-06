@@ -114,6 +114,7 @@ type TInputType =
 	| 'date'
 	| 'expression'
 	| 'own'
+	| 'predefined'
 	| null;
 
 type TStatus = 'preview' | 'final';
@@ -676,6 +677,8 @@ function getSequenceFunction(
 			return createExpressionSeq(input, p);
 		case 'own':
 			return createOwnSeq(input, p);
+		case 'predefined':
+			return createPredefinedSeq(input, p);
 		default:
 			const retStr = { stringFunction: '', stopFunction: true };
 			return (i) => retStr;
@@ -727,8 +730,11 @@ function getInputType(input: string, p: TParameter): TInputType | null {
 			type = 'date';
 			break;
 		// eigene Sequenz
-		case /^;/i.test(input):
+		case /^\[/i.test(input):
 			type = 'own';
+			break;
+		case /^;/i.test(input):
+			type = 'predefined';
 			break;
 		// kein Typ erkennbar, dann nehme ich Dezimal an
 		default:
@@ -906,8 +912,10 @@ function createStringSeq(
 	input: string,
 	parameter: TParameter,
 ): (i: number) => { stringFunction: string; stopFunction: boolean } {
-	const start =
-		input.match(parameter.segments['start_alpha'])?.groups?.start || '';
+	const startRegEx = new RegExp(parameter.segments['start_alpha'], 'i');
+
+	const start = input.match(startRegEx)?.groups?.start || '';
+
 	const defaultReturn = { stringFunction: '', stopFunction: true };
 	if (start === '') return (i) => defaultReturn;
 
@@ -937,6 +945,44 @@ function createStringSeq(
 	const format =
 		input.match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
 		'';
+	// determine capitalization
+	let capital: string = 'preserve';
+	// check global configuration first
+	switch (
+		String(parameter.config.get('alphaCapital') || '').toLocaleLowerCase()
+	) {
+		case 'upper':
+			capital = 'upper';
+			break;
+		case 'lower':
+			capital = 'lower';
+			break;
+		case 'pascal':
+			capital = 'pascal';
+			break;
+	}
+
+	// then check input first character
+	if (input && input[0].toUpperCase() === input[0]) {
+		capital = 'upper';
+	}
+
+	// then check input capitalization options
+	switch (
+		String(
+			input.match(startRegEx)?.groups?.alphacapital,
+		).toLocaleLowerCase()
+	) {
+		case 'u':
+			capital = 'upper';
+			break;
+		case 'l':
+			capital = 'lower';
+			break;
+		case 'p':
+			capital = 'pascal';
+			break;
+	}
 
 	// support string or array in configuration
 	const alphabetRaw =
@@ -950,12 +996,6 @@ function createStringSeq(
 	if (uniqAlphabet.size !== alphabetArr.length) {
 		throw new Error('Alphabet includes invalid entries!');
 	}
-
-	// erkennen ob der eingegebene Start komplett GROSS geschrieben ist
-	const startIsAllUpper =
-		start !== '' &&
-		start === start.toUpperCase() &&
-		start !== start.toLowerCase();
 
 	const charToIndex = new Map<string, number>();
 	// Build mapping that accepts both lower/upper input forms but keeps alphabetArr as canonical output values
@@ -1055,9 +1095,12 @@ function createStringSeq(
 
 		// if expression does not lead to a string, the current / new value will not be changed
 		try {
-			value = String(
-				runExpression(replaceSpecialChars(expr, replacableValues)),
+			let tempValue = runExpression(
+				replaceSpecialChars(expr, replacableValues),
 			);
+			if (typeof tempValue === 'string' || tempValue instanceof String) {
+				value = String(tempValue);
+			}
 		} catch {}
 
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
@@ -1075,9 +1118,39 @@ function createStringSeq(
 			stopExpr = i >= parameter.origCursorPos.length;
 		}
 
-		// Wenn der Start komplett groß war -> Ausgabe in GROSS
-		if (startIsAllUpper && value !== '') {
-			value = value.toUpperCase();
+		// change capitalization based on settings
+		switch (capital) {
+			case 'upper':
+				value = value.toUpperCase();
+				break;
+			case 'lower':
+				value = value.toLowerCase();
+				break;
+			case 'pascal':
+				value =
+					value.charAt(0).toUpperCase() +
+					value.slice(1).toLowerCase();
+				break;
+			default:
+				// preserve original capitalization
+				for (let idx = value.length - 1; idx >= 0; idx--) {
+					const ch = value.charAt(idx);
+					const origCh = start.charAt(
+						Math.max(0, start.length - value.length + idx),
+					);
+					if (origCh.toUpperCase() === origCh) {
+						value =
+							value.slice(0, idx) +
+							ch.toUpperCase() +
+							value.slice(idx + 1);
+					} else {
+						value =
+							value.slice(0, idx) +
+							ch.toLowerCase() +
+							value.slice(idx + 1);
+					}
+				}
+				break;
 		}
 
 		return {
@@ -1198,7 +1271,7 @@ function createDateSeq(
 
 			let value: Temporal.PlainDateTime;
 			if (idx >= 0) {
-				switch (unit) {
+				switch (unit.toLowerCase()) {
 					case 'w':
 						value = baseDate.add({ weeks: idx });
 						break;
@@ -1213,7 +1286,7 @@ function createDateSeq(
 						break;
 				}
 			} else {
-				switch (unit) {
+				switch (unit.toLowerCase()) {
 					case 'w':
 						value = baseDate.subtract({
 							weeks: Math.abs(idx),
@@ -1359,7 +1432,69 @@ function createExpressionSeq(
 	};
 }
 
+// Create own sequence base on direct input
 function createOwnSeq(
+	input: string,
+	parameter: TParameter,
+): (i: number) => { stringFunction: string; stopFunction: boolean } {
+	const sequenceSet =
+		input.match(parameter.segments['start_own'])?.groups?.ownseq || '';
+
+	const start =
+		parseInt(
+			input.match(parameter.segments['start_own'])?.groups?.startseq ||
+				'1',
+		) || 1;
+	const steps =
+		Number(input.match(parameter.segments['steps_other'])?.groups?.steps) ||
+		Number(parameter.config.get('step')) ||
+		1;
+	const repe =
+		Number(
+			input.match(parameter.segments['repetition'])?.groups?.repeat ??
+				parameter.config.get('repetition'),
+		) || Number.MAX_SAFE_INTEGER;
+	const freq =
+		Number(
+			input.match(parameter.segments['frequency'])?.groups?.freq ??
+				parameter.config.get('frequency'),
+		) || 1;
+	const startover =
+		Number(
+			input.match(parameter.segments['startover'])?.groups?.startover ??
+				parameter.config.get('startover'),
+		) || Number.MAX_SAFE_INTEGER;
+
+	let ownSeq: string[] = [];
+
+	if (sequenceSet.length > 0) {
+		ownSeq = sequenceSet
+			.split(/\s*[;,]\s*/) // Split an Komma oder Semikolon mit optionalen Leerzeichen davor und danach
+			.filter(Boolean); // Entfernt leere Strings, falls vorhanden
+	}
+
+	return (i) => {
+		if (ownSeq.length === 0) {
+			return { stringFunction: '', stopFunction: true };
+		} else {
+			return {
+				stringFunction:
+					ownSeq[
+						(start -
+							1 +
+							steps *
+								Math.trunc(
+									((i % startover) % (freq * repe)) / freq,
+								)) %
+							ownSeq.length
+					] || '',
+				stopFunction: i >= parameter.origCursorPos.length,
+			};
+		}
+	};
+}
+
+function createPredefinedSeq(
 	input: string,
 	parameter: TParameter,
 ): (i: number) => { stringFunction: string; stopFunction: boolean } {
@@ -1369,9 +1504,10 @@ function createOwnSeq(
 		/** Wenn true, gilt '' (leerer x) als Match für den ersten Eintrag; default: false ('' -> kein Match) */
 		emptyMatchesAll?: boolean;
 		fullMatch?: boolean;
+		startsWith?: boolean;
 	};
 
-	function arrayStartsWithString(
+	function arrayIncludesString(
 		x: string,
 		a: string[],
 		options?: StartsOptions,
@@ -1380,6 +1516,7 @@ function createOwnSeq(
 			ignoreCase = false,
 			emptyMatchesAll = false,
 			fullMatch = false,
+			startsWith = false,
 		} = options || {};
 
 		if (x == null) return -1;
@@ -1396,8 +1533,10 @@ function createOwnSeq(
 				);
 			case fullMatch:
 				return a.findIndex((s) => s === x);
-			default:
+			case startsWith:
 				return a.findIndex((s) => s.startsWith(x));
+			default:
+				return a.findIndex((s) => s.includes(x));
 		}
 	}
 
@@ -1406,40 +1545,82 @@ function createOwnSeq(
 	];
 
 	const sequenceText =
-		input.match(parameter.segments['start_own'])?.groups?.start_own || '';
-	const sequenceSet =
-		input.match(parameter.segments['start_own'])?.groups?.ownseq || '';
+		input.match(parameter.segments['start_predefined'])?.groups
+			?.start_predefined || '';
 	const sequenceOptions =
-		input.match(parameter.segments['start_own'])?.groups?.ownoptions || '';
+		input.match(parameter.segments['start_predefined'])?.groups
+			?.predefinedopts || '';
 
 	const searchOptions: StartsOptions = {
 		ignoreCase: sequenceOptions.toLocaleLowerCase().indexOf('i') > -1,
 		fullMatch: sequenceOptions.toLocaleLowerCase().indexOf('f') > -1,
+		startsWith: sequenceOptions.toLocaleLowerCase().indexOf('s') > -1,
 	};
+
+	const parseDigits = sequenceOptions.match(/(\d+)(?:\|(\d+)?)?/);
+
+	const sequenceNumber = parseInt(
+		parseDigits && parseDigits.length > 0 ? parseDigits[1] : '0',
+	);
+
+	const sequenceStart =
+		parseInt(
+			parseDigits && parseDigits.length > 1 ? parseDigits[2] : '1',
+		) || 1;
 
 	let ownSeq: string[] = [];
 	let start = 0;
 
+	const steps =
+		Number(input.match(parameter.segments['steps_other'])?.groups?.steps) ||
+		Number(parameter.config.get('step')) ||
+		1;
+	const repe =
+		Number(
+			input.match(parameter.segments['repetition'])?.groups?.repeat ??
+				parameter.config.get('repetition'),
+		) || Number.MAX_SAFE_INTEGER;
+	const freq =
+		Number(
+			input.match(parameter.segments['frequency'])?.groups?.freq ??
+				parameter.config.get('frequency'),
+		) || 1;
+	const startover =
+		Number(
+			input.match(parameter.segments['startover'])?.groups?.startover ??
+				parameter.config.get('startover'),
+		) || Number.MAX_SAFE_INTEGER;
+
 	if (sequenceText.length > 0) {
-		for (let i = 0; i < ownSequences.length; i++) {
-			let l = arrayStartsWithString(
+		if (sequenceNumber >= 1 && sequenceNumber <= ownSequences.length) {
+			let index = arrayIncludesString(
 				sequenceText,
-				ownSequences[i],
+				ownSequences[sequenceNumber - 1],
 				searchOptions,
 			);
-			if (l > -1) {
-				ownSeq = ownSequences[i];
-				start = l;
-				break;
+			if (index > -1) {
+				ownSeq = ownSequences[sequenceNumber - 1];
+				start = index;
+			}
+		} else {
+			for (let i = 0; i < ownSequences.length; i++) {
+				let l = arrayIncludesString(
+					sequenceText,
+					ownSequences[i],
+					searchOptions,
+				);
+				if (l > -1) {
+					ownSeq = ownSequences[i];
+					start = l;
+					break;
+				}
 			}
 		}
-	}
-	if (sequenceSet.length > 0) {
-		ownSeq = sequenceSet
-			.split(/\s*[;,]\s*/) // Split an Komma oder Semikolon mit optionalen Leerzeichen davor und danach
-			.filter(Boolean); // Entfernt leere Strings, falls vorhanden
-
-		start = 0;
+	} else {
+		if (sequenceNumber >= 1 && sequenceNumber <= ownSequences.length) {
+			ownSeq = ownSequences[sequenceNumber - 1];
+			start = (sequenceStart - 1) % ownSeq.length;
+		}
 	}
 
 	return (i) => {
@@ -1447,7 +1628,15 @@ function createOwnSeq(
 			return { stringFunction: '', stopFunction: true };
 		} else {
 			return {
-				stringFunction: ownSeq[(start + i) % ownSeq.length] || '',
+				stringFunction:
+					ownSeq[
+						(start +
+							steps *
+								Math.trunc(
+									((i % startover) % (freq * repe)) / freq,
+								)) %
+							ownSeq.length
+					] || '',
 				stopFunction: i >= parameter.origCursorPos.length,
 			};
 		}
@@ -1493,10 +1682,11 @@ function getRegExpressions(): RuleTemplate {
 		start_alpha: '', // Start-Wert bei Buchstaben
 		start_date: '', // Start-Wert bei Datumseingabe
 		start_own: '', // Start-Wert bei eigenen Listen (string)
+		start_predefined: '', // Start-Wert in der Configuration vordefinierte Listen (string)
 		start_expression: '', // Start-Wert bei Ausdrücken
 		steps_decimal: '', // Schritte bei Zahlen (auch mit Nachkommastellen möglich)
-		steps_date: '', // Schritte bei einem Datum (es wird d, w, m oder y davor geschrieben, um zu sagen, welche Einheit die Steps sind)
-		steps_other: '', // Schritte bei anderen Typen (nur Ganzzahl)
+		steps_date: '', // Schritte bei einem Datum (es wird d, w, m oder y nach einer Zahl geschrieben, um zu sagen, welche Einheit die Steps sind)
+		steps_other: '', // Schritte bei anderen Typen (nur Ganzzahl-Schritte)
 		format_decimal: '', // Formatierung der Zahlen
 		format_alpha: '',
 		format_date: '',
@@ -1524,17 +1714,23 @@ function getRegExpressions(): RuleTemplate {
 	// i ::= counter, starting with 0 and increasing with each insertion
 	const ruleTemplate: RuleTemplate = {};
 	ruleTemplate.charStartDate = `%`;
-	ruleTemplate.charStartOwn = `;`;
+	ruleTemplate.charStartOwnSequence = `\\[`;
+	ruleTemplate.charStartPredefinedSequence = `;`;
 	ruleTemplate.charStartExpr = `\\|`;
 	ruleTemplate.charStartSteps = `:`;
 	ruleTemplate.charStartFormat = `~`;
 	ruleTemplate.charStartFrequency = `\\*`;
 	ruleTemplate.charStartRepetition = `#`;
 	ruleTemplate.charStartStartover = `##`;
-	ruleTemplate.charStartOwnSequence = `\\[`;
 	ruleTemplate.charStartExpression = `::`;
 	ruleTemplate.charStartStopExpression = `@`;
-	ruleTemplate.specialchars = `[_epasni]`;
+	// optional information after charStartOptions
+	ruleTemplate.charStartOptions = `\\?`;
+	ruleTemplate.specialchars = `(?:[_epasni])`;
+	ruleTemplate.dateunits = `(?:[dDwWmMyY])`;
+	ruleTemplate.predefinedoptions = `(?: [ifsIFS]+ )`;
+	ruleTemplate.alphacapitalchars = `(?: [uUlLpP]? )`;
+	// all Rules including sub-rules
 	ruleTemplate.doublestring = `(?:"
 									(?:
 										(?:
@@ -1605,21 +1801,6 @@ function getRegExpressions(): RuleTemplate {
 							)`;
 	ruleTemplate.signedInt = `(?<int>[+-]? {{integer}})`;
 	ruleTemplate.signedNum = `(?:[+-]? (?:{{numeric}} | {{hexNum}} | {{octNum}} | {{binNum}}))`;
-	ruleTemplate.ownsequence = `(?:
-									(?: {{charStartOwnSequence}} )
-									\\s*
-									(?<ownseq> 
-										(?:
-											(?:
-												(?<!\\\\)
-												\\\\\\]
-											)
-											|
-											[^\\]]
-										)*
-									)
-									\\]
-								)`;
 	ruleTemplate.start_decimal = `^(?:
 									(?<lead_string>
 										(?<lead_char> {{leadchars}})
@@ -1631,7 +1812,14 @@ function getRegExpressions(): RuleTemplate {
 									(?: {{random}} )?
 									(?= {{delimiter}} )
 								)`;
-	ruleTemplate.start_alpha = `^(?:(?<start>[\\w]+) (?= {{delimiter}} ))`;
+	ruleTemplate.start_alpha = `^(?:
+									(?<start> [\\w]+ )
+									(?:
+										{{charStartOptions}}
+										(?<alphacapital> {{alphacapitalchars}} )
+									)?
+									(?= {{delimiter}} )
+								)`;
 	ruleTemplate.start_date = `^(?:
 									(?: {{charStartDate}} )
 									\\s*
@@ -1664,21 +1852,78 @@ function getRegExpressions(): RuleTemplate {
 										(?= {{delimiter}} )
 									)`;
 	ruleTemplate.start_own = `^(?: 
-								( {{charStartOwn}} )
-								\\s*
-								(?:
+								\\[
+								(?<ownseq> 
 									(?:
 										(?:
-											(?<ownoptions>
-												(?: i|f|if|fi|I|F|IF|FI)
-											)
-											:
-										)?
-										(?<start_own> \\w+ | {{doublestring}} | {{singlestring}} )
-									)
-									|
-									(?: {{ownsequence}} )
+											(?<!\\\\)
+											\\\\\\]
+										)
+										|
+										[^\\]]
+									)*
 								)
+								\\]
+								(?:
+									{{charStartOptions}}
+									\\s*
+									(?<startseq>
+										\\d+
+									)?
+								)?
+								(?= {{delimiter}} )
+							)`;
+	ruleTemplate.start_predefined = `^(?: 
+								( {{charStartPredefinedSequence}} )
+								\\s*
+								(?<start_predefined>
+									{{doublestring}}
+									|
+									{{singlestring}}
+									|
+									\\w+
+								)?
+								(?:
+									{{charStartOptions}}
+									\\s*
+									(?<predefinedopts>
+										(?:
+											(?:
+												\\d+
+												(?:
+													\\|
+													(?: \\d+)?
+												)?
+											)
+											\\s*
+											{{predefinedoptions}}
+										)
+										|
+										(?:
+											{{predefinedoptions}}
+											\\s*
+											(?:
+												\\d+
+												(?:
+													\\|
+													(?: \\d+)?
+												)?
+											)
+										)
+										|
+										(?:
+											{{predefinedoptions}}
+										)
+										|
+										(?:
+											\\d+
+												(?:
+													\\|
+													(?: \\d+)?
+												)?
+										)
+									)?
+								)?
 								(?= {{delimiter}} )
 							)`;
 	ruleTemplate.steps_decimal = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedNum}}) (?= {{delimiter}} ))`;
@@ -1687,7 +1932,7 @@ function getRegExpressions(): RuleTemplate {
 									(?:{{charStartSteps}})
 									(?<steps> {{signedNum}})?
 									\\s*
-									(?<date_unit>[dwmy])?
+									(?<date_unit> {{dateunits}} )?
 									(?= {{delimiter}} )
 								)`;
 	ruleTemplate.steps_other = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedInt}}) (?= {{delimiter}} ))`;
@@ -1701,33 +1946,32 @@ function getRegExpressions(): RuleTemplate {
 									)?
 									(?<dateformat>
 										(?:
-											[^ {{delimiterChars}} ]+
-											|
-											".+"
-											|
-											'.+'
+											{{doublestring}}
+											| {{singlestring}}
+											| {{bracketedexpression}}
+											| [^ {{delimiterChars}} ]+
 										)
 									)?
 									(?= {{delimiter}} )
 								)`;
-	ruleTemplate.frequency = `(?:(?:{{charStartFrequency}}) \\s* (?<freq>\\d+) (?= {{delimiter}} ))`;
-	ruleTemplate.repetition = `(?:(?<!{{charStartRepetition}})(?:{{charStartRepetition}}) \\s* (?<repeat>\\d+) (?= {{delimiter}} ))`;
-	ruleTemplate.startover = `(?:(?:{{charStartStartover}}) \\s* (?<startover>\\d+) (?= {{delimiter}} ))`;
+	ruleTemplate.frequency = `(?:(?:{{charStartFrequency}}) \\s* (?<freq> \\d+) (?= {{delimiter}} ))`;
+	ruleTemplate.repetition = `(?:(?<!{{charStartRepetition}})(?: {{charStartRepetition}}) \\s* (?<repeat> \\d+ ) (?= {{delimiter}} ))`;
+	ruleTemplate.startover = `(?:(?:{{charStartStartover}}) \\s* (?<startover> \\d+) (?= {{delimiter}} ))`;
 	ruleTemplate.expression = `(?: {{charStartExpression}} \\s* 
 								(?<expr>
-									\\(.+?\\)
-									| ".+"
-									| '.+'
-									| .+?
+									{{doublestring}}
+									| {{singlestring}}
+									| {{bracketedexpression}}
+									| [^ {{delimiterChars}} ]+
 								)
 								(?= {{delimiter}} )
 							)`;
 	ruleTemplate.stopexpression = `(?: {{charStartStopExpression}} \\s* 
 									(?<stopexpr>
-										\\(.+\\)
-										| ".+"
-										| '.+'
-										| .+?
+										{{doublestring}}
+										| {{singlestring}}
+										| {{bracketedexpression}}
+										| [^ {{delimiterChars}} ]+
 									)
 									(?= {{delimiter}} )
 								)`;
