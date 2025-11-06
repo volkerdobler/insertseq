@@ -117,6 +117,7 @@ type TInputType =
 	| 'expression'
 	| 'own'
 	| 'predefined'
+	| 'textSelected'
 	| null;
 
 type TStatus = 'preview' | 'final';
@@ -685,6 +686,8 @@ function getSequenceFunction(
 			return createOwnSeq(input, p);
 		case 'predefined':
 			return createPredefinedSeq(input, p);
+		case 'textSelected':
+			return createTextSelectedSeq(input, p);
 		default:
 			const retStr = { stringFunction: '', stopFunction: true };
 			return (i) => retStr;
@@ -720,7 +723,6 @@ function getInputType(input: string, p: TParameter): TInputType | null {
 			break;
 		// nummerische Zahl oder "leer"
 		case /^(?:([x0\\s\\._])\1*)?[+-]?\d/i.test(input):
-		case /^$/i.test(input):
 			type = 'decimal';
 			break;
 		// Expression
@@ -742,9 +744,15 @@ function getInputType(input: string, p: TParameter): TInputType | null {
 		case /^;/i.test(input):
 			type = 'predefined';
 			break;
-		// kein Typ erkennbar, dann nehme ich Dezimal an
+		// kein Typ erkennbar, dann nehme ich Dezimal an, soland nichts markiert worden ist - sonst lass einfach die Markierung stehen
+		case /^$/i.test(input):
 		default:
-			type = 'decimal';
+			const selectedText = p.origTextSel.join('');
+			if (selectedText.length > 0) {
+				type = 'textSelected';
+			} else {
+				type = 'decimal';
+			}
 	}
 
 	return type;
@@ -1402,6 +1410,8 @@ function createExpressionSeq(
 	return (i) => {
 		if (i <= parameter.origTextSel.length) {
 			replacableValues.origTextStr = parameter.origTextSel[i];
+			// set current value to original selection text for use in expression
+			replacableValues.currentValueStr = parameter.origTextSel[i];
 		}
 
 		replacableValues.currentIndexStr = i.toString();
@@ -1661,6 +1671,18 @@ function createPredefinedSeq(
 				stopFunction: i >= parameter.origCursorPos.length,
 			};
 		}
+	};
+}
+
+function createTextSelectedSeq(
+	input: string,
+	parameter: TParameter,
+): (i: number) => { stringFunction: string; stopFunction: boolean } {
+	return (i) => {
+		return {
+			stringFunction: parameter.origTextSel[i] || '',
+			stopFunction: i >= parameter.origCursorPos.length,
+		};
 	};
 }
 
