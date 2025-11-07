@@ -8,7 +8,7 @@ const HISTORY_MAX =
 	) || 100;
 
 export function getHistory(ctx: vscode.ExtensionContext): string[] {
-	return ctx.globalState.get<string[]>(HISTORY_KEY, []);
+	return ctx.globalState.get<string[]>(HISTORY_KEY, []) || [];
 }
 
 export async function saveToHistory(
@@ -35,6 +35,7 @@ export async function clearHistory(ctx: vscode.ExtensionContext) {
 
 export async function deleteFromHistory(ctx: vscode.ExtensionContext, item: string) {
 	if (!item) return;
-	const list = getHistory(ctx).filter(x => x !== item);
+	const list = getHistory(ctx).filter((x) => x !== item);
 	await ctx.globalState.update(HISTORY_KEY, list);
 }
+

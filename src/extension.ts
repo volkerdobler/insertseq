@@ -1,34 +1,40 @@
 /*
 The idea of the extension "InsertSeq" (previous InsertNums) based on the plugin insertnums 
 for sublimecode from James Brooks
-Original sublimecode extension: https://github.com/jbrooksuk/InsertNums
+Version 1.0 is completely rewritten and additional features are added.
 
-Version 1.0 is completely new written and additional features are added.
+Original sublimecode extension: https://github.com/jbrooksuk/InsertNums
+Version 1.0 has some inspirations from the extension "VSCodeExtensionInsertSequence" (https://github.com/kuone314/VSCodeExtensionInsertSequence) by kuone314
 
 Volker Dobler
 original from May 2020
 rewritten November 2025
 */
 
-const debug = true;
-
+// external modules
 import * as vscode from 'vscode';
 import { Temporal } from 'temporal-polyfill';
 
-import * as formatting from './formatting';
+// internal modules
 import {
 	getHistory,
 	saveToHistory,
 	clearHistory,
 	deleteFromHistory,
 } from './history';
-declare const require: any;
+import * as formatting from './formatting';
+import { safeEvaluate } from './safeEval';
+
+// internal console.log command, if debug is true
+const debug = false;
 
 function printToConsole(str: string): void {
 	if (debug) console.log('Debugging: ' + str);
 }
 
+// this method is called when your extension is activated
 export function activate(context: vscode.ExtensionContext) {
+	// register insertseq command (normal insertion)
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
 			'extension.insertseq',
@@ -40,6 +46,7 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		),
 	);
+	// register insertseq.history command (insertion from history / previous insertions)
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
 			'extension.insertseq.history',
@@ -51,87 +58,44 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		),
 	);
-
-	// Internal commands (not contributed in package.json) to allow keybindings while QuickPick is open
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			'insertseq._history.deleteActive',
-			async () => {
-				const qp = currentHistoryQuickPick;
-				if (!qp) return;
-				const active = qp.activeItems[0] as
-					| (vscode.QuickPickItem & { cmd?: string })
-					| undefined;
-
-				if (!active || !active.cmd) return;
-				await deleteFromHistory(context, active.cmd);
-				qp.items = qp.items.filter(
-					(i) => (i as any).cmd !== active.cmd,
-				);
-			},
-		),
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			'insertseq._history.clearAll',
-			async () => {
-				const qp = currentHistoryQuickPick;
-				// Confirm before clearing
-				const ans = await vscode.window.showWarningMessage(
-					'Clear entire sequence history?',
-					{ modal: true },
-					'Clear',
-				);
-				if (ans !== 'Clear') return;
-				await clearHistory(context);
-				if (qp)
-					qp.items = [
-						{
-							label: '$(add) New sequence',
-							description: 'Start a new sequence',
-							cmd: '',
-						},
-					];
-			},
-		),
-	);
 }
 
 export function deactivate() {}
 
 const appName: string = 'insertseq';
 
+// Template for the different segments of the regex input string
 interface RuleTemplate {
 	[key: string]: string;
 }
 
-// Input type based on the beginning of the input string
-type TInputType =
-	| 'decimal'
-	| 'hex'
-	| 'octal'
-	| 'binary'
-	| 'alpha'
-	| 'date'
-	| 'expression'
-	| 'own'
-	| 'predefined'
-	| 'textSelected'
-	| null;
+// Defines different input types (based on the beginning of the input string)
+type TInput =
+	| 'decimal' // (normal) numbers (integer or float)
+	| 'hex' // hexadecimal numbers
+	| 'octal' // octal numbers
+	| 'binary' // binary numbers
+	| 'alpha' // strings (alphabetic) based on configured "alphabet"
+	| 'date' // date values (e.g. 2023-11-05) (future: also time?)
+	| 'expression' // expressions (JavaScript)
+	| 'own' // own (war "months") - custom alphabetic sequences (inserted as [...] array)
+	| 'predefined' // predefined text sequences (based on predefined lists in configuration)
+	| 'textSelected' // no input - just use the originally selected text
+	| null; // no valid input type detected
 
-type TStatus = 'preview' | 'final';
+type TStatus = 'preview' | 'final'; // status of the insertion (preview with decorations or final insertion)
 
-// Parameter for the sequence creation functions
+// parameters passed to insertNewSequence() and subfunctions
 type TParameter = {
 	editor: vscode.TextEditor;
 	origCursorPos: vscode.Selection[];
 	origTextSel: string[];
 	segments: RuleTemplate;
 	config: vscode.WorkspaceConfiguration;
+	myDelimiter: string | null;
 };
 
-// Special replacements within expressions
+// Special chars replacements within expressions or stop expressions
 type TSpecialReplacementValues = {
 	currentValueStr: string;
 	valueAfterExpressionStr: string;
@@ -145,11 +109,13 @@ type TSpecialReplacementValues = {
 
 // Default configuration values (will be overwritten by user settings)
 let previewDecorationType: vscode.TextEditorDecorationType | null = null;
+
 // current shown history quickpick (if any) - used by delete/clear commands
 let currentHistoryQuickPick: vscode.QuickPick<
 	vscode.QuickPickItem & { cmd?: string }
 > | null = null;
 
+// sort function: sort and/or reverse selections. If neither sort nor reverse is set, returns the original array.
 function sortSelectionsByPosition(
 	selections: vscode.Selection[],
 	sort: boolean = false,
@@ -167,25 +133,18 @@ function sortSelectionsByPosition(
 	return reverse ? tempSelections.slice().reverse() : tempSelections;
 }
 
-async function InsertSeqCommand(
-	context: vscode.ExtensionContext,
-	value: string,
-) {
-	// decimals: [<start>][:<step>][#<repeat>][*<frequency>][~<format>]r[+]<random>][::<expr>][@<stopexpr>][$][!]
-	// alpha: <start>[:<step>][#<repeat>][\*<frequency>][~<format>][w][@<stopexpr>][$][!]
-	// dates: %[<year>[-<month>[-<day>]]][:[dwmy]<step>][#<repeat>][*<frequency>][~<format>][$][!]
-	// expressions: [<cast>]|[~<format>::]<expr>[@<stopexpr>][$][!]
-	// own (war "months"): ;<start>[:<step>][#<repeat>][\*<frequency>][~<format>][@<stopexpr>][$][!]
+// Syntaxes for different input types:
+// ===================================
+// decimals: [<start>[r[+]<random>][?<delimiter>]][:<step>][#<repeat>][*<frequency>][##startover][~<format>][::<expr>][@<stopexpr>][$][!]
+// alpha: <start>[:<step>][#<repeat>][*<frequency>][##startover][~<format>][::<expr>][@<stopexpr>][w][$][!]
+// dates: %[<year>[-<month>[-<day>]]][:<step>[dwmy]][#<repeat>][*<frequency>][##startover][~<format>][$][!]
+// expressions: |<expr>[~<format>][@<stopexpr>][$][!]
+// own (war "months"): ;<start>[:<step>][#<repeat>][\*<frequency>][##startover][~<format>][@<stopexpr>][$][!]
+// predefined: <predefinedList as array>[?[whicharray[|startat]][ifs]][:<step>][#<repeat>][\*<frequency>][##startover][~<format>][@<stopexpr>][$][!]
 
-	// get active editor
-	const editor = vscode.window.activeTextEditor;
-	if (!editor) {
-		vscode.window.showInformationMessage('No active editor!');
-		return;
-	}
-
-	// read config file
-	// config entries in appName overwrites same config entries in "insertnums"
+// initialize global parameters, get original selections, regex segments and configuration (used in insertNewSequence and insertSeqHistory)
+async function initApp(editor: vscode.TextEditor): Promise<TParameter> {
+	// read config file, since version 1.0 insertnums config entries are no longer merged
 	const config = Object.assign(
 		{},
 		vscode.workspace.getConfiguration(appName),
@@ -193,12 +152,6 @@ async function InsertSeqCommand(
 
 	// read regular Expression for segmenting the input string
 	const regexpInputSegments = getRegExpressions();
-
-	// get current alphabet from configuration and replace placeholder in regex
-	const currentAlphabet: string = config.get('alphabet') || '\u{0}';
-	regexpInputSegments['start_alpha'] = regexpInputSegments[
-		'start_alpha'
-	].replace('\\w', `${currentAlphabet}`);
 
 	// get current selected Text
 	const origTextSelections = editor.selections.map((selection) =>
@@ -217,18 +170,42 @@ async function InsertSeqCommand(
 		(selection) => new vscode.Selection(selection.start, selection.start),
 	);
 
-	// global parameter for sequence creation which will be passed to insertNewSequence()
-	const parameter: TParameter = {
+	// global parameter for sequence creation which will be passed to subfunctions
+	return {
 		editor: editor,
 		origCursorPos: origCursorPositions,
 		origTextSel: origTextSelections,
 		segments: regexpInputSegments,
 		config: config,
+		myDelimiter: null,
 	};
+}
 
+// Command 1: InsertSeqCommand - main command for inserting new sequences (default KEY: Ctrl+Alt+.)
+async function InsertSeqCommand(
+	context: vscode.ExtensionContext,
+	value: string,
+) {
+	// get active editor, if not available show info message and return
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) {
+		vscode.window.showInformationMessage('No active editor!');
+		return;
+	}
+
+	// get global parameter (config, regex, original selections etc.) - will be passed to subfunctions
+	const parameter: TParameter = await initApp(editor);
+
+	// get current alphabet from configuration and replace placeholder in regex
+	const currentAlphabet: string = parameter.config.get('alphabet') || '\u{0}';
+	parameter.segments['start_alpha'] = parameter.segments[
+		'start_alpha'
+	].replace('\\w', `${currentAlphabet}`);
+
+	// set input box options for sequence input, including placeHolder, predefined value if available and live preview as decorations
 	const inputOptions: vscode.InputBoxOptions = {
 		placeHolder:
-			'[<start>][:<step>][*<frequency>][#<repeat>][##startover][~<format>][;predefinedText|[<ownselection>]][r[+]<random>][::<expr>][@<stopexpr>][$][!]',
+			'[<start>][:<step>][*<frequency>][#<repeat>][##startover][~<format>][::<expr>][@<stopexpr>][$][!]',
 		value: value,
 		validateInput: function (input) {
 			insertNewSequence(input, parameter, 'preview');
@@ -236,14 +213,17 @@ async function InsertSeqCommand(
 		},
 	};
 
+	// show input box based on above options
 	vscode.window.showInputBox(inputOptions).then(function (
 		input: string | undefined,
 	) {
+		// insert final sequence (check if canceled will be done in insertNewSequence and in saveToHistory)
 		insertNewSequence(input, parameter, 'final');
 		saveToHistory(context, input);
 	});
 }
 
+// Command 2: InsertSeqHistory - main command for browsing through history / preview entries (default KEY: Ctrl+Alt+,)
 async function InsertSeqHistory(
 	context: vscode.ExtensionContext,
 	value: string,
@@ -254,224 +234,48 @@ async function InsertSeqHistory(
 		return;
 	}
 
-	const history = getHistory(context);
-
-	if (history.length === 0) {
-		InsertSeqCommand(context, '');
-		return;
-	}
-
-	// read config file - insertnums as of history reason (extension previously was named insertnums) and 'appName' as of current config file.
-	// config entries in appName overwrites same config entries in "insertnums"
-	const config = Object.assign(
-		{},
-		vscode.workspace.getConfiguration(appName),
-	);
-
-	// read regular Expression for segmenting the input string
-	const regexpInputSegments = getRegExpressions();
-
-	// get current alphabet from configuration and replace placeholder in regex
-	const currentAlphabet: string = config.get('alphabet') || '\u{0}';
-	regexpInputSegments['start_alpha'] = regexpInputSegments[
-		'start_alpha'
-	].replace('\\w', `${currentAlphabet}`);
-
-	// get current selected Text
-	const origTextSelections = editor.selections.map((selection) =>
-		editor.document.getText(selection),
-	);
-
-	// delete current selected Text (will be inserted later when input is cancelled). Wait for edit to finish because of the following cursor position reading.
-	await editor.edit((builder) => {
-		editor.selections.forEach((selection) => {
-			builder.replace(selection, '');
-		});
-	});
-
-	// get current (multi-)cursor positions (without original selected Text)
-	const origCursorPositions = editor.selections.map(
-		(selection) => new vscode.Selection(selection.start, selection.start),
-	);
-
-	// global parameter for sequence creation which will be passed to insertNewSequence()
-	const parameter: TParameter = {
-		editor: editor,
-		origCursorPos: origCursorPositions,
-		origTextSel: origTextSelections,
-		segments: regexpInputSegments,
-		config: config,
-	};
+	// get global parameter (config, regex, original selections etc.) - will be passed to subfunctions
+	const parameter: TParameter = await initApp(editor);
 
 	// build QuickPick items: top 'New sequence', then history newest-first
-	const qp = vscode.window.createQuickPick<
-		vscode.QuickPickItem & { cmd: string }
-	>();
-	// expose current quickpick so internal commands (DEL / CTRL+DEL) can access it
-	currentHistoryQuickPick = qp;
-	const items: Array<
-		vscode.QuickPickItem & {
-			cmd: string;
-			buttons?: vscode.QuickInputButton[];
-		}
-	> = [];
-	items.push({
-		label: '$(add) New sequence',
-		description: 'Start a new sequence',
-		cmd: '',
-	});
+	const qp = createQuickPick(context, parameter);
 
-	// create items with a delete button each (trash icon)
-	for (const h of history) {
-		items.push({
-			label: h,
-			description: '',
-			cmd: h,
-			buttons: [
-				{
-					iconPath: new vscode.ThemeIcon('trash'),
-					tooltip: 'Delete this history entry',
-				} as any,
-			],
-		});
-	}
-
-	qp.items = items;
-	qp.placeholder = 'Choose "New sequence" or any of the last entries';
-	qp.matchOnDescription = true;
-
-	function schedulePreview(cmd: string | undefined) {
-		if (!cmd) {
-			// clear preview decorations
-			if (previewDecorationType)
-				parameter.editor.setDecorations(previewDecorationType, []);
-		} else {
-			// call preview
-			try {
-				insertNewSequence(cmd, parameter, 'preview');
-			} catch (e) {
-				console.error('preview error', e);
-			}
-		}
-	}
-
-	qp.onDidChangeActive((activeItems) => {
-		const active = activeItems[0];
-		if (!active || !active.cmd) {
-			schedulePreview(undefined);
-			return;
-		}
-		schedulePreview(active.cmd);
-	});
-
-	// handle clicking the per-item delete button
-	qp.onDidTriggerItemButton(async (e) => {
-		const item = e.item as vscode.QuickPickItem & { cmd?: string };
-		if (!item || !item.cmd) return;
-		// delete from storage
-		await deleteFromHistory(context, item.cmd);
-		// remove from quickpick items
-		qp.items = qp.items.filter((i) => (i as any).cmd !== item.cmd);
-		// clear preview if the deleted item was active
-		const active = qp.activeItems[0];
-		if (!active || !active.cmd) {
-			schedulePreview(undefined);
-		} else {
-			schedulePreview(active.cmd);
-		}
-	});
-
-	// add a toolbar Clear button to clear all history
-	qp.buttons = [
-		{
-			iconPath: new vscode.ThemeIcon('trash'),
-			tooltip: 'Clear all history',
-		} as any,
-	];
-	qp.onDidTriggerButton(async (button) => {
-		// Confirm
-		const ans = await vscode.window.showWarningMessage(
-			'Clear entire history?',
-			{ modal: true },
-			'Clear',
-		);
-		if (ans !== 'Clear') return;
-		await clearHistory(context);
-		// reset quickpick items to only New sequence
-		qp.items = [
-			{
-				label: '$(add) New sequence',
-				description: 'Start a new sequence',
-				cmd: '',
-			},
-		];
-		schedulePreview(undefined);
-	});
-
-	qp.onDidAccept(async () => {
-		const chosen = qp.activeItems[0];
-		if (!chosen) {
-			qp.hide();
-			return;
-		}
-
-		if (!chosen.cmd) {
-			// New sequence selected -> delegate to InsertSeqCommand
-			qp.hide();
-			await InsertSeqCommand(context, '');
-			return;
-		}
-
-		// history item selected -> final execution
-		qp.busy = true;
-		try {
-			insertNewSequence(chosen.cmd, parameter, 'final');
-			// save to history (will no-op if already present)
-			await saveToHistory(context, chosen.cmd);
-		} finally {
-			qp.busy = false;
-			qp.hide();
-		}
-	});
-
-	qp.onDidHide(() => {
-		// clear preview decorations
-		if (previewDecorationType)
-			parameter.editor.setDecorations(previewDecorationType, []);
-		qp.dispose();
-		// clear global reference
-		if (currentHistoryQuickPick === qp) currentHistoryQuickPick = null;
-	});
-
+	// show QuickPick
 	qp.show();
 }
 
-// Create new Sequence based on Input
+// working horse: create new Sequence based on Input string, (global) Parameter and Status of input (preview or final)
 function insertNewSequence(
 	input: string | undefined, // der eingegebene Text
 	parameter: TParameter,
 	status: TStatus,
 ): void {
+	// check, if output should be sorted or reversed (default: output in selection-order)
+	const sorted =
+		(input && input.match(parameter.segments['outputSort'])) ?? null;
+	const reverse =
+		(input && input.match(parameter.segments['outputReverse'])) ?? null;
+
 	// get current sequence function based on input type
 	const currSeqFunction = getSequenceFunction(input, parameter);
 
-	const sorted = input && input?.match(parameter.segments['outputSort']);
-	const reverse = input && input?.match(parameter.segments['outputReverse']);
-
-	// generate new sequence strings (up to stop expression or maxInsertions)
+	// generate new sequence input strings (up to stop expression or maxInsertions)
 	const strList: string[] = [];
 	for (
 		let i = 0;
 		i < (Number(parameter.config.get('maxInsertions')) || 1000);
 		i++
 	) {
+		// build strList-Array until stop expression is true or maxInsertions reached
 		const res = currSeqFunction(i);
 		if (res.stopFunction) break;
 		strList.push(res.stringFunction);
 	}
 
-	const delimiter: string = parameter.config.get('delimiter') || '';
-	const newLine: boolean = delimiter === '';
+	// get delimiter and newLine settings from configuration (if insertations exceed number of selections)
+	const delimiter: string | null =
+		parameter.myDelimiter || parameter.config.get('delimiter') || null;
+	// select proper EOL string for current document
 	const eolString =
 		parameter.editor.document.eol === vscode.EndOfLine.LF ? '\n' : '\r\n';
 
@@ -479,26 +283,32 @@ function insertNewSequence(
 	if (!previewDecorationType) {
 		previewDecorationType = vscode.window.createTextEditorDecorationType({
 			after: {
-				color: parameter.config.previewColor,
+				color: parameter.config.previewColor ?? '#888888',
 				margin: '0 0 0 0',
 			},
 		});
 	}
+	// clear previous decorations
 	parameter.editor.setDecorations(previewDecorationType, []);
 
+	// get sorted/reversed cursor positions for insertions
 	const insertCursorPos = sortSelectionsByPosition(
 		parameter.origCursorPos,
 		sorted ? true : false,
 		reverse ? true : false,
 	);
 
+	// handle preview or final insertion
 	switch (status) {
 		case 'preview':
-			// Vorschau mit Decorations
+			// preview with Decorations
+			// clear previous decorations
 			const decorations: vscode.DecorationOptions[] = [];
+
+			// safe last inserted string for possible appending at the end
 			let addStr = '';
 
-			// for each created string, create a decoration. If the number of created strings is higher than the number of original cursors, new lines will be inserted.
+			// for each created string, create a decoration. If the number of created strings is higher than the number of original cursors, "new lines" will be inserted.
 			strList.forEach((str, index) => {
 				// create decoration at original cursor position as far as original cursor positions exist
 				if (index < insertCursorPos.length) {
@@ -511,72 +321,43 @@ function insertNewSequence(
 						),
 						renderOptions: {
 							after: {
+								// replace spaces with non-breaking spaces for correct rendering as decoration
 								contentText: str.replace(/\s/g, '\u00A0'),
 							},
 						},
 					};
 					decorations.push(decoration);
+					// safe last inserted string for possible appending at the end
 					addStr = str;
-					// decorations are only visible in previous selected multi-cursors
-					//
-					//				} else {
-					//					// insert additional decorations outside of selection
-					//					const lastPos =
-					//						parameter.origCursorPos[
-					//							parameter.origCursorPos.length - 1
-					//						];
-					//					const addIndex = index - parameter.origCursorPos.length + 1;
-					//
-					//					if (newLine) {
-					//						// insert decoration at new line as long as not end of document
-					//						if (
-					//							lastPos.start.line + addIndex <
-					//							parameter.editor.document.lineCount
-					//						) {
-					//							let decoration = {
-					//								range: new vscode.Range(
-					//									lastPos.start.line + addIndex,
-					//									0,
-					//									lastPos.start.line + addIndex,
-					//									0,
-					//								),
-					//								renderOptions: {
-					//									after: {
-					//										contentText: str.replace(
-					//											/\s/g,
-					//											'\u00A0',
-					//										),
-					//									},
-					//								},
-					//							};
-					//							decorations.push(decoration);
-					//						}
-					//					} else {
-					//						addStr += delimiter + str;
-					//					}
 				}
 			});
-			if (strList.length > insertCursorPos.length && !newLine) {
+			// if more created strings than original cursors, append the rest at the end (with delimiter or newline symbol)
+			if (strList.length > insertCursorPos.length) {
 				const lastPos = insertCursorPos[insertCursorPos.length - 1];
-
+				decorations.pop();
+				for (let i = insertCursorPos.length; i < strList.length; i++) {
+					addStr += (delimiter ? delimiter : '\u21b5') + strList[i]; // \u21b5 = downwards arrow with corner leftwards
+				}
 				let decoration = {
 					range: new vscode.Range(
 						lastPos.start.line,
-						0,
-						lastPos.start.line,
-						0,
+						lastPos.start.character,
+						lastPos.end.line,
+						lastPos.end.character,
 					),
 					renderOptions: {
 						after: {
-							contentText: addStr.replace(/\s/g, '\u00A0'),
+							contentText: addStr,
 						},
 					},
 				};
-				decorations[decorations.length - 1] = decoration;
+				decorations.push(decoration);
 			}
 			parameter.editor.setDecorations(previewDecorationType, decorations);
 			break;
 		case 'final':
+			// final insertion
+			// clear previous decorations
 			parameter.editor.setDecorations(previewDecorationType, []);
 			try {
 				previewDecorationType.dispose();
@@ -586,15 +367,18 @@ function insertNewSequence(
 			parameter.editor.edit((builder) => {
 				let addStr = '';
 
+				// if no strings created, use original selected text as backup
 				if (strList.length === 0) {
 					parameter.origTextSel.map((s) => strList.push(s));
 				}
 
+				// for each created string, insert at original cursor position. If more strings than original cursors, insert the rest at the end (with delimiter or newline symbol)
 				strList.forEach((str, index) => {
 					// insert strings in original Selection
-					const maxIndex = newLine
-						? insertCursorPos.length
-						: insertCursorPos.length - 1;
+					const maxIndex =
+						delimiter == null
+							? insertCursorPos.length
+							: insertCursorPos.length - 1;
 					if (index < maxIndex) {
 						const currSel = new vscode.Selection(
 							insertCursorPos[index].start.line,
@@ -602,10 +386,10 @@ function insertNewSequence(
 							insertCursorPos[index].end.line,
 							insertCursorPos[index].end.character,
 						);
-						builder.replace(currSel, str.replace(/\s/g, '\u00A0'));
+						builder.replace(currSel, str);
 					} else {
 						// insert additional insertions as newlines
-						if (newLine) {
+						if (delimiter == null) {
 							// insert decoration at new line as long as not end of document
 
 							// at the end of document, insert additional lines
@@ -618,15 +402,9 @@ function insertNewSequence(
 								currSel.line ===
 								parameter.editor.document.lineCount
 							) {
-								builder.insert(
-									currSel,
-									eolString + str.replace(/\s/g, '\u00A0'),
-								);
+								builder.insert(currSel, eolString + str);
 							} else {
-								builder.insert(
-									currSel,
-									str.replace(/\s/g, '\u00A0') + eolString,
-								);
+								builder.insert(currSel, str + eolString);
 							}
 						} else {
 							// insert additional strings with "delimiter"
@@ -652,6 +430,7 @@ function insertNewSequence(
 	}
 }
 
+// returns the proper sequence function based on input type
 function getSequenceFunction(
 	input: string | undefined,
 	p: TParameter,
@@ -659,92 +438,97 @@ function getSequenceFunction(
 	stringFunction: string;
 	stopFunction: boolean;
 } {
-	// bei "undefined" wurde die Eingabe abgebrochen - überschreibe die bisherig (temporären) Eingaben
+	// if input was "undefined" (canceled), return stopFunction true
 	if (input == null) {
 		const retStr = { stringFunction: '', stopFunction: true };
 		return (i) => retStr;
 	}
 
-	const inputType: TInputType = getInputType(input, p);
+	// determine input type (based on input string beginning)
+	const inputType: TInput = getInputType(input, p);
 
+	// return proper sequence function based on input type
 	switch (inputType) {
 		case 'decimal':
-			return createDecimalSeq(input, p, 10);
+			return createDecimalSeq(input, p, 10); // decimal
 		case 'hex':
-			return createDecimalSeq(input, p, 16);
+			return createDecimalSeq(input, p, 16); // hex
 		case 'octal':
-			return createDecimalSeq(input, p, 8);
+			return createDecimalSeq(input, p, 8); // octal
 		case 'binary':
-			return createDecimalSeq(input, p, 2);
+			return createDecimalSeq(input, p, 2); // binary
 		case 'alpha':
-			return createStringSeq(input, p);
+			return createStringSeq(input, p); // strings
 		case 'date':
-			return createDateSeq(input, p);
+			return createDateSeq(input, p); // dates (future: also time?)
 		case 'expression':
-			return createExpressionSeq(input, p);
+			return createExpressionSeq(input, p); // expressions
 		case 'own':
-			return createOwnSeq(input, p);
+			return createOwnSeq(input, p); // own (war "months" in version 0.x) - custom alphabetic sequences
 		case 'predefined':
-			return createPredefinedSeq(input, p);
+			return createPredefinedSeq(input, p); // predefined text sequences (predefined lists in configuration)
 		case 'textSelected':
-			return createTextSelectedSeq(input, p);
+			return createTextSelectedSeq(input, p); // no input - just use the originally selected text
 		default:
 			const retStr = { stringFunction: '', stopFunction: true };
-			return (i) => retStr;
+			return (i) => retStr; // no valid input type detected, stop function
 	}
 }
 
-function getInputType(input: string, p: TParameter): TInputType | null {
-	let type: TInputType = null;
+// determines the input type based on the beginning of the input string
+function getInputType(input: string, p: TParameter): TInput | null {
+	let type: TInput = null;
 
+	// get current alphabet from configuration
 	const alphabet: string = p.config.get('alphabet') || '';
 
 	// helper: regex-escape
 	const escapeForRegex = (s: string) =>
 		s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 
-	// matcht, wenn das Input mit einem der Zeichen aus `alphabet` beginnt
+	// define regex for alphabetic characters based on current alphabet (from configuration)
 	const chars = Array.from(alphabet).map(escapeForRegex).join('');
 	const reAlphabetCharClass = new RegExp('^[' + chars + ']', 'iu');
 
 	// What kind of input is it (check regex from begin)
 	switch (true) {
-		// Hexadezimale Zahl
+		// hex numbers
 		case /^(?:([x0\\s\\._])\1*)?[+-]?0x[0-9a-f]+/i.test(input):
 			type = 'hex';
 			break;
-		// Oktal Zahl
+		// octal numbers
 		case /^(?:([x0\\s\\._])\1*)?[+-]?0o[0-7]+/i.test(input):
 			type = 'octal';
 			break;
-		// binäre Zahl
+		// binary numbers
 		case /^(?:([x0\\s\\._])\1*)?[+-]?0b[01]+/i.test(input):
 			type = 'binary';
 			break;
-		// nummerische Zahl oder "leer"
+		// numbers (decimal)
 		case /^(?:([x0\\s\\._])\1*)?[+-]?\d/i.test(input):
 			type = 'decimal';
 			break;
-		// Expression
+		// expression
 		case /^\|/i.test(input):
 			type = 'expression';
 			break;
-		// Alphabetische Zeichen
+		// strings (alphabetic)
 		case reAlphabetCharClass.test(input):
 			type = 'alpha';
 			break;
-		// Datum
+		// date values
 		case /^%/i.test(input):
 			type = 'date';
 			break;
-		// eigene Sequenz
+		// own sequences
 		case /^\[/i.test(input):
 			type = 'own';
 			break;
+		// predefined sequences
 		case /^;/i.test(input):
 			type = 'predefined';
 			break;
-		// kein Typ erkennbar, dann nehme ich Dezimal an, soland nichts markiert worden ist - sonst lass einfach die Markierung stehen
+		// empty input (when input box is empty) - use selected text if available or decimal as default
 		case /^$/i.test(input):
 		default:
 			const selectedText = p.origTextSel.join('');
@@ -758,22 +542,31 @@ function getInputType(input: string, p: TParameter): TInputType | null {
 	return type;
 }
 
+// creates decimal sequence function - used for decimal, hex, octal and binary sequences
 function createDecimalSeq(
 	input: string,
 	parameter: TParameter,
 	base: number,
 ): (i: number) => { stringFunction: string; stopFunction: boolean } {
-	// rules: RuleTemplate, selections: vscode.Selection[], config: vscode.WorkspaceConfiguration, base: number): (i : number) => string {
+	// extract parameters from input string or use configuration defaults
+	const startMatch = input.match(parameter.segments['start_decimal']);
 
+	// extract start value (with possible decimals), random number and delimiter
 	const start =
-		Number(
-			input.match(parameter.segments['start_decimal'])?.groups?.start ??
-				parameter.config.get('start'),
-		) ?? 1;
-	const startDecimals =
-		input.match(parameter.segments['start_decimal'])?.groups
-			?.startDecimals || '';
+		Number(startMatch?.groups?.start ?? parameter.config.get('start')) ?? 1;
+	const startDecimals = startMatch?.groups?.startDecimals || '';
+	const randomNumber = Number(startMatch?.groups?.rndNumber) || 0;
+	const randomDecimal = startMatch?.groups?.rndDecimals || '';
+	const randomPlusMinus = startMatch?.groups?.rndPlusMinus || null;
+	const leadString = startMatch?.groups?.lead_string;
+	const randomAvailable = startMatch?.groups?.rndAvailable || null;
 
+	const myDelimiter = startMatch?.groups?.seqdelimiter || null;
+
+	// set custom delimiter if given in input
+	parameter.myDelimiter = myDelimiter;
+
+	// extract steps, repetition, frequency, startover, stop expression and expression
 	const steps =
 		Number(
 			input.match(parameter.segments['steps_decimal'])?.groups?.steps ??
@@ -799,35 +592,34 @@ function createDecimalSeq(
 		'';
 	const expr =
 		input.match(parameter.segments['expression'])?.groups?.expr ?? '';
-	const leadString = input.match(parameter.segments['start_decimal'])?.groups
-		?.lead_string;
 
-	const randomAvailable =
-		input.match(parameter.segments['start_decimal'])?.groups
-			?.rndAvailable || null;
+	// determine if radix prefix is requested
+	const radixPrefix =
+		base !== 10
+			? startMatch?.groups?.radixPrefix !== undefined
+				? String(startMatch?.groups?.radixPrefix) === '1'
+				: parameter.config.get('radixPrefix') !== undefined
+					? parameter.config.get('radixPrefix') === true
+					: false
+			: false;
 
-	const randomNumber =
-		Number(
-			input.match(parameter.segments['start_decimal'])?.groups?.rndNumber,
-		) || 0;
-	const randomDecimal =
-		input.match(parameter.segments['start_decimal'])?.groups?.rndDecimals ||
-		'';
-
-	const randomPlusMinus =
-		input.match(parameter.segments['start_decimal'])?.groups
-			?.rndPlusMinus || null;
-
+	// determine format string based on base
 	const basePrefix =
-		base === 16 ? '#x' : base === 8 ? '#o' : base === 2 ? '#b' : null;
+		base === 16 ? '#x' : base === 8 ? '#o' : base === 2 ? '#b' : '';
+
+	// format string: leading string (if given) or radixPrefix if given or format from input or configuration or empty
 	const format = leadString
 		? leadString[0] + '>' + input.length
-		: (basePrefix ??
-			input.match(parameter.segments['format_decimal'])?.groups
-				?.format_decimal ??
-			parameter.config.get('format') ??
-			'');
+		: radixPrefix
+			? basePrefix
+			: String(
+					input.match(parameter.segments['format_decimal'])?.groups
+						?.format_decimal ??
+						parameter.config.get('format') ??
+						'',
+				);
 
+	// prepare special replacement values for expressions and stop expressions
 	const replacableValues: TSpecialReplacementValues = {
 		currentValueStr: '',
 		valueAfterExpressionStr: '',
@@ -839,6 +631,7 @@ function createDecimalSeq(
 		origTextStr: '',
 	};
 
+	// return the sequence function (i = current index of insertion, starting with 0)
 	return (i) => {
 		let value = start;
 
@@ -858,6 +651,15 @@ function createDecimalSeq(
 									0.5 * 10 ** (-randomDecimal.length - 1)),
 					).toFixed(randomDecimal.length),
 				);
+			} else {
+				// show info message and stop function if maxNumber < start
+				vscode.window.showInformationMessage(
+					'InsertSeq: Random number maximum is less than start value!',
+				);
+				return {
+					stringFunction: '',
+					stopFunction: true,
+				};
 			}
 		} else {
 			// calculate current value based on start, step, frequency, repetition and startover
@@ -866,10 +668,13 @@ function createDecimalSeq(
 				steps * Math.trunc(((i % startover) % (freq * repe)) / freq);
 		}
 
+		// set special replacement values for origTextStr and currentIndexStr
 		if (i <= parameter.origTextSel.length) {
 			replacableValues.origTextStr = parameter.origTextSel[i];
 		}
 		replacableValues.currentIndexStr = i.toString();
+
+		// set current value string before expression evaluation
 		replacableValues.currentValueStr = value.toString(base);
 
 		// if expression exists, evaluate expression with current Value and replace newValue with result of expression.
@@ -883,20 +688,24 @@ function createDecimalSeq(
 			// ignore errors in expression evaluation - keep current value;
 		}
 
+		// set value after expression evaluation
 		replacableValues.valueAfterExpressionStr = value.toString(base);
 
+		// default: stop expression triggered if i >= number of original selections
 		let stopExpressionTriggered = i >= parameter.origCursorPos.length;
 
+		// check stop expression if given
 		if (stopexpr.length > 0) {
 			// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 			try {
-				let stopExprResult = runExpression(
+				const stopExprResult = runExpression(
 					replaceSpecialChars(stopexpr, replacableValues),
 				);
-				if (stopExprResult) {
-					stopExprResult = Boolean(stopExprResult);
+				if (stopExprResult != null) {
+					stopExpressionTriggered = Boolean(stopExprResult);
 				} else {
-					stopExprResult = i >= parameter.origCursorPos.length;
+					stopExpressionTriggered =
+						i >= parameter.origCursorPos.length;
 				}
 			} catch {
 				stopExpressionTriggered = i >= parameter.origCursorPos.length;
@@ -905,18 +714,33 @@ function createDecimalSeq(
 			stopExpressionTriggered = i >= parameter.origCursorPos.length;
 		}
 
+		// set previous value string for next iteration
 		replacableValues.previousValueStr = value.toString();
 
 		// apply formatting if format string is given and return formatted value
-		if (format !== '') {
+		if (format && format !== '') {
 			return {
 				stringFunction: formatting.formatNumber(value, format),
 				stopFunction: stopExpressionTriggered,
 			};
 		} else {
 			if (startDecimals === '') {
+				let prefixStr = '';
+				if (radixPrefix) {
+					switch (base) {
+						case 16:
+							prefixStr = '0x';
+							break;
+						case 8:
+							prefixStr = '0o';
+							break;
+						case 2:
+							prefixStr = '0b';
+							break;
+					}
+				}
 				return {
-					stringFunction: value.toString(base),
+					stringFunction: prefixStr + value.toString(base),
 					stopFunction: stopExpressionTriggered,
 				};
 			} else {
@@ -929,11 +753,12 @@ function createDecimalSeq(
 	};
 }
 
+// creates string sequence function - used for alphabetic sequences
 function createStringSeq(
 	input: string,
 	parameter: TParameter,
 ): (i: number) => { stringFunction: string; stopFunction: boolean } {
-	// Unicode sichere Umwandlung von String zu Index
+	// utility functions for string to index and index to string conversion - unicode-graphem aware
 	function stringToIndex(str: string): number {
 		const chars = Array.from(str); // Unicode-Graphem
 		let index = 0;
@@ -946,7 +771,7 @@ function createStringSeq(
 			index = index * alphabetLen + charIndex;
 		}
 
-		// Alle Kombinationen kürzerer Länge berücksichtigen
+		// all combinations with fewer characters
 		for (let len = 1; len < chars.length; len++) {
 			index += Math.pow(alphabetLen, len);
 		}
@@ -980,13 +805,17 @@ function createStringSeq(
 		return chars.join('');
 	}
 
+	// extract start value as regex group to allow lowercase/uppercase detection
 	const startRegEx = new RegExp(parameter.segments['start_alpha'], 'i');
+	const startMatch = input.match(startRegEx);
 
-	const start = input.match(startRegEx)?.groups?.start || '';
+	const start = startMatch?.groups?.start || '';
 
+	// default return if start is empty
 	const defaultReturn = { stringFunction: '', stopFunction: true };
 	if (start === '') return (i) => defaultReturn;
 
+	// extract steps, repetition, frequency, startover, stop expression, expression and format
 	const steps =
 		Number(input.match(parameter.segments['steps_other'])?.groups?.steps) ||
 		Number(parameter.config.get('step')) ||
@@ -1013,7 +842,8 @@ function createStringSeq(
 	const format =
 		input.match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
 		'';
-	// determine capitalization
+
+	// determine capitalization, default: preserve original capitalization (from rightmost characters)
 	let capital: string = 'preserve';
 	// check global configuration first
 	switch (
@@ -1030,17 +860,8 @@ function createStringSeq(
 			break;
 	}
 
-	// then check input first character
-	if (input && input[0].toUpperCase() === input[0]) {
-		capital = 'upper';
-	}
-
 	// then check input capitalization options
-	switch (
-		String(
-			input.match(startRegEx)?.groups?.alphacapital,
-		).toLocaleLowerCase()
-	) {
+	switch (String(startMatch?.groups?.alphacapital).toLocaleLowerCase()) {
 		case 'u':
 			capital = 'upper';
 			break;
@@ -1059,10 +880,10 @@ function createStringSeq(
 		? alphabetRaw.map(String)
 		: Array.from(String(alphabetRaw));
 
-	// Prüfung, ob alphabet Duplikate enthält
+	// check alphabet for unique entries
 	const uniqAlphabet = new Set(alphabetArr);
 	if (uniqAlphabet.size !== alphabetArr.length) {
-		throw new Error('Alphabet includes invalid entries!');
+		throw new Error('Alphabet includes double entries!');
 	}
 
 	const charToIndex = new Map<string, number>();
@@ -1076,6 +897,7 @@ function createStringSeq(
 	});
 	const alphabetLen = alphabetArr.length;
 
+	// prepare special replacement values for expressions and stop expressions
 	const replacableValues: TSpecialReplacementValues = {
 		currentValueStr: '',
 		valueAfterExpressionStr: '',
@@ -1087,8 +909,10 @@ function createStringSeq(
 		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
 	};
 
+	// get current index of start string
 	const currentIndex = stringToIndex(start);
 
+	// return the sequence function (i = current index of insertion, starting with 0)
 	return (i) => {
 		if (i <= parameter.origTextSel.length) {
 			replacableValues.origTextStr = parameter.origTextSel[i];
@@ -1096,13 +920,16 @@ function createStringSeq(
 			replacableValues.origTextStr = '';
 		}
 
+		// set current index string
 		replacableValues.currentIndexStr = i.toString();
 
+		// calculate current value based on start, step, frequency, repetition and startover
 		let value = indexToString(
 			currentIndex +
 				steps * Math.trunc(((i % startover) % (freq * repe)) / freq),
 		);
 
+		// set current value string before expression evaluation
 		replacableValues.currentValueStr = value;
 
 		// if expression does not lead to a string, the current / new value will not be changed
@@ -1115,9 +942,11 @@ function createStringSeq(
 			}
 		} catch {}
 
+		// set value after expression evaluation
 		replacableValues.valueAfterExpressionStr = value;
 
-		let stopExprResult = false;
+		// default: stop expression triggered if i >= number of original selections
+		let stopExprResult = i >= parameter.origCursorPos.length;
 
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 		if (stopexpr.length > 0) {
@@ -1137,6 +966,7 @@ function createStringSeq(
 			stopExprResult = i >= parameter.origCursorPos.length;
 		}
 
+		// set previous value string for next iteration
 		replacableValues.previousValueStr = value;
 
 		// change capitalization based on settings
@@ -1153,7 +983,7 @@ function createStringSeq(
 					value.slice(1).toLowerCase();
 				break;
 			default:
-				// preserve original capitalization
+				// preserve original capitalization (from rightmost characters)
 				for (let idx = value.length - 1; idx >= 0; idx--) {
 					const ch = value.charAt(idx);
 					const origCh = start.charAt(
@@ -1185,7 +1015,7 @@ function createDateSeq(
 	input: string,
 	parameter: TParameter,
 ): (i: number) => { stringFunction: string; stopFunction: boolean } {
-	// if only "%" is given, use current date as start date
+	// if only "%", without additional digits, is given, use current date as start date
 	if (input.match(/^%(?!\d)/)) {
 		input = '%' + Temporal.Now.plainDateISO().toString() + input.slice(1);
 	}
@@ -1246,6 +1076,8 @@ function createDateSeq(
 		) ||
 		Number(parameter.config.get('startover')) ||
 		Number.MAX_SAFE_INTEGER;
+	const expr =
+		input.match(parameter.segments['expression'])?.groups?.expr || '';
 	const stopexpr =
 		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
 		'';
@@ -1347,6 +1179,35 @@ function createDateSeq(
 			.toPlainDate()
 			.toLocaleString(language);
 
+		// if expression exists, evaluate expression with current Value and replace newValue with result of expression.
+		try {
+			let exprResult = runExpression(
+				replaceSpecialChars(expr, replacableValues),
+			);
+			if (
+				typeof exprResult === 'string' ||
+				exprResult instanceof String
+			) {
+				const tempDate = Temporal.PlainDate.from(String(exprResult));
+				value = Temporal.PlainDateTime.from({
+					year: tempDate.year,
+					month: tempDate.month,
+					day: tempDate.day,
+					hour: 0,
+					minute: 0,
+					second: 0,
+					millisecond: 0,
+					microsecond: 0,
+					nanosecond: 0,
+				});
+			}
+		} catch {
+			// ignore errors in expression evaluation - keep current value;
+		}
+		replacableValues.valueAfterExpressionStr = value
+			.toPlainDate()
+			.toLocaleString(language);
+
 		let stopExprResult = false;
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 		if (stopexpr.length > 0) {
@@ -1381,6 +1242,7 @@ function createDateSeq(
 	};
 }
 
+// Create sequence based on expression
 function createExpressionSeq(
 	input: string,
 	parameter: TParameter,
@@ -1394,6 +1256,9 @@ function createExpressionSeq(
 	const stopexpr =
 		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
 		'';
+	const format =
+		input.match(parameter.segments['format_decimal'])?.groups
+			?.format_decimal || '';
 
 	const replacableValues: TSpecialReplacementValues = {
 		currentValueStr: '',
@@ -1434,12 +1299,15 @@ function createExpressionSeq(
 			replacableValues.currentValueStr = '';
 		}
 
-		let stopExprResult = false;
+		// set value after expression evaluation (not different from current value here, but for consistency, but to work with stopexpr)
+		replacableValues.valueAfterExpressionStr =
+			replacableValues.currentValueStr;
 
+		let stopExprResult = false;
 		// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
 		if (stopexpr.length > 0) {
 			try {
-				let stopExprResult = runExpression(
+				stopExprResult = runExpression(
 					replaceSpecialChars(stopexpr, replacableValues),
 				);
 				if (stopExprResult) {
@@ -1495,6 +1363,12 @@ function createOwnSeq(
 			input.match(parameter.segments['startover'])?.groups?.startover ??
 				parameter.config.get('startover'),
 		) || Number.MAX_SAFE_INTEGER;
+	const format =
+		input.match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
+		'';
+	const stopexpr =
+		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
+		'';
 
 	let ownSeq: string[] = [];
 
@@ -1504,12 +1378,61 @@ function createOwnSeq(
 			.filter(Boolean); // Entfernt leere Strings, falls vorhanden
 	}
 
+	const replacableValues: TSpecialReplacementValues = {
+		currentValueStr: '',
+		valueAfterExpressionStr: '', // only for stopexpression
+		previousValueStr: '',
+		currentIndexStr: '',
+		origTextStr: '',
+		startStr: parameter.config.get('start') || '1',
+		stepStr: parameter.config.get('step') || '1',
+		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
+	};
+
 	return (i) => {
+		replacableValues.currentIndexStr = i.toString();
+		replacableValues.origTextStr =
+			i < parameter.origTextSel.length ? parameter.origTextSel[i] : '';
+		replacableValues.currentValueStr =
+			i < ownSeq.length
+				? ownSeq[
+						(start -
+							1 +
+							steps *
+								Math.trunc(
+									((i % startover) % (freq * repe)) / freq,
+								)) %
+							ownSeq.length
+					]
+				: '';
+
 		if (ownSeq.length === 0) {
 			return { stringFunction: '', stopFunction: true };
 		} else {
+			// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
+			let stopExprResult = false;
+			if (stopexpr.length > 0) {
+				try {
+					stopExprResult = runExpression(
+						replaceSpecialChars(stopexpr, replacableValues),
+					);
+					if (stopExprResult) {
+						stopExprResult = Boolean(stopExprResult);
+					} else {
+						stopExprResult = i >= parameter.origCursorPos.length;
+					}
+				} catch {
+					stopExprResult = i >= parameter.origCursorPos.length;
+				}
+			} else {
+				stopExprResult = i >= parameter.origCursorPos.length;
+			}
+
+			replacableValues.previousValueStr =
+				replacableValues.currentValueStr;
+
 			return {
-				stringFunction:
+				stringFunction: formatting.formatString(
 					ownSeq[
 						(start -
 							1 +
@@ -1519,12 +1442,15 @@ function createOwnSeq(
 								)) %
 							ownSeq.length
 					] || '',
-				stopFunction: i >= parameter.origCursorPos.length,
+					format,
+				),
+				stopFunction: stopExprResult,
 			};
 		}
 	};
 }
 
+// Create predefined own sequence from configuration
 function createPredefinedSeq(
 	input: string,
 	parameter: TParameter,
@@ -1571,7 +1497,7 @@ function createPredefinedSeq(
 		}
 	}
 
-	const ownSequences: string[][] = parameter.config.get('ownsequences') || [
+	const predefinedSeq: string[][] = parameter.config.get('ownsequences') || [
 		[],
 	];
 
@@ -1622,58 +1548,109 @@ function createPredefinedSeq(
 				parameter.config.get('startover'),
 		) || Number.MAX_SAFE_INTEGER;
 
+	const stopexpr =
+		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
+		'';
+
 	if (sequenceText.length > 0) {
-		if (sequenceNumber >= 1 && sequenceNumber <= ownSequences.length) {
+		if (sequenceNumber >= 1 && sequenceNumber <= predefinedSeq.length) {
 			let index = arrayIncludesString(
 				sequenceText,
-				ownSequences[sequenceNumber - 1],
+				predefinedSeq[sequenceNumber - 1],
 				searchOptions,
 			);
 			if (index > -1) {
-				ownSeq = ownSequences[sequenceNumber - 1];
+				ownSeq = predefinedSeq[sequenceNumber - 1];
 				start = index;
 			}
 		} else {
-			for (let i = 0; i < ownSequences.length; i++) {
+			for (let i = 0; i < predefinedSeq.length; i++) {
 				let l = arrayIncludesString(
 					sequenceText,
-					ownSequences[i],
+					predefinedSeq[i],
 					searchOptions,
 				);
 				if (l > -1) {
-					ownSeq = ownSequences[i];
+					ownSeq = predefinedSeq[i];
 					start = l;
 					break;
 				}
 			}
 		}
 	} else {
-		if (sequenceNumber >= 1 && sequenceNumber <= ownSequences.length) {
-			ownSeq = ownSequences[sequenceNumber - 1];
+		if (sequenceNumber >= 1 && sequenceNumber <= predefinedSeq.length) {
+			ownSeq = predefinedSeq[sequenceNumber - 1];
 			start = (sequenceStart - 1) % ownSeq.length;
 		}
 	}
 
+	const replacableValues: TSpecialReplacementValues = {
+		currentValueStr: '',
+		valueAfterExpressionStr: '', // only for stopexpression
+		previousValueStr: '',
+		currentIndexStr: '',
+		origTextStr: '',
+		startStr: parameter.config.get('start') || '1',
+		stepStr: parameter.config.get('step') || '1',
+		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
+	};
+
 	return (i) => {
-		if (ownSeq.length === 0) {
-			return { stringFunction: '', stopFunction: true };
-		} else {
-			return {
-				stringFunction:
-					ownSeq[
+		replacableValues.currentIndexStr = i.toString();
+		replacableValues.origTextStr =
+			i < parameter.origTextSel.length ? parameter.origTextSel[i] : '';
+
+		const value =
+			i < ownSeq.length
+				? ownSeq[
 						(start +
 							steps *
 								Math.trunc(
 									((i % startover) % (freq * repe)) / freq,
 								)) %
 							ownSeq.length
-					] || '',
-				stopFunction: i >= parameter.origCursorPos.length,
+					]
+				: '';
+
+		replacableValues.currentValueStr = value;
+
+		replacableValues.valueAfterExpressionStr =
+			replacableValues.currentValueStr;
+
+		if (ownSeq.length === 0) {
+			return { stringFunction: '', stopFunction: true };
+		} else {
+			// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
+			let stopExprTrigger = false;
+			if (stopexpr.length > 0) {
+				try {
+					const exprResult = runExpression(
+						replaceSpecialChars(stopexpr, replacableValues),
+					);
+					if (exprResult) {
+						stopExprTrigger = Boolean(exprResult);
+					} else {
+						stopExprTrigger = i >= parameter.origCursorPos.length;
+					}
+				} catch {
+					stopExprTrigger = i >= parameter.origCursorPos.length;
+				}
+			} else {
+				stopExprTrigger = i >= parameter.origCursorPos.length;
+			}
+
+			replacableValues.previousValueStr =
+				replacableValues.currentValueStr;
+
+			return {
+				stringFunction: value,
+				stopFunction: stopExprTrigger,
 			};
 		}
 	};
 }
 
+// Create sequence based on original selected text
 function createTextSelectedSeq(
 	input: string,
 	parameter: TParameter,
@@ -1684,6 +1661,167 @@ function createTextSelectedSeq(
 			stopFunction: i >= parameter.origCursorPos.length,
 		};
 	};
+}
+
+function createQuickPick(
+	context: vscode.ExtensionContext,
+	parameter: TParameter,
+): vscode.QuickPick<
+	vscode.QuickPickItem & {
+		cmd: string;
+	}
+> {
+	// build QuickPick items: top 'New sequence', then history newest-first
+	const qp = vscode.window.createQuickPick<
+		vscode.QuickPickItem & { cmd: string }
+	>();
+
+	const items: Array<
+		vscode.QuickPickItem & {
+			cmd: string;
+			buttons?: vscode.QuickInputButton[];
+		}
+	> = [];
+	items.push({
+		label: '$(add) New sequence',
+		description: 'Start a new sequence',
+		cmd: '',
+	});
+
+	// create items with a delete button each (trash icon)
+	const history = getHistory(context) || [];
+	for (const h of history) {
+		items.push({
+			label: h,
+			description: '',
+			cmd: h,
+			buttons: [
+				{
+					iconPath: new vscode.ThemeIcon('edit'),
+					tooltip: 'Edit this history entry',
+				} as any,
+				{
+					iconPath: new vscode.ThemeIcon('trash'),
+					tooltip: 'Delete this history entry',
+				} as any,
+			],
+		});
+	}
+
+	qp.items = items;
+	qp.placeholder = 'Choose "New sequence" or any of the last entries';
+	qp.matchOnDescription = true;
+
+	function schedulePreview(cmd: string | undefined) {
+		if (!cmd) {
+			// clear preview decorations
+			if (previewDecorationType)
+				parameter.editor.setDecorations(previewDecorationType, []);
+		} else {
+			// call preview
+			try {
+				insertNewSequence(cmd, parameter, 'preview');
+			} catch (e) {
+				printToConsole(
+					'Function: schedulePreview - preview error: ' + e,
+				);
+			}
+		}
+	}
+
+	qp.onDidChangeActive((activeItems) => {
+		const active = activeItems[0];
+		if (!active || !active.cmd) {
+			schedulePreview(undefined);
+			return;
+		}
+		schedulePreview(active.cmd);
+	});
+
+	// handle clicking the per-item buttons (delete / edit)
+	qp.onDidTriggerItemButton(async (e) => {
+		const item = e.item as vscode.QuickPickItem & { cmd?: string };
+		if (!item || !item.cmd) return;
+		const tooltip = (e.button && (e.button as any).tooltip) || '';
+		if (tooltip === 'Delete this history entry') {
+			// delete from storage
+			await deleteFromHistory(context, item.cmd);
+			// remove from quickpick items
+			qp.items = qp.items.filter((i) => (i as any).cmd !== item.cmd);
+			// clear preview if the deleted item was active
+			const active = qp.activeItems[0];
+			if (!active || !active.cmd) {
+				schedulePreview(undefined);
+			} else {
+				schedulePreview(active.cmd);
+			}
+		} else if (tooltip === 'Edit this history entry') {
+			// Hide quickpick and launch InsertSeqCommand with the selected history item
+			qp.hide();
+			await InsertSeqCommand(context, item.cmd);
+		}
+	});
+
+	// add a toolbar Clear button to clear all history
+	qp.buttons = [
+		{
+			iconPath: new vscode.ThemeIcon('trash'),
+			tooltip: 'Clear all history',
+		} as any,
+	];
+	qp.onDidTriggerButton(async (button) => {
+		// Confirm
+		const ans = await vscode.window.showWarningMessage(
+			'Clear entire history?',
+			{ modal: true },
+			'Clear',
+		);
+		if (ans !== 'Clear') return;
+		await clearHistory(context);
+		// reset quickpick items to only New sequence
+		qp.items = [
+			{
+				label: '$(add) New sequence',
+				description: 'Start a new sequence',
+				cmd: '',
+			},
+		];
+		schedulePreview(undefined);
+	});
+
+	qp.onDidAccept(async () => {
+		const chosen = qp.activeItems[0];
+		if (!chosen) {
+			qp.hide();
+			return;
+		}
+
+		if (!chosen.cmd) {
+			// New sequence selected -> delegate to InsertSeqCommand
+			qp.hide();
+			await InsertSeqCommand(context, '');
+			return;
+		}
+
+		// history item selected -> final execution
+		qp.busy = true;
+		try {
+			insertNewSequence(chosen.cmd, parameter, 'final');
+			// save to history (will no-op if already present)
+			await saveToHistory(context, chosen.cmd);
+		} finally {
+			qp.busy = false;
+			qp.hide();
+		}
+	});
+
+	qp.onDidHide(() => {
+		// clear preview decorations
+		if (previewDecorationType)
+			parameter.editor.setDecorations(previewDecorationType, []);
+		qp.dispose();
+	});
+	return qp;
 }
 
 function replaceSpecialChars(
@@ -1700,10 +1838,30 @@ function replaceSpecialChars(
 	// i ::= counter, starting with 0 and increasing with each insertion
 
 	return st
-		.replace(/\b_\b/gi, para.currentValueStr)
-		.replace(/\bo\b/gi, para.origTextStr)
-		.replace(/\bc\b/gi, para.valueAfterExpressionStr)
-		.replace(/\bp\b/gi, para.previousValueStr)
+		.replace(
+			/\b_\b/gi,
+			Number.isFinite(para.currentValueStr)
+				? para.currentValueStr
+				: `'${para.currentValueStr}'`,
+		)
+		.replace(
+			/\bo\b/gi,
+			Number.isFinite(para.origTextStr)
+				? para.origTextStr
+				: `'${para.origTextStr}'`,
+		)
+		.replace(
+			/\bc\b/gi,
+			Number.isFinite(para.valueAfterExpressionStr)
+				? para.valueAfterExpressionStr
+				: `'${para.valueAfterExpressionStr}'`,
+		)
+		.replace(
+			/\bp\b/gi,
+			Number.isFinite(para.previousValueStr)
+				? para.previousValueStr
+				: `'${para.previousValueStr}'`,
+		)
 		.replace(/\ba\b/gi, para.startStr)
 		.replace(/\bs\b/gi, para.stepStr)
 		.replace(/\bn\b/gi, para.numberOfSelectionsStr)
@@ -1724,8 +1882,8 @@ function runExpression(str: string): any {
 		try {
 			// dynamically require the safeEval helper if available
 			// eslint-disable-next-line @typescript-eslint/no-var-requires
-			const se = require('./safeEval');
-			res = se.safeEvaluate ? se.safeEvaluate(str, 1000) : null;
+			// const se = require('./safeEval');
+			res = safeEvaluate ? safeEvaluate(str, 1000) : null;
 		} catch {
 			res = null;
 		}
@@ -1826,6 +1984,11 @@ function getRegExpressions(): RuleTemplate {
 	ruleTemplate.leadchars = `[0x\\s\\._]`;
 	ruleTemplate.delimiterChars = `{{charStartSteps}} {{charStartFormat}} {{charStartRepetition}} {{charStartFrequency}} {{charStartOwnSequence}} {{charStartStopExpression}} $ !`;
 	ruleTemplate.delimiter = `(?:\\s*(?:[ {{delimiterChars}} ] | $))`;
+	ruleTemplate.sequencedelimiter = `(?:
+										\\s*
+										_
+										(?<seqdelimiter> .{1,2})
+									)`;
 	ruleTemplate.integer = `(?:[1-9]\\d*|0)`;
 	ruleTemplate.pointfloat = `(?: (?: [1-9]\\d*|0 )? \\. (?<startDecimals> \\d+ ) )`;
 	ruleTemplate.exponentfloat = `(?:(?:{{integer}} | {{pointfloat}}) [e] [+-]? \\d+)`;
@@ -1878,6 +2041,11 @@ function getRegExpressions(): RuleTemplate {
 										(?:{{signedNum}})
 									)
 									(?: {{random}} )?
+									(?: {{sequencedelimiter}} )?
+									(?:
+										{{charStartOptions}}
+										(?<radixPrefix> [01] )?
+									)?
 									(?= {{delimiter}} )
 								)`;
 	ruleTemplate.start_alpha = `^(?:
@@ -1886,6 +2054,7 @@ function getRegExpressions(): RuleTemplate {
 										{{charStartOptions}}
 										(?<alphacapital> {{alphacapitalchars}} )
 									)?
+									(?: {{sequencedelimiter}} )?
 									(?= {{delimiter}} )
 								)`;
 	ruleTemplate.start_date = `^(?:
@@ -1911,6 +2080,7 @@ function getRegExpressions(): RuleTemplate {
 										)
 										(?![\\d-])
 									)?
+									(?: {{sequencedelimiter}} )?
 									(?= {{delimiter}} )
 								)`;
 	ruleTemplate.start_expression = `^(?:
@@ -1933,12 +2103,12 @@ function getRegExpressions(): RuleTemplate {
 								)
 								\\]
 								(?:
-									{{charStartOptions}}
 									\\s*
 									(?<startseq>
 										\\d+
 									)?
 								)?
+								(?: {{sequencedelimiter}} )?
 								(?= {{delimiter}} )
 							)`;
 	ruleTemplate.start_predefined = `^(?: 
@@ -1992,6 +2162,7 @@ function getRegExpressions(): RuleTemplate {
 										)
 									)?
 								)?
+								(?: {{sequencedelimiter}} )?
 								(?= {{delimiter}} )
 							)`;
 	ruleTemplate.steps_decimal = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedNum}}) (?= {{delimiter}} ))`;
@@ -2004,8 +2175,34 @@ function getRegExpressions(): RuleTemplate {
 									(?= {{delimiter}} )
 								)`;
 	ruleTemplate.steps_other = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedInt}}) (?= {{delimiter}} ))`;
-	ruleTemplate.format_decimal = `(?: {{charStartFormat}} (?<format_decimal> (?<padding> {{leadchars}} )? (?<align> [<>^=] )? (?<sign> [ +-] )? (?<length> \\d+ ) (?<precision>\\.\\d+)? (?<type>[bcdeEfFgGnoxX%])? ) (?= {{delimiter}} ) )`;
-	ruleTemplate.format_alpha = `(?: {{charStartFormat}} (?<format_alpha> (?<padding> {{leadchars}} )? (?<align> [<>^=] )? (?<length> \\d+ ) ) (?= {{delimiter}} ) )`;
+	ruleTemplate.format_decimal = `(?:
+									{{charStartFormat}}
+									(?<format_decimal>
+										(?<padding> {{leadchars}} )?
+										(?<align> [<>^=] )?
+										(?<sign> [ +-] )?
+										(?<alternate> # )?
+										(?:<length>
+											(?<zero> 0 )?
+											(?: \\d+ )
+										)?
+										(?<thousands> , )?
+										(?<precision>\\.\\d+ )?
+										(?<type> [bcdeEfFgGnoxX%] )?
+									)
+									(?= {{delimiter}} )
+								)`;
+	ruleTemplate.format_alpha = `(?: 
+									{{charStartFormat}}
+									(?<format_alpha>
+										(?<padding> {{leadchars}} )?
+										(?<align> [<>^=] )?
+										(?<length> \\d+ )?
+										(?<wrap> w )?
+										(?<leftright> [lLrR] )?
+									)
+									(?= {{delimiter}} )
+								)`;
 	ruleTemplate.format_date = `(?: 
 									{{charStartFormat}}
 									(?:
@@ -2017,7 +2214,7 @@ function getRegExpressions(): RuleTemplate {
 											{{doublestring}}
 											| {{singlestring}}
 											| {{bracketedexpression}}
-											| .+?
+											| [^ {{delimiterChars}} ]?
 										)
 									)?
 									(?= {{delimiter}} )
@@ -2030,7 +2227,7 @@ function getRegExpressions(): RuleTemplate {
 									{{doublestring}}
 									| {{singlestring}}
 									| {{bracketedexpression}}
-									| .+?
+									| [^ {{delimiterChars}} ]?
 								)
 								(?= {{delimiter}} )
 							)`;

@@ -183,6 +183,11 @@
 					],
 					"description": "Own defined Sequences (Array of arrays)"
 				},
+				"insertseq.radixPrefix": {
+					"type": "boolean",
+					"default": false,
+					"description": "Whether to use radix prefixes (0b, 0o, 0x) when inserting numbers in binary, octal, or hexadecimal format"
+				},
 				"insertseq.previewColor": {
 					"type": "string",
 					"default": "#888888",
@@ -248,7 +253,8 @@
 	"dependencies": {
 		"d3-format": "^3.1.0",
 		"eval5": "^1.4.8",
-		"temporal-polyfill": "^0.3.0"
+		"temporal-polyfill": "^0.3.0",
+		"vm": "^0.1.0"
 	},
 	"devDependencies": {
 		"@types/assert": "^1.5.11",
