@@ -22,15 +22,38 @@ export type SafeEvalResult =
 	| { ok: true; value: unknown }
 	| { ok: false; error: string };
 
+// function tryIfToTernary(code: string): string | null {
+// 	const re =
+// 		/^\s*if\s*\(([\s\S]*?)\)\s*\{\s*([\s\S]*?)\s*\}\s*else\s*\{\s*([\s\S]*?)\s*\}\s*$/i;
+// 	const m = code.match(re);
+// 	if (!m) return null;
+// 	const cond = m[1].trim();
+// 	const thenB = m[2].trim();
+// 	const elseB = m[3].trim();
+// 	return `(${cond}) ? (${thenB}) : (${elseB})`;
+// }
+
 function tryIfToTernary(code: string): string | null {
-	const re =
+	const reElse =
 		/^\s*if\s*\(([\s\S]*?)\)\s*\{\s*([\s\S]*?)\s*\}\s*else\s*\{\s*([\s\S]*?)\s*\}\s*$/i;
-	const m = code.match(re);
-	if (!m) return null;
-	const cond = m[1].trim();
-	const thenB = m[2].trim();
-	const elseB = m[3].trim();
-	return `(${cond}) ? (${thenB}) : (${elseB})`;
+	let m = code.match(reElse);
+	if (m) {
+		const cond = m[1].trim();
+		const thenB = m[2].trim();
+		const elseB = m[3].trim();
+		return `(${cond}) ? (${thenB}) : (${elseB})`;
+	}
+
+	// optional: handle "if (...) { then }" without else -> produce ternary with undefined as else
+	const reIfOnly = /^\s*if\s*\(([\s\S]*?)\)\s*\{\s*([\s\S]*?)\s*\}\s*$/i;
+	m = code.match(reIfOnly);
+	if (m) {
+		const cond = m[1].trim();
+		const thenB = m[2].trim();
+		return `(${cond}) ? (${thenB}) : (undefined)`;
+	}
+
+	return null;
 }
 
 function runInVmAssignResult(code: string, timeout = 1000): unknown {

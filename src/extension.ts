@@ -640,7 +640,11 @@ function createDecimalSeq(
 		if (randomAvailable) {
 			// generate random number based on given input
 			const maxNumber =
-				randomPlusMinus !== null ? start + randomNumber : randomNumber;
+				randomPlusMinus !== null
+					? start + randomNumber
+					: randomNumber > 0
+						? randomNumber
+						: start;
 
 			// generate random number between start and maxNumber
 			if (start <= maxNumber) {
@@ -653,15 +657,6 @@ function createDecimalSeq(
 									0.5 * 10 ** (-randomDecimal.length - 1)),
 					).toFixed(randomDecimal.length),
 				);
-			} else {
-				// show info message and stop function if maxNumber < start
-				vscode.window.showInformationMessage(
-					'InsertSeq: Random number maximum is less than start value!',
-				);
-				return {
-					stringFunction: '',
-					stopFunction: true,
-				};
 			}
 		} else {
 			// calculate current value based on start, step, frequency, repetition and startover
@@ -678,6 +673,7 @@ function createDecimalSeq(
 
 		// set current value string before expression evaluation
 		replacableValues.currentValueStr = value.toString(base);
+		replacableValues.valueAfterExpressionStr = '';
 
 		// if expression exists, evaluate expression with current Value and replace newValue with result of expression.
 		// if expression does not lead to a number, the current / new value will not be changed
@@ -929,6 +925,8 @@ function createStringSeq(
 				steps * Math.trunc(((i % startover) % (freq * repe)) / freq),
 		);
 
+		replacableValues.valueAfterExpressionStr = '';
+
 		// set current value string before expression evaluation
 		replacableValues.currentValueStr = value;
 
@@ -1176,6 +1174,7 @@ function createDateSeq(
 
 		let value = calculateDateOffset(instant, i);
 
+		replacableValues.valueAfterExpressionStr = '';
 		replacableValues.currentValueStr = value
 			.toPlainDate()
 			.toLocaleString(language);
@@ -1275,6 +1274,7 @@ function createExpressionSeq(
 			replacableValues.currentValueStr = parameter.origTextSel[i];
 		}
 
+		replacableValues.valueAfterExpressionStr = '';
 		replacableValues.currentIndexStr = i.toString();
 
 		try {
@@ -1288,12 +1288,8 @@ function createExpressionSeq(
 				replacableValues.currentValueStr = String(exprResult);
 			} else if (typeof exprResult === 'number') {
 				replacableValues.currentValueStr = exprResult.toString();
-			} else {
-				replacableValues.currentValueStr = '';
 			}
-		} catch {
-			replacableValues.currentValueStr = '';
-		}
+		} catch {}
 
 		// set value after expression evaluation (not different from current value here, but for consistency, but to work with stopexpr)
 		replacableValues.valueAfterExpressionStr =
@@ -1399,6 +1395,9 @@ function createOwnSeq(
 							ownSeq.length
 					]
 				: '';
+
+		replacableValues.valueAfterExpressionStr =
+			replacableValues.currentValueStr;
 
 		if (ownSeq.length === 0) {
 			return { stringFunction: '', stopFunction: true };
@@ -1653,9 +1652,48 @@ function createTextSelectedSeq(
 	input: string,
 	parameter: TParameter,
 ): (i: number) => { stringFunction: string; stopFunction: boolean } {
+	const expr = getExpression(input, parameter);
+	const format =
+		input.match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
+		String(parameter.config.get('stringFormat')) ||
+		'';
+
+	const replacableValues: TSpecialReplacementValues = {
+		currentValueStr: '',
+		valueAfterExpressionStr: '', // only for stopexpression
+		previousValueStr: '',
+		currentIndexStr: '',
+		origTextStr: '',
+		startStr: parameter.config.get('start') || '1',
+		stepStr: parameter.config.get('step') || '1',
+		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
+	};
+
 	return (i) => {
+		let value = parameter.origTextSel[i] || '';
+
+		replacableValues.origTextStr = parameter.origTextSel[i];
+		replacableValues.currentIndexStr = i.toString();
+		replacableValues.currentValueStr = value;
+		replacableValues.valueAfterExpressionStr = '';
+
+		// if expression exists, evaluate expression with current Value and replace newValue with result of expression.
+		try {
+			let exprResult = runExpression(
+				replaceSpecialChars(expr, replacableValues),
+			);
+			if (
+				typeof exprResult === 'string' ||
+				exprResult instanceof String
+			) {
+				value = String(exprResult);
+			}
+		} catch {
+			// ignore errors in expression evaluation - keep current value;
+		}
+
 		return {
-			stringFunction: parameter.origTextSel[i] || '',
+			stringFunction: formatting.formatString(value, format),
 			stopFunction: i >= parameter.origCursorPos.length,
 		};
 	};
@@ -1965,11 +2003,11 @@ function getRegExpressions(): RuleTemplate {
 	ruleTemplate.charStartPredefinedSequence = `^;`;
 	ruleTemplate.charStartExpr = `^\\|`;
 	// rules, which are normally not at the beginning of an input (but could be, when <start> is omitted/defaulted)
-	ruleTemplate.charStartSteps = `(?:(?<!^)\\bsteps?:|(?<!:):)`;
+	ruleTemplate.charStartSteps = `(?:(?<!^)\\bsteps?:|(?<!:|format|freq|frequency|rep|repeat|repetition|startat|startagain|startover|expr|expression|stop|stopexpr|stopexpression|option|options):)`;
 	ruleTemplate.charStartFormat = `(?:(?<!^)\\bformat:|~)`;
 	ruleTemplate.charStartFrequency = `(?:(?<!^)\\bfreq(?:uency)?:|\\*)`;
-	ruleTemplate.charStartRepetition = `(?:(?<!^)\\brep(?:eat|etition):|#)`;
-	ruleTemplate.charStartStartover = `(?:(?<!^)\\brestart(?:at|again|over)?:|##)`;
+	ruleTemplate.charStartRepetition = `(?:(?<!^)\\brep(?:eat|etition)?:|(?<!#)#)`;
+	ruleTemplate.charStartStartover = `(?:(?<!^)\\bstart(?:again|over):|##)`;
 	ruleTemplate.charStartExpression = `(?:(?<!^)\\bexpr(?:ession)?:|::)`;
 	ruleTemplate.charStartStopExpression = `(?:(?<!^)\\bstop(?:expr(?:ession)?|if)?:|@)`;
 	// optional information after charStartOptions
