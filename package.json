@@ -275,7 +275,7 @@
 		"prettier": "^3.2.5",
 		"ts-loader": "^9.5.1"
 	},
-	"icon": "insertnums.png",
+	"icon": "insertseq.png",
 	"galleryBanner": {
 		"color": "#5757ff",
 		"theme": "dark"
