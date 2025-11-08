@@ -37,6 +37,7 @@
 		"dist/**",
 		"README.md",
 		"CHANGELOG.md",
+		"LICENSE.md",
 		"package.json",
 		"insertseq.png"
 	],
