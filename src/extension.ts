@@ -9,6 +9,11 @@ Version 1.0 has some inspirations from the extension "VSCodeExtensionInsertSeque
 Volker Dobler
 original from May 2020
 rewritten November 2025
+
+TO-DO:
+
+
+
 */
 
 // external modules
@@ -587,11 +592,8 @@ function createDecimalSeq(
 			input.match(parameter.segments['startover'])?.groups?.startover ??
 				parameter.config.get('startover'),
 		) || Number.MAX_SAFE_INTEGER;
-	const stopexpr =
-		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ??
-		'';
-	const expr =
-		input.match(parameter.segments['expression'])?.groups?.expr ?? '';
+	const stopexpr = getStopExpression(input, parameter);
+	const expr = getExpression(input, parameter);
 
 	// determine if radix prefix is requested
 	const radixPrefix =
@@ -615,7 +617,7 @@ function createDecimalSeq(
 			: String(
 					input.match(parameter.segments['format_decimal'])?.groups
 						?.format_decimal ??
-						parameter.config.get('format') ??
+						String(parameter.config.get('numberFormat')) ??
 						'',
 				);
 
@@ -834,13 +836,11 @@ function createStringSeq(
 		) ||
 		Number(parameter.config.get('startover')) ||
 		Number.MAX_SAFE_INTEGER;
-	const stopexpr =
-		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
-		'';
-	const expr =
-		input.match(parameter.segments['expression'])?.groups?.expr || '';
+	const stopexpr = getStopExpression(input, parameter);
+	const expr = getExpression(input, parameter);
 	const format =
 		input.match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
+		String(parameter.config.get('stringFormat')) ||
 		'';
 
 	// determine capitalization, default: preserve original capitalization (from rightmost characters)
@@ -1076,17 +1076,18 @@ function createDateSeq(
 		) ||
 		Number(parameter.config.get('startover')) ||
 		Number.MAX_SAFE_INTEGER;
-	const expr =
-		input.match(parameter.segments['expression'])?.groups?.expr || '';
-	const stopexpr =
-		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
-		'';
-	const format =
-		input.match(parameter.segments['format_date'])?.groups?.dateformat ||
-		parameter.config.get('format') ||
-		'';
+	const stopexpr = getStopExpression(input, parameter);
+	const expr = getExpression(input, parameter);
+	const parameterFormatDate = input.match(parameter.segments['format_date']);
+	const format = parameterFormatDate?.groups?.dateformat
+		? parameterFormatDate?.groups?.indoublequotes ||
+			parameterFormatDate?.groups?.insinglequotes ||
+			parameterFormatDate?.groups?.inbrackets ||
+			parameterFormatDate?.groups?.dateformat ||
+			''
+		: String(parameter.config.get('dateFormat')) || '';
 	const language =
-		input.match(parameter.segments['format_date'])?.groups?.language ||
+		parameterFormatDate?.groups?.language ||
 		parameter.config.get('language') ||
 		undefined;
 
@@ -1253,12 +1254,7 @@ function createExpressionSeq(
 	const expr =
 		input.match(parameter.segments['start_expression'])?.groups?.start ||
 		'';
-	const stopexpr =
-		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
-		'';
-	const format =
-		input.match(parameter.segments['format_decimal'])?.groups
-			?.format_decimal || '';
+	const stopexpr = getStopExpression(input, parameter);
 
 	const replacableValues: TSpecialReplacementValues = {
 		currentValueStr: '',
@@ -1366,9 +1362,7 @@ function createOwnSeq(
 	const format =
 		input.match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
 		'';
-	const stopexpr =
-		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
-		'';
+	const stopexpr = getStopExpression(input, parameter);
 
 	let ownSeq: string[] = [];
 
@@ -1501,12 +1495,18 @@ function createPredefinedSeq(
 		[],
 	];
 
-	const sequenceText =
-		input.match(parameter.segments['start_predefined'])?.groups
-			?.start_predefined || '';
-	const sequenceOptions =
-		input.match(parameter.segments['start_predefined'])?.groups
-			?.predefinedopts || '';
+	const predefinedParameter = input.match(
+		parameter.segments['start_predefined'],
+	);
+	// if start_predefined group exists, extract sequence text (could be within quotes or plain text)
+	const sequenceText = predefinedParameter?.groups?.start_predefined
+		? predefinedParameter.groups.indoublequotes ||
+			predefinedParameter.groups.insinglequotes ||
+			predefinedParameter.groups.inbrackets ||
+			predefinedParameter.groups.start_predefined ||
+			''
+		: '';
+	const sequenceOptions = predefinedParameter?.groups?.predefinedopts || '';
 
 	const searchOptions: StartsOptions = {
 		ignoreCase: sequenceOptions.toLocaleLowerCase().indexOf('i') > -1,
@@ -1548,9 +1548,7 @@ function createPredefinedSeq(
 				parameter.config.get('startover'),
 		) || Number.MAX_SAFE_INTEGER;
 
-	const stopexpr =
-		input.match(parameter.segments['stopexpression'])?.groups?.stopexpr ||
-		'';
+	const stopexpr = getStopExpression(input, parameter);
 
 	if (sequenceText.length > 0) {
 		if (sequenceNumber >= 1 && sequenceNumber <= predefinedSeq.length) {
@@ -1840,25 +1838,25 @@ function replaceSpecialChars(
 	return st
 		.replace(
 			/\b_\b/gi,
-			Number.isFinite(para.currentValueStr)
+			Number(para.currentValueStr)
 				? para.currentValueStr
 				: `'${para.currentValueStr}'`,
 		)
 		.replace(
 			/\bo\b/gi,
-			Number.isFinite(para.origTextStr)
+			Number(para.origTextStr)
 				? para.origTextStr
 				: `'${para.origTextStr}'`,
 		)
 		.replace(
 			/\bc\b/gi,
-			Number.isFinite(para.valueAfterExpressionStr)
+			Number(para.valueAfterExpressionStr)
 				? para.valueAfterExpressionStr
 				: `'${para.valueAfterExpressionStr}'`,
 		)
 		.replace(
 			/\bp\b/gi,
-			Number.isFinite(para.previousValueStr)
+			Number(para.previousValueStr)
 				? para.previousValueStr
 				: `'${para.previousValueStr}'`,
 		)
@@ -1901,6 +1899,28 @@ function runExpression(str: string): any {
 	}
 }
 
+function getStopExpression(input: string, parameter: TParameter): string {
+	const parameterStopexpr = input.match(parameter.segments['stopexpression']);
+	return parameterStopexpr?.groups?.stopexpr
+		? parameterStopexpr.groups.indoublequotes ||
+				parameterStopexpr.groups.insinglequotes ||
+				parameterStopexpr.groups.inbrackets ||
+				parameterStopexpr.groups.stopexpr ||
+				''
+		: '';
+}
+
+function getExpression(input: string, parameter: TParameter): string {
+	const parameterExpression = input.match(parameter.segments['expression']);
+	return parameterExpression?.groups?.expr
+		? parameterExpression.groups.indoublequotes ||
+				parameterExpression.groups.insinglequotes ||
+				parameterExpression.groups.inbrackets ||
+				parameterExpression.groups.expr ||
+				''
+		: '';
+}
+
 // Get regular expressions for segmenting the input string
 function getRegExpressions(): RuleTemplate {
 	const matchRule: RuleTemplate = {
@@ -1939,51 +1959,62 @@ function getRegExpressions(): RuleTemplate {
 	// a ::= value of <start>
 	// i ::= counter, starting with 0 and increasing with each insertion
 	const ruleTemplate: RuleTemplate = {};
-	ruleTemplate.charStartDate = `%`;
-	ruleTemplate.charStartOwnSequence = `\\[`;
-	ruleTemplate.charStartPredefinedSequence = `;`;
-	ruleTemplate.charStartExpr = `\\|`;
-	ruleTemplate.charStartSteps = `:`;
-	ruleTemplate.charStartFormat = `~`;
-	ruleTemplate.charStartFrequency = `\\*`;
-	ruleTemplate.charStartRepetition = `#`;
-	ruleTemplate.charStartStartover = `##`;
-	ruleTemplate.charStartExpression = `::`;
-	ruleTemplate.charStartStopExpression = `@`;
+	// start of input, which defines input types
+	ruleTemplate.charStartDate = `^%`;
+	ruleTemplate.charStartOwnSequence = `^\\[`;
+	ruleTemplate.charStartPredefinedSequence = `^;`;
+	ruleTemplate.charStartExpr = `^\\|`;
+	// rules, which are normally not at the beginning of an input (but could be, when <start> is omitted/defaulted)
+	ruleTemplate.charStartSteps = `(?:(?<!^)\\bsteps?:|(?<!:):)`;
+	ruleTemplate.charStartFormat = `(?:(?<!^)\\bformat:|~)`;
+	ruleTemplate.charStartFrequency = `(?:(?<!^)\\bfreq(?:uency)?:|\\*)`;
+	ruleTemplate.charStartRepetition = `(?:(?<!^)\\brep(?:eat|etition):|#)`;
+	ruleTemplate.charStartStartover = `(?:(?<!^)\\brestart(?:at|again|over)?:|##)`;
+	ruleTemplate.charStartExpression = `(?:(?<!^)\\bexpr(?:ession)?:|::)`;
+	ruleTemplate.charStartStopExpression = `(?:(?<!^)\\bstop(?:expr(?:ession)?|if)?:|@)`;
 	// optional information after charStartOptions
-	ruleTemplate.charStartOptions = `\\?`;
+	ruleTemplate.charStartOptions = `(?:(?<!^)\\boptions?:|\\?)`;
 	ruleTemplate.specialchars = `(?:[_epasni])`;
 	ruleTemplate.dateunits = `(?:[dDwWmMyY])`;
 	ruleTemplate.predefinedoptions = `(?: [ifsIFS]+ )`;
 	ruleTemplate.alphacapitalchars = `(?: [uUlLpP]? )`;
 	// all Rules including sub-rules
 	ruleTemplate.doublestring = `(?:"
-									(?:
+									(?<indoublequotes>
 										(?:
-											(?<!\\\\) \\\\"
-										)
-										|[^"]
-									)+" 
+											(?:
+												(?<!\\\\) \\\\"
+											)
+											|[^"]
+										)+
+									)
+									"
 								)`;
 	ruleTemplate.singlestring = `(?:\'
+									(?<insinglequotes>
+										(?:
+											(?:
+												(?<!\\\\)\\\\\'
+											)
+											|[^\']
+										)+
+									)
+									\'
+								)`;
+	ruleTemplate.brackets = `(?:\\(
+								(?<inbrackets>
 									(?:
 										(?:
-											(?<!\\\\)\\\\\'
+											(?<!\\\\)\\\\\\)
 										)
-										|[^\']
-									)+\'
-								)`;
-	ruleTemplate.bracketedexpression = `(?:\\(
-											(?:
-												(?:
-													(?<!\\\\)\\\\\\)
-												)
-												|[^)]
-											)+\\)
-										)`;
+										|[^)]
+									)+
+								)
+								\\)
+							)`;
 	ruleTemplate.leadchars = `[0x\\s\\._]`;
-	ruleTemplate.delimiterChars = `{{charStartSteps}} {{charStartFormat}} {{charStartRepetition}} {{charStartFrequency}} {{charStartOwnSequence}} {{charStartStopExpression}} $ !`;
-	ruleTemplate.delimiter = `(?:\\s*(?:[ {{delimiterChars}} ] | $))`;
+	ruleTemplate.delimiterTokens = `(?: {{charStartSteps}} | {{charStartFormat}} | {{charStartRepetition}} | {{charStartFrequency}} | {{charStartOwnSequence}} | {{charStartExpression}} | {{charStartStopExpression}} | \\$ | !)`;
+	ruleTemplate.delimiter = `(?:\\s*(?:(?= {{delimiterTokens}} ) | $) )`;
 	ruleTemplate.sequencedelimiter = `(?:
 										\\s*
 										_
@@ -1991,6 +2022,7 @@ function getRegExpressions(): RuleTemplate {
 									)`;
 	ruleTemplate.integer = `(?:[1-9]\\d*|0)`;
 	ruleTemplate.pointfloat = `(?: (?: [1-9]\\d*|0 )? \\. (?<startDecimals> \\d+ ) )`;
+	ruleTemplate.pointfloatForExpression = `(?: (?: [1-9]\\d*|0 )? \\. \\d+ )`;
 	ruleTemplate.exponentfloat = `(?:(?:{{integer}} | {{pointfloat}}) [e] [+-]? \\d+)`;
 	ruleTemplate.float = `(?:{{pointfloat}} | {{exponentfloat}})`;
 	ruleTemplate.hexNum = `(?:0[x](?<hex>0|[1-9a-f][0-9a-f]*))`;
@@ -2001,7 +2033,7 @@ function getRegExpressions(): RuleTemplate {
 								\\s*\\b
 								(?:
 									(?: [+-]?
-										(?: {{integer}} | {{float}} )
+										(?: {{integer}} | {{pointfloatForExpression}} )
 									)
 									| {{specialchars}}
 								)
@@ -2009,6 +2041,21 @@ function getRegExpressions(): RuleTemplate {
 							)`;
 	ruleTemplate.exproperator = `(?: \\s* (?:\\+|-|\\*|\\/|\\*\\*|mod|div) \\s* )`;
 	ruleTemplate.exprcompare = `(?:<=|<|>=|>|===|==)`;
+	ruleTemplate.easyexpression = `(?:
+									{{exprtoken}}
+									(?:
+										{{exproperator}}
+										{{exprtoken}}
+									)*
+									(?:
+										{{exprcompare}}
+										{{exprtoken}}
+										(?:
+											{{exproperator}}
+											{{exprtoken}}
+										)*
+									)
+								)`;
 	ruleTemplate.random = `(?: 
 								(?:
 									(?<rndAvailable> [rR])
@@ -2074,9 +2121,10 @@ function getRegExpressions(): RuleTemplate {
 										)
 										|
 										(?<fulldate>
-											.+?
-											| ".+"
-											| '.+'
+											{{doublestring}}
+											| {{singlestring}}
+											| {{brackets}}
+											| .+?
 										)
 										(?![\\d-])
 									)?
@@ -2116,10 +2164,8 @@ function getRegExpressions(): RuleTemplate {
 								\\s*
 								(?<start_predefined>
 									{{doublestring}}
-									|
-									{{singlestring}}
-									|
-									\\w+
+									| {{singlestring}}
+									| \\w+
 								)?
 								(?:
 									{{charStartOptions}}
@@ -2182,7 +2228,7 @@ function getRegExpressions(): RuleTemplate {
 										(?<align> [<>^=] )?
 										(?<sign> [ +-] )?
 										(?<alternate> # )?
-										(?:<length>
+										(?<length>
 											(?<zero> 0 )?
 											(?: \\d+ )
 										)?
@@ -2210,12 +2256,10 @@ function getRegExpressions(): RuleTemplate {
 										\\s*
 									)?
 									(?<dateformat>
-										(?:
-											{{doublestring}}
-											| {{singlestring}}
-											| {{bracketedexpression}}
-											| [^ {{delimiterChars}} ]?
-										)
+										{{doublestring}}
+										| {{singlestring}}
+										| {{brackets}}
+										| [^\\s]+
 									)?
 									(?= {{delimiter}} )
 								)`;
@@ -2226,8 +2270,8 @@ function getRegExpressions(): RuleTemplate {
 								(?<expr>
 									{{doublestring}}
 									| {{singlestring}}
-									| {{bracketedexpression}}
-									| [^ {{delimiterChars}} ]?
+									| {{brackets}}
+									| {{easyexpression}}
 								)
 								(?= {{delimiter}} )
 							)`;
@@ -2235,8 +2279,8 @@ function getRegExpressions(): RuleTemplate {
 									(?<stopexpr>
 										{{doublestring}}
 										| {{singlestring}}
-										| {{bracketedexpression}}
-										| [^ {{delimiterChars}} ]+
+										| {{brackets}}
+										| {{easyexpression}}
 									)
 									(?= {{delimiter}} )
 								)`;

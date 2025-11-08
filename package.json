@@ -62,15 +62,15 @@
 					"default": "",
 					"description": "Start sequence from beginning, independent of repetition and frequency"
 				},
-				"insertseq.stringFormat": {
-					"type": "string",
-					"default": "",
-					"description": "Default output format for strings"
-				},
 				"insertseq.numberFormat": {
 					"type": "string",
 					"default": "",
 					"description": "Default output format for numbers"
+				},
+				"insertseq.stringFormat": {
+					"type": "string",
+					"default": "",
+					"description": "Default output format for strings"
 				},
 				"insertseq.dateFormat": {
 					"type": "string",
