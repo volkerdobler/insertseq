@@ -31,8 +31,8 @@
 	"categories": [
 		"Other"
 	],
-	"main": "./out/extension.js",
-	"browser": "./out/extension-web.js",
+	"main": "./dist/extension.js",
+	"browser": "./dist/extension-web.js",
 	"contributes": {
 		"configuration": {
 			"title": "insertseq",
@@ -244,22 +244,23 @@
 		"pretest": "npm run compile",
 		"package": "npm run check-types && node esbuild.js --production",
 		"build:desk": "npm run package",
-		"build:web": "node esbuild-web.js",
+		"build:web": "node esbuild-web.js --production",
 		"build:all": "npm run build:desk && npm run build:web",
 		"serve:web": "npx http-server ./out -p 8080",
-		"vscode:prepublish": "npm run compile",
+		"vscode:prepublish": "npm run build:all",
 		"watch": "tsc -watch -p ./"
 	},
 	"dependencies": {
 		"d3-format": "^3.1.0",
 		"eval5": "^1.4.8",
-		"temporal-polyfill": "^0.3.0",
-		"vm": "^0.1.0"
+		"temporal-polyfill": "^0.3.0"
 	},
 	"devDependencies": {
 		"@types/assert": "^1.5.11",
 		"@types/d3-format": "^3.0.4",
-		"@types/vscode": "^1.89.0",
+		"@types/vscode": "^1.105.0",
+		"@types/node": "^18.15.11",
+		"typescript": "^5.1.6",
 		"assert": "^2.1.0",
 		"esbuild": "^0.25.12",
 		"eslint": "^9.2.0",
