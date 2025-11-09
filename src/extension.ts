@@ -2051,7 +2051,7 @@ function getRegExpressions(): RuleTemplate {
 								\\)
 							)`;
 	ruleTemplate.leadchars = `[0x\\s\\._]`;
-	ruleTemplate.delimiterTokens = `(?: {{charStartSteps}} | {{charStartFormat}} | {{charStartRepetition}} | {{charStartFrequency}} | {{charStartOwnSequence}} | {{charStartExpression}} | {{charStartStopExpression}} | \\$ | !)`;
+	ruleTemplate.delimiterTokens = `(?: \\s | {{charStartSteps}} | {{charStartFormat}} | {{charStartRepetition}} | {{charStartFrequency}} | {{charStartOwnSequence}} | {{charStartExpression}} | {{charStartStopExpression}} | \\$ | !)`;
 	ruleTemplate.delimiter = `(?:\\s*(?:(?= {{delimiterTokens}} ) | $) )`;
 	ruleTemplate.sequencedelimiter = `(?:
 										\\s*

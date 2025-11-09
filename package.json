@@ -249,20 +249,18 @@
 	"scripts": {
 		"check-types": "tsc --noEmit",
 		"compile": "tsc -p ./",
-		"pretest": "npm run compile",
-		"package": "npm run check-types && node esbuild.js --production",
-		"build:desk": "npm run package",
-		"build:web": "node esbuild-web.js --production",
+		"watch": "tsc -watch -p ./",
+		"build:desk": "npm run check-types && node esbuild.js --production",
+		"build:web": "npm run check-types && node esbuild-web.js --production",
 		"build:all": "npm run build:desk && npm run build:web",
-		"serve:web": "npx http-server ./out -p 8080",
-		"vscode:prepublish": "npm run build:all",
-		"watch": "tsc -watch -p ./"
+		"vscode:prepublish": "npm run build:all"
 	},
-	"dependencies": {},
-	"devDependencies": {
+	"dependencies": {
 		"d3-format": "^3.1.0",
 		"eval5": "^1.4.8",
-		"temporal-polyfill": "^0.3.0",
+		"temporal-polyfill": "^0.3.0"
+	},
+	"devDependencies": {
 		"@types/assert": "^1.5.11",
 		"@types/d3-format": "^3.0.4",
 		"@types/vscode": "^1.105.0",

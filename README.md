@@ -1,58 +1,63 @@
-# Insert Sequences (InsertSeq)
+# VS Code Extension: Insert Sequences (InsertSeq)
 
 Insert Sequences is a small VS Code extension that helps you generate and insert all kinds of sequences into one or more cursors. It supports numeric sequences, alphabetic sequences, dates, user-defined or predefined lists, and inline JavaScript expressions. The syntax is compact and powerful, allowing repetition, stepping, frequency, custom formats, stop expressions, and much more.
 
 All inputs are previewed live (as a decoration) for the current selections, so you can verify the generated sequence before pressing Enter.
 
+> # ATTENTION! This is version 1.0 and a big update to previous versions. Read this documentation carfully!
+
 ## Usage
 
-Basic flow:
+## Important news in version 1.0
 
-You can start the extension either with a normal input box by using the command palette and searching for "insertseq" or by using the (default) key binding `CTRL+ALT+.`.
-A second command is a history quick pick command, which can be started by searching for "insertseq.history" or by using the (default) key binding `CTRL+ALT+,`.
+1. Most important, you now will see the current sequence as **preview/decoration** before pressing `ENTER`.
+   Most options are the same as before, with the following exceptions:
+1. There is not specific insertations for months (previously starting with `%`). Instead, you now can define your own sequenes and insert all kind of (own) lists - maybe also months (but I would recommend to use dates instead).
+1. Beside predefined lists in your configuration file, you can insert directly your current list which then is used for this insertion.
+1. Beside the (old short and often cryptical) delimiter-chars for the different options, you now can use text-delimiter as an alternative (_steps:_, _freq:_, _repeat:_, _startover:_, _expr:_, _stopif:_, _format:_)
 
-More details to the history functionality are described below.
-
-Insertion order note:
+## Note regarding the insertion order:
 
 - By default the mapping from sequence items to your cursors depends on the order you created the selections (click order). That order might not match the visual document order (top→bottom).
 - Use `$` to force top→bottom (document) insertion order regardless of the click order.
 - Use `!` to invert the insertion order. Without `$` that means the click order is reversed; when combined with `$` it results in bottom→top document order.
   See the "Syntax details" section for more information.
 
-Examples (simple → advanced):
+## Start extension(s):
 
-1. Simple increasing integers
+You can start the extension either with the command palette and search for `insertseq` or with the (default) key binding `CTRL+ALT+.` (which can be change via configuration [Configuration](#configuration))
 
-We start a multi-cursor selection of 5 lines:
+If you have already used this extension for a while, you can also use previous insertions with the second command `insertseq.history` (default key binding `CTRL+ALT+,`). With this command, you see all previous insertions and can run them again or edit them to get a new insertion. More details below in the section [History](#history)
 
-```
-|
-|
-|
-|
-|
-```
+# Examples (simple → advanced):
 
-Input: `1`
-
-During the input box is still open, you can see the created sequence as preview (decoration). You can chance the color of the decoration via configuration (see section below)
-
-Output (inserted for 5 selections):
+### We start with a multi-cursor selection of 5 lines:
 
 ```
-1
-2
+|
+|
+|
+|
+|
+```
+
+When starting the `insertseq`-command, you will see a preview of the numbers 1 to 5 (because, by default, the start-value is the number 1 if no input is typed).
+
+If you start typing the number 3, the preview will change to the number 3 to 7 - and if you press `ENTER` the preview will change to a real insertion of these numbers.
+
+```
 3
 4
 5
+6
+7
 ```
 
-![screenshot-placeholder-1](assets/screenshots/example-1.png)
+### You want to increase the number by another number?
 
-2. Start and step
+To increase the sequence not by 1 but by any other number (positiv or negative) you can tell the extension the number either by typing `:<number>` or with more descriptive with `step:<number>`. The second alternative has to start with a word boundary, so either a space or comma - **not working** is `10step:2`!.
 
-Input: `10:2`
+Example: with the input `10:2` (alternative: `10 step:2`) you get
 
 Output (for 5 selections):
 
@@ -64,11 +69,11 @@ Output (for 5 selections):
 18
 ```
 
-![screenshot-placeholder-2](assets/screenshots/example-2.png)
+### Repeat sequence after a fixed number of insertions
 
-3. Repeat limited times
+If you want to repeat the sequence after a defined number of insertions, you can do this with the char `#` or the alternative `rep:` (or `repeat:` or `repetition`) input.
 
-Input: `1#5` (step is 1 by default, no need to include it for this sequence)
+Example: `1#5` (step is 1 by default, no need to include it for this sequence)
 
 Output (for 10 selections):
 
@@ -85,11 +90,11 @@ Output (for 10 selections):
 5
 ```
 
-![screenshot-placeholder-3](assets/screenshots/example-3.png)
+### Repeat each value multiple times
 
-4. Repeat each value multiple times
+If you want to repeat each insertions multiple times, you can use the `*` char or `freq:` (or `frequency:`) option.
 
-Input: `1*2`
+Example: `1 freq:2`
 
 Output (for 10 selections, each value repeated twice):
 
@@ -106,7 +111,77 @@ Output (for 10 selections, each value repeated twice):
 5
 ```
 
-![screenshot-placeholder-4](assets/screenshots/example-4.png)
+### Startover
+
+Sometime, you need to start the frequency not at a symetrical point, but anywhere in the sequence. This is the task for `##` or more describable `startover` or alternative `startagain`.
+
+Example: `1 rep:2 freq:3 startover:7` (shorter: 1#2\*3##7)
+
+Output (for 13 selections):
+
+```
+1
+1
+1
+2
+2
+2
+1
+1         <== start of the sequence from the beginning
+1
+1
+2
+2
+2
+```
+
+### Stop expression
+
+Sometime, you want to insert less or more numbers than the current selection.
+Both can be done with the char `@` or the alternatives `stopif:` or `stopexpr:` or `stopexpression:`.
+This option needs a formular/expression, which has to be `true` to stop the insertion.
+
+You can use special chars in this formular/expression to stop the insertion, whenever you need it. E.g. `i` is the current index of the insertions (starting with 0).
+
+Easy forumlar/expressions can be inserted directly after the column, but I recommend to insert the forumlar/expression in parantisies.
+
+Example: `1 stopif:(i>5)
+
+Output (for 10 selections, the insertion stops if index is 6, which is when the number is 7):
+
+```
+1
+2
+3
+4
+5
+6
+
+
+
+
+```
+
+If the formular/expression is larger than the number of selections, additional lines will be included.
+
+Example: `1 stopif:(i>5)
+
+```
+1
+```
+
+Output (for 10 selections, the insertion stops if index is 6, which is when the number is 7):
+
+```
+1
+2
+3
+4
+5
+6
+```
+
+During the input, when seeing the preview/decoration, no new lines are inserted. In this case, you see all future insertions in the last current line.
 
 5. Alpha sequences
 
