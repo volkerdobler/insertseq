@@ -250,9 +250,10 @@
 		"check-types": "tsc --noEmit",
 		"compile": "tsc -p ./",
 		"watch": "tsc -watch -p ./",
-		"build:desk": "npm run check-types && node esbuild.js --production",
-		"build:web": "npm run check-types && node esbuild-web.js --production",
-		"build:all": "npm run build:desk && npm run build:web",
+		"clean": "rimraf ./dist",
+		"build:desk": "npm run clean && npm run check-types && node esbuild.js --production",
+		"build:web": "npm run clean && npm run check-types && node esbuild-web.js --production",
+		"build:all": "npm run clean && npm run build:desk && npm run build:web",
 		"vscode:prepublish": "npm run build:all"
 	},
 	"dependencies": {
@@ -263,15 +264,16 @@
 	"devDependencies": {
 		"@types/assert": "^1.5.11",
 		"@types/d3-format": "^3.0.4",
-		"@types/vscode": "^1.105.0",
 		"@types/node": "^18.15.11",
-		"typescript": "^5.1.6",
+		"@types/vscode": "^1.105.0",
 		"assert": "^2.1.0",
 		"esbuild": "^0.25.12",
 		"eslint": "^9.2.0",
 		"npm-run-all": "^4.1.5",
 		"prettier": "^3.2.5",
-		"ts-loader": "^9.5.1"
+		"rimraf": "^6.1.0",
+		"ts-loader": "^9.5.1",
+		"typescript": "^5.1.6"
 	},
 	"icon": "insertseq.png",
 	"galleryBanner": {
