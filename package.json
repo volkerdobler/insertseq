@@ -1,6 +1,6 @@
 {
 	"name": "insertseq",
-	"version": "0.99.10",
+	"version": "0.99.11",
 	"publisher": "volkerdobler",
 	"displayName": "Insert Sequences",
 	"description": "Insert sequences of any kind (numberic, alpha, expressions, etc.) to VSCode textdocuments",
@@ -166,7 +166,7 @@
 					"default": "abcdefghijklmnopqrstuvwxyz",
 					"description": "Alphabet, for string successors"
 				},
-				"insertseq.ownsequences": {
+				"insertseq.mysequences": {
 					"type": "array",
 					"default": [
 						[
@@ -249,8 +249,8 @@
 	"scripts": {
 		"check-types": "tsc --noEmit",
 		"compile": "tsc -p ./",
-		"watch": "tsc -watch -p ./",
-		"clean": "rimraf ./dist",
+		"watch": "npm run clean && tsc -watch -p ./",
+		"clean": "rimraf ./dist/* -g",
 		"build:desk": "npm run check-types && node esbuild.js --production",
 		"build:web": "npm run check-types && node esbuild-web.js --production",
 		"build:all": "npm run clean && npm run build:desk && npm run build:web",

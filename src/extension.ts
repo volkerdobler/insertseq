@@ -1250,9 +1250,24 @@ function createExpressionSeq(
 	// const retFunction = { stringFunction: '', stopFunction: true };
 	// return (i) => retFunction;
 
-	const expr =
-		input.match(parameter.segments['start_expression'])?.groups?.start ||
-		'';
+	// check if valid expression is given
+	const expressionMatch = input.match(
+		parameter.segments['start_expression'],
+	);
+	if (!expressionMatch) {
+		const retFunction = { stringFunction: '', stopFunction: true };
+		return (i) => retFunction;
+	}
+
+	// extract expression, if in quotes or brackets remove them
+	const expr = expressionMatch?.groups?.start
+		? expressionMatch.groups.indoublequotes ||
+				expressionMatch.groups.insinglequotes ||
+				expressionMatch.groups.inbrackets ||
+				expressionMatch.groups.stopexpr ||
+				''
+		: '';
+	// extract stop expression
 	const stopexpr = getStopExpression(input, parameter);
 
 	const replacableValues: TSpecialReplacementValues = {
@@ -1288,6 +1303,8 @@ function createExpressionSeq(
 				replacableValues.currentValueStr = String(exprResult);
 			} else if (typeof exprResult === 'number') {
 				replacableValues.currentValueStr = exprResult.toString();
+			} else if (parameter.origTextSel[i].length === 0) {
+				replacableValues.currentValueStr = (i+1).toString();
 			}
 		} catch {}
 
@@ -1314,7 +1331,7 @@ function createExpressionSeq(
 			stopExprResult = i >= parameter.origCursorPos.length;
 		}
 
-		replacableValues.previousValueStr = replacableValues.currentValueStr;
+		replacableValues.previousValueStr = replacableValues.valueAfterExpressionStr;
 
 		return {
 			stringFunction: replacableValues.currentValueStr,
@@ -1490,7 +1507,7 @@ function createPredefinedSeq(
 		}
 	}
 
-	const predefinedSeq: string[][] = parameter.config.get('ownsequences') || [
+	const predefinedSeq: string[][] = parameter.config.get('mysequences') || [
 		[],
 	];
 
@@ -1598,8 +1615,7 @@ function createPredefinedSeq(
 			i < parameter.origTextSel.length ? parameter.origTextSel[i] : '';
 
 		const value =
-			i < ownSeq.length
-				? ownSeq[
+				ownSeq[
 						(start +
 							steps *
 								Math.trunc(
@@ -1607,7 +1623,6 @@ function createPredefinedSeq(
 								)) %
 							ownSeq.length
 					]
-				: '';
 
 		replacableValues.currentValueStr = value;
 
@@ -2172,7 +2187,12 @@ function getRegExpressions(): RuleTemplate {
 	ruleTemplate.start_expression = `^(?:
 										(?:{{charStartExpr}})
 										\\s*
-										(?<start>.+?)
+										(?<start>
+											{{doublestring}}
+											| {{singlestring}}
+											| {{brackets}}
+											| {{easyexpression}}
+										)
 										(?= {{delimiter}} )
 									)`;
 	ruleTemplate.start_own = `^(?: 
