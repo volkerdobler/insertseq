@@ -245,8 +245,13 @@ async function InsertSeqHistory(
 	// build QuickPick items: top 'New sequence', then history newest-first
 	const qp = createQuickPick(context, parameter);
 
-	// show QuickPick
-	qp.show();
+	if (qp.items.length > 1) {
+		// show QuickPick if more than 1 item
+		qp.show();
+	} else {
+		// show normal input box if no items beside "new sequence" are in the history
+		InsertSeqCommand(context, value)
+	}
 }
 
 // working horse: create new Sequence based on Input string, (global) Parameter and Status of input (preview or final)

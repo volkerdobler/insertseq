@@ -27,7 +27,7 @@ All inputs are previewed live (as a decoration) for the current selections, so y
 
 You can start the extension either with the command palette and search for `insertseq` or with the (default) key binding `CTRL+ALT+.` (which can be change via configuration [Configuration](#configuration))
 
-If you have already used this extension for a while, you can also use previous insertions with the second command `insertseq.history` (default key binding `CTRL+ALT+,`). With this command, you see all previous insertions and can run them again or edit them to get a new insertion. More details below in the section [History](#history)
+If you have already used this extension for a while, you can also use previous insertions with the second command `insertseq.history` (default key binding `CTRL+ALT+,`). With this command, you see all previous insertions and can run them again or edit them to get a new insertion. If you don't have any history entries, the "normal" input box is shown. More details below in the section [History](#history)
 
 # Examples (simple → advanced):
 
