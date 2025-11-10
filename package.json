@@ -166,7 +166,7 @@
 					"default": "abcdefghijklmnopqrstuvwxyz",
 					"description": "Alphabet, for string successors"
 				},
-				"insertseq.ownsequences": {
+				"insertseq.mysequences": {
 					"type": "array",
 					"default": [
 						[
@@ -249,8 +249,8 @@
 	"scripts": {
 		"check-types": "tsc --noEmit",
 		"compile": "tsc -p ./",
-		"watch": "tsc -watch -p ./",
-		"clean": "rimraf ./dist",
+		"watch": "npm run clean && tsc -watch -p ./",
+		"clean": "rimraf ./dist/* -g",
 		"build:desk": "npm run check-types && node esbuild.js --production",
 		"build:web": "npm run check-types && node esbuild-web.js --production",
 		"build:all": "npm run clean && npm run build:desk && npm run build:web",
