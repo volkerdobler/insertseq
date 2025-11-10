@@ -11,10 +11,10 @@ All inputs are previewed live (as a decoration) for the current selections, so y
 ## Important news in version 1.0
 
 1. Most important, you now will see the current sequence as **preview/decoration** before pressing `ENTER`.
-   Most options are the same as before, with the following exceptions:
-1. There is not specific insertations for months (previously starting with `%`). Instead, you now can define your own sequenes and insert all kind of (own) lists - maybe also months (but I would recommend to use dates instead).
-1. Beside predefined lists in your configuration file, you can insert directly your current list which then is used for this insertion.
+1. The order of the inserted options are no longer fixed. You can insert the options in any order you like.
 1. Beside the (old short and often cryptical) delimiter-chars for the different options, you now can use text-delimiter as an alternative (_steps:_, _freq:_, _repeat:_, _startover:_, _expr:_, _stopif:_, _format:_)
+1. Beside predefined lists in your configuration file, you can insert directly a current list to use for this insertion.
+1. There is not specific insertations for months (previously starting with `%`). Instead, you now can define your own sequenes and insert all kind of (own) lists - maybe also months (but I would recommend to use dates instead).
 
 ## Note regarding the insertion order:
 
@@ -135,6 +135,22 @@ Output (for 13 selections):
 2
 ```
 
+### Formatting numbers
+
+The output can be formatted. Internally the d3-format library is used, so a lot of possible formatting can be done.
+
+Example: You want to prefix the output with zeros and want to have a total width for the numbers of 3 `1~03d`
+
+Output (for 5 selections):
+
+```
+001
+002
+003
+004
+005
+```
+
 ### Stop expression
 
 Sometime, you want to insert less or more numbers than the current selection.
@@ -181,11 +197,13 @@ Output (for 10 selections, the insertion stops if index is 6, which is when the 
 6
 ```
 
-During the input, when seeing the preview/decoration, no new lines are inserted. In this case, you see all future insertions in the last current line.
+During the preview/decoration, no new lines are inserted. In this case, you see all future insertions in the last selected line.
 
-5. Alpha sequences
+### Alpha sequences
 
-Input: `a`
+Beside numbers, you can insert alphabetic sequences. **Attention:** You can only use chars which are predefined in the "alphabet" you provided in your configuration. And all chars in the alphabet have to be uniq (no double char). If you have not defined your own alphabet, the program uses the default alphabet a-z (upper or lower chars)
+
+Example: `a`
 
 Output (for 5 selections):
 
@@ -197,98 +215,67 @@ d
 e
 ```
 
-![screenshot-placeholder-5](assets/screenshots/example-5.png)
+### Formatting alpha sequences
 
-6. Formatted numbers
+Like the number formatting, you can also format the output of the alpha sequences.
 
-Input: `1~03d`
+With the following input you get an output with a width of 5 chars, right-aligned `a~>10`
 
-Output (for 5 selections, 3 digits):
+Output (for 5 selections)
 
 ```
-001
-002
-003
-004
-005
+         a
+         b
+         c
+         d
+         e
 ```
 
-![screenshot-placeholder-6](assets/screenshots/example-6.png)
+### Date sequences
 
-7. Date sequences
+Another sequence you can use are dates. The date sequences start with `%`, followed by a date in the form yyyy-mm-dd.
+For step counter you can use wither days (default), weeks, months or years.
+The output language format can be changed as first part of the `~` option (see example below).
 
-Input: `%[2025-01-01]:1d`
+You want to insert every second week, starting with 2nd of March 2026, and want to output the format in a german language format (dd.MM.yyyy):
+
+Input: `%2025-03-02:1w~lang:de`
 
 Output (for 5 selections):
 
 ```
-2025-01-01
-2025-01-02
-2025-01-03
-2025-01-04
-2025-01-05
+2.3.2025
+16.3.2025
+30.3.2025
+13.4.2025
+27.4.2025
 ```
 
-![screenshot-placeholder-7](assets/screenshots/example-7.png)
+### Expressions
 
-8. Date sequence — 2 weeks step
+Another flexible way of creating a sequence is to use expressions/formulars.
 
-Input: `%[2025-01-01]:2w`
+If you want to insert a sequence, where you double the previous value, you can use:
+`|(i>0?p * 2:1)` 
+(be aware the previous value is 0 or '' at the beginning! and also it is recommended to use brackets or quotes around any expression)
 
 Output (for 5 selections):
-
-```
-2025-01-01
-2025-01-15
-2025-01-29
-2025-02-12
-2025-02-26
-```
-
-![screenshot-placeholder-7b](assets/screenshots/example-7b.png)
-
-9. Expressions
-
-Input: `| i * 2`
-
-Output (for 5 selections):
-
-```
-0
-2
-4
-6
-8
-```
-
-![screenshot-placeholder-8](assets/screenshots/example-8.png)
-
-10. Stop expression
-
-Input: `1@i>5`
-
-Output (for 10 selections; stops when condition is true after 6 outputs):
 
 ```
 1
 2
-3
 4
-5
-6
-
-
-
-
+8
+16
 ```
 
-![screenshot-placeholder-9](assets/screenshots/example-9.png)
+### Own lists
 
-11. Predefined lists
+If the above sequences don't fit to your needs, you can create your own sequence and insertation will use your list. The list has to start with `[` and should insert either numbers or strings
 
-Input: `["Jan","Feb","Mar"]`
+Example: `["Jan","Feb","Mar"]`
 
-Output (for 5 selections, list wraps):
+Output (for 5 selections):
 
 ```
 Jan
@@ -298,7 +285,11 @@ Jan
 Feb
 ```
 
-![screenshot-placeholder-10](assets/screenshots/example-10.png)
+### Predefined lists
+
+If you have to insert individual sequences/lists more often, you can predefine them in your configuration.
+
+For example, if you have the configuration entry: `insertseq.ownsequences`
 
 ## Syntax Definitions
 
