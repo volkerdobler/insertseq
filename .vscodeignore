@@ -13,3 +13,4 @@ webpack.config.js
 **/*.pdn
 .babelrc
 esbuild.js
+quickpick_keyboard.txt
