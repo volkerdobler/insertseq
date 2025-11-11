@@ -420,12 +420,17 @@ Predefined sequences are configured under `insertseq.mysequences` and referenced
 
 - Syntax: `;name`, `;"My Seq"`, `;?1` (array index), or `;element`.
 - The resolver matches array names or elements and starts accordingly. If no match is found, the identifier is used as a single-item sequence.
+    - You can add the following chars before of after the optional index:
+        - `i`: The input is case-insensitive, so `;jan` will also find a predefined sequence including `Jan`
+        - `f`: The input has to macht the complete word in the sequence. Example `Jan` will not match an item `January`
+        - `s`: Normally, the location of the string is not important. With the `s` option, the input string has to match the beginning of the sequence item.
 
 Examples:
 
 - `;Mar`
 - `;?1`
 - `;?1|3`
+- `;jan?i
 
 Interaction with other options is the same as for other sequence types.
 

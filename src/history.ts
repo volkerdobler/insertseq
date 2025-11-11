@@ -18,6 +18,7 @@ export async function migrateOldHistory(
 		const current = getHistory(ctx); // reads HISTORY_KEY
 		const merged: string[] = [];
 
+		// skip old month inputs starting with ;
 		const oldMonthInput = new RegExp(/^;/);
 		// preserve order: take old first (assumed most-recent-first), then append current items not already present
 		for (const it of old) {
