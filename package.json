@@ -1,6 +1,6 @@
 {
 	"name": "insertseq",
-	"version": "0.99.12",
+	"version": "1.0.0",
 	"publisher": "volkerdobler",
 	"displayName": "Insert Sequences",
 	"description": "Insert sequences of any kind (numberic, alpha, expressions, etc.) to VSCode textdocuments",
