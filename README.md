@@ -237,6 +237,18 @@ Jul
 
 ---
 
+## Content of full syntax description
+
+- [Numbers](#numeric-sequences-details)
+- [Alphabetical/Strings](#alphabetic--string-sequences-details)
+- [Dates](#date-sequences-details)
+- [Own](#own-sequences-details)
+- [Predefined](#predefined-sequences-details)
+
+- [History command](#history)
+
+- [Configurations](#configuration)
+
 ## Input parts (overview)
 
 The syntax is built from segments. Each input type has a specific starting marker or format. Apart from the start token, the order of options does not matter.
@@ -255,18 +267,6 @@ The syntax is built from segments. Each input type has a specific starting marke
 | reverse   | Reverse order                      | `!`                                                | reverses insertion order                               |
 
 ---
-
-## Content of full syntax description
-
-- [Numbers](#numeric-sequences-details)
-- [Alphabetical/Strings](#alphabetic--string-sequences-details)
-- [Dates](#date-sequences-details)
-- [Own](#own-sequences-details)
-- [Predefined](#predefined-sequences-details)
-
-- [History command](#history)
-
-- [Configurations](#configuration)
 
 ### Numeric Sequences details
 
