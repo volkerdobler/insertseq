@@ -1,49 +1,50 @@
 {
 	"name": "insertnums",
-	"version": "0.10.1",
+	"version": "1.0.0",
 	"publisher": "volkerdobler",
 	"displayName": "Insert Sequences",
-	"description": "Insert sequences of any kind (numberic, alpha, expressions) to VSCode textdocuments",
+	"description": "Insert sequences of any kind (numberic, alpha, expressions, etc.) to VSCode textdocuments",
 	"keywords": [
 		"sequences",
 		"numbers",
 		"insert",
 		"alphachars",
 		"expressions",
-		"frequencies"
+		"frequencies",
+		"insertnums",
+		"insertseq",
+		"insertsequences"
 	],
-	"activationEvents": [],
 	"license": "MIT",
 	"bugs": {
-		"url": "https://github.com/volkerdobler/insertnums/issues",
-		"email": "vscode.insertnums.ext@volker-dobler.de"
+		"url": "https://github.com/volkerdobler/insertseq/issues",
+		"email": "vscode.insertsequences.ext@volker-dobler.de"
 	},
-	"homepage": "https://github.com/volkerdobler/insertnums/blob/master/README.md",
+	"homepage": "https://github.com/volkerdobler/insertseq/blob/master/README.md",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/volkerdobler/insertnums.git"
+		"url": "https://github.com/volkerdobler/insertseq.git"
 	},
 	"engines": {
-		"vscode": "^1.93.0"
+		"vscode": "^1.105.0"
 	},
 	"categories": [
 		"Other"
 	],
 	"main": "./dist/extension.js",
+	"browser": "./dist/extension-web.js",
+	"files": [
+		"dist/**",
+		"README.md",
+		"CHANGELOG.md",
+		"LICENSE.md",
+		"package.json",
+		"insertseq.png"
+	],
 	"contributes": {
 		"configuration": {
 			"title": "insertseq",
 			"properties": {
-				"insertseq.historyLimit": {
-					"type": "number",
-					"default": 100,
-					"description": "Maximum number of historical records, 0 is unlimited"
-				},
-				"insertseq.editHistory": {
-					"type": "boolean",
-					"default": false,
-					"description": "Items from PickHistory are editable (default: false)"
-				},
 				"insertseq.start": {
 					"type": "string",
 					"default": "1",
@@ -54,10 +55,77 @@
 					"default": "1",
 					"description": "Default increment"
 				},
-				"insertseq.cast": {
+				"insertseq.repetition": {
 					"type": "string",
-					"default": "s",
-					"description": "Default substitution function [S = String, I = Integer, F = Float, B = Boolean]"
+					"default": "",
+					"description": "Default repetition"
+				},
+				"insertseq.frequency": {
+					"type": "string",
+					"default": "1",
+					"description": "Default frequency"
+				},
+				"insertseq.startover": {
+					"type": "string",
+					"default": "",
+					"description": "Start sequence from beginning, independent of repetition and frequency"
+				},
+				"insertseq.numberFormat": {
+					"type": "string",
+					"default": "",
+					"description": "Default output format for numbers"
+				},
+				"insertseq.stringFormat": {
+					"type": "string",
+					"default": "",
+					"description": "Default output format for strings"
+				},
+				"insertseq.dateFormat": {
+					"type": "string",
+					"default": "",
+					"description": "Default output format for dates"
+				},
+				"insertseq.alphaCapital": {
+					"type": "string",
+					"default": "preserve",
+					"enum": [
+						"preserve",
+						"upper",
+						"lower",
+						"pascal"
+					],
+					"enumDescriptions": [
+						"preserve (default): preserve chars as insert",
+						"upper: output all chars as upper letters",
+						"lower: output all chars as lower letters",
+						"pascal: output first letter as upper letter, rest as lower letters"
+					],
+					"description": "Default output in alpha sequences"
+				},
+				"insertseq.language": {
+					"type": "string",
+					"default": "",
+					"description": "Default language format for dates"
+				},
+				"insertseq.insertOrder": {
+					"type": "string",
+					"default": "cursor",
+					"description": "Default order of insertion",
+					"enum": [
+						"cursor",
+						"sorted",
+						"reverse"
+					],
+					"enumdescription": [
+						"cursor (default): insertion is based on multi cursor click order",
+						"sorted: insertion is from top most click down",
+						"reverse: insertion is from bottom most click up"
+					]
+				},
+				"insertseq.century": {
+					"type": "string",
+					"default": "20",
+					"description": "Default century if year has only 2 digits - default: 20"
 				},
 				"insertseq.centerString": {
 					"type": "string",
@@ -67,43 +135,8 @@
 						"r"
 					],
 					"enumdescription": [
-						"l (default): e.g. a 1 char string centered in a 4 char field is left oriented",
-						"r: e.g. a 1 char string centered in a 4 char field is right oriented"
-					]
-				},
-				"insertseq.minMonthLength": {
-					"type": "number",
-					"default": 3,
-					"description": "Minimum length of a string to identify a month (e.g. Apr => 3)"
-				},
-				"insertseq.language": {
-					"type": "string",
-					"default": "de",
-					"description": "Default language format for months"
-				},
-				"insertseq.languageFormat": {
-					"type": "string",
-					"default": "s",
-					"enum": [
-						"l",
-						"s"
-					],
-					"enumdescription": [
-						"s (default): month only as short name (e.g. Jan)",
-						"l: month as long name (e.g. January)"
-					]
-				},
-				"insertseq.insertOrder": {
-					"type": "string",
-					"default": "cursor",
-					"description": "Default order of insertion",
-					"enum": [
-						"cursor",
-						"sorted"
-					],
-					"enumdescription": [
-						"cursor (default): insertion is based on multi cursor click order",
-						"sorted: insertion is from top most click down (reverse is possible with option '!')"
+						"l (default): e.g. a 1 char string centered in a 4 char field is left oriented (placed at position 2)",
+						"r: e.g. a 1 char string centered in a 4 char field is right oriented (placed at position 3)"
 					]
 				},
 				"insertseq.dateStepUnit": {
@@ -123,32 +156,90 @@
 						"y: years"
 					]
 				},
-				"insertseq.dateFormat": {
+				"insertseq.delimiter": {
 					"type": "string",
-					"default": "dd.MM.yyyy",
-					"description": "Default date format"
+					"default": "",
+					"description": "Delimiter, for additional insertations"
+				},
+				"insertseq.alphabet": {
+					"type": "string",
+					"default": "abcdefghijklmnopqrstuvwxyz",
+					"description": "Alphabet, for string successors"
+				},
+				"insertseq.mysequences": {
+					"type": "array",
+					"default": [
+						[
+							"Jan",
+							"Feb",
+							"Mar",
+							"Apr",
+							"Mai",
+							"Jun",
+							"Jul",
+							"Aug",
+							"Sep",
+							"Okt",
+							"Nov",
+							"Dez"
+						],
+						[
+							"foo",
+							"bar",
+							"foz"
+						]
+					],
+					"description": "Own defined Sequences (Array of arrays)"
+				},
+				"insertseq.radixPrefix": {
+					"type": "boolean",
+					"default": false,
+					"description": "Whether to use radix prefixes (0b, 0o, 0x) when inserting numbers in binary, octal, or hexadecimal format"
+				},
+				"insertseq.previewColor": {
+					"type": "string",
+					"default": "#888888",
+					"description": "Color of preview decoration"
+				},
+				"insertseq.maxInsertions": {
+					"type": "number",
+					"default": 10000,
+					"description": "Maximum number of insertions to avoid performance issues - internal variable, be aware what you are doing if you change it"
+				},
+				"insertseq.maxHistoryItems": {
+					"type": "number",
+					"default": 100,
+					"description": "Maximum items stored in history"
 				}
 			}
 		},
 		"commands": [
 			{
-				"command": "extension.insertSeq",
+				"command": "extension.insertseq",
 				"title": "Insert Sequences"
 			},
 			{
-				"command": "extension.insertSeq.showHistory",
-				"title": "Insert Sequences Show History"
+				"command": "extension.insertseq.history",
+				"title": "Insert Sequences-History"
+			},
+			{
+				"command": "insertseq._history.deleteActive",
+				"title": "InsertSeq: Delete active history item"
+			},
+			{
+				"command": "insertseq._history.clearAll",
+				"title": "InsertSeq: Clear history"
 			}
 		],
 		"keybindings": [
 			{
-				"command": "extension.insertSeq",
+				"command": "extension.insertseq",
 				"key": "ctrl+alt+.",
 				"mac": "cmd+alt+.",
 				"when": "editorTextFocus"
 			},
 			{
-				"command": "extension.insertSeq.showHistory",
+				"command": "extension.insertseq.history",
 				"key": "ctrl+alt+,",
 				"mac": "cmd+alt+,",
 				"when": "editorTextFocus"
@@ -156,33 +247,36 @@
 		]
 	},
 	"scripts": {
-		"compile": "npm run check-types && node esbuild.js",
 		"check-types": "tsc --noEmit",
-		"watch": "npm-run-all -p watch:*",
-		"watch:esbuild": "node esbuild.js --watch",
-		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-		"vscode:prepublish": "npm run package",
-		"package": "npm run check-types && node esbuild.js --production"
+		"compile": "tsc -p ./",
+		"watch": "npm run clean && tsc -watch -p ./",
+		"clean": "rimraf ./dist/* -g",
+		"build:desk": "npm run check-types && node esbuild.js --production",
+		"build:web": "npm run check-types && node esbuild-web.js --production",
+		"build:all": "npm run clean && npm run build:desk && npm run build:web",
+		"vscode:prepublish": "npm run build:all"
+	},
+	"dependencies": {
+		"d3-format": "^3.1.0",
+		"eval5": "^1.4.8",
+		"temporal-polyfill": "^0.3.0"
 	},
 	"devDependencies": {
-		"@types/d3-format": "^2.0.5",
-		"@types/node": "^20.12.11",
-		"@types/vscode": "^1.89.0",
-		"esbuild": "^0.24.0",
+		"@types/assert": "^1.5.11",
+		"@types/d3-format": "^3.0.4",
+		"@types/node": "^24.10.0",
+		"@types/vscode": "^1.105.0",
+		"assert": "^2.1.0",
+		"esbuild": "^0.27.0",
 		"eslint": "^9.2.0",
 		"npm-run-all": "^4.1.5",
 		"prettier": "^3.2.5",
-		"ts-loader": "^9.5.1"
+		"ts-loader": "^9.5.1",
+		"typescript": "^5.1.6"
 	},
-	"icon": "insertnums.png",
+	"icon": "insertseq.png",
 	"galleryBanner": {
 		"color": "#5757ff",
 		"theme": "dark"
-	},
-	"dependencies": {
-		"d3-format": "^2.0.0",
-		"date-fns": "^3.6.0",
-		"mathjs": "^14.6.0",
-		"ovsx": "^0.10.5"
 	}
 }
