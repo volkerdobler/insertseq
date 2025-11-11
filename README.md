@@ -10,7 +10,7 @@ All inputs are previewed live (as a decoration) for the current selections, so y
 
 ## Important changes in version 1.0
 
-1. Most importantly, you now see the current sequence as a live preview/decoration before pressing `ENTER`.
+1. Most importantly, you now see the current sequence as a live preview/decoration before pressing Enter.
 2. The order of the insertion options is no longer fixed. You can provide the options in any order.
 3. In addition to the short delimiter characters used previously, you can now use readable option keywords (for example: `steps:`, `freq:`, `repeat:`, `startover:`, `expr:`, `stopif:`, `format:`).
 4. Besides predefined lists in your configuration file, you can provide a list inline for a single insertion.
@@ -18,16 +18,16 @@ All inputs are previewed live (as a decoration) for the current selections, so y
 
 ## Note about insertion order
 
-- By default the mapping from sequence items to your cursors follows the order you created the selections (click order). That order might not match the visual document order (top → bottom).
+- By default, the mapping from sequence items to your cursors follows the order in which you created the selections (click order). That order might not match the document order (top → bottom).
 - Use `$` to force top→bottom (document) insertion order regardless of click order.
-- Use `!` to invert the insertion order. Without `$` this reverses the click order; when combined with `$` it results in bottom→top document order.
+- Use `!` to invert the insertion order. Without `$`, this reverses the click order; when combined with `$` it results in bottom→top document order.
   See the "Syntax details" section for more information.
 
 ## Starting the extension
 
-You can start the extension from the Command Palette by searching for `insertseq`, or use the default key binding `CTRL+ALT+.` (this can be changed in settings).
+You can start the extension from the Command Palette by searching for `insertseq`, or use the default key binding Ctrl+Alt+. (this can be changed in settings).
 
-If you have used this extension before, you can reuse previous inputs with the command `insertseq.history` (default key binding `CTRL+ALT+,`). This shows your previous insertions; you can run them again or edit them. If no history entries exist, the normal input box is shown. See the [History](#history) section for details.
+If you have used this extension before, you can reuse previous inputs with the command `insertseq.history` (default key binding Ctrl+Alt+,). This shows your previous insertions; you can run them again or edit them. If no history entries exist, the normal input box is shown. See the [History](#history) section for details.
 
 # Examples (simple → advanced)
 
@@ -35,7 +35,7 @@ If you have used this extension before, you can reuse previous inputs with the c
 
 With five empty cursors, start `insertseq` and you will see a preview of numbers 1 to 5 (the default start is 1).
 
-If you type `3`, the preview updates to 3–7. Pressing `ENTER` inserts those numbers:
+If you type `3`, the preview updates to 3–7. Pressing Enter inserts those numbers:
 
 ```
 3
@@ -172,7 +172,7 @@ Use `~w` to enable wrap behavior (for example, `z~w` yields `z, a, b, ...` if co
 
 ### Date sequences
 
-Date sequences start with `%` followed by a date (e.g. `yyyy-mm-dd`) or a quoted date string. Steps support days (default), weeks, months, or years. You can specify a language for formatting with `lang:`.
+Date sequences start with `%` followed by a date (for example, `yyyy-mm-dd`) or a quoted date string. Steps support days (default), weeks, months, or years. You can specify a language for formatting with `lang:`.
 
 Input: `%2025-03-02:1w~lang:de` with 5 selections → output:
 
@@ -256,7 +256,19 @@ The syntax is built from segments. Each input type has a specific starting marke
 
 ---
 
-### Numeric Sequences
+## Content of full syntax description
+
+- [Numbers](#numeric-sequences-details)
+- [Alphabetical/Strings](#alphabetic--string-sequences-details)
+- [Dates](#date-sequences-details)
+- [Own](#own-sequences-details)
+- [Predefined](#predefined-sequences-details)
+
+- [History command](#history)
+
+- [Configurations](#configuration)
+
+### Numeric Sequences details
 
 `[<start>[r<random>]][<steps>][<freq>][<repeat>][<startover>][<format>][<expression>][<stopexpression>][$][!]`
 
@@ -322,7 +334,7 @@ More examples:
 
 ---
 
-### Alphabetic / String Sequences
+### Alphabetic / String Sequences details
 
 `[<start>[?u|l|p]][<steps>][<freq>][<repeat>][<startover>][<format>][<expression>][<stopexpression>][$][!]`
 
@@ -345,7 +357,7 @@ Examples:
 
 ---
 
-### Date sequences
+### Date sequences details
 
 Most options work like numeric sequences — the parts below differ.
 
@@ -371,7 +383,7 @@ Examples:
 
 ---
 
-### Expression sequences
+### Expression sequences details
 
 - Start with `|` followed by an expression. The expression is evaluated for each emission.
 - Does not accept step, repeat, frequency, or startover — implement such behavior inside the expression.
@@ -386,7 +398,7 @@ Examples:
 
 ---
 
-### Own sequences (inline lists)
+### Own sequences details
 
 Inline lists in square brackets are treated as circular/custom lists.
 
@@ -402,7 +414,7 @@ Examples:
 
 ---
 
-### Predefined sequences
+### Predefined sequences details
 
 Predefined sequences are configured under `insertseq.mysequences` and referenced with the `;` prefix.
 
@@ -421,7 +433,7 @@ Interaction with other options is the same as for other sequence types.
 
 ## History
 
-Default keybinding: `CTRL+ALT+,` (also available via the Command Palette as "Insert Sequences - History").
+Default keybinding: Ctrl+Alt+, (also available via the Command Palette as "Insert Sequences - History").
 
 What it shows:
 
