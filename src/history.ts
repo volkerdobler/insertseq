@@ -2,10 +2,39 @@ import * as vscode from 'vscode';
 
 // -------------------- History helpers --------------------
 const HISTORY_KEY = 'insertseq.history';
+const OLD_HISTORY_KEY = 'history';
 const HISTORY_MAX =
 	Number(
 		vscode.workspace.getConfiguration('insertseq').get('maxHistoryItems'),
 	) || 100;
+
+export async function migrateOldHistory(
+	ctx: vscode.ExtensionContext,
+): Promise<void> {
+	try {
+		const old = ctx.globalState.get<string[]>(OLD_HISTORY_KEY, []) || [];
+		if (!old.length) return;
+
+		const current = getHistory(ctx); // reads HISTORY_KEY
+		const merged: string[] = [];
+
+		// preserve order: take old first (assumed most-recent-first), then append current items not already present
+		for (const it of old) {
+			if (it && !merged.includes(it)) merged.push(it);
+		}
+		for (const it of current) {
+			if (it && !merged.includes(it)) merged.push(it);
+		}
+
+		if (merged.length > HISTORY_MAX) merged.length = HISTORY_MAX;
+		await ctx.globalState.update(HISTORY_KEY, merged);
+
+		// clear old history to avoid duplicate future migrations
+		await ctx.globalState.update(OLD_HISTORY_KEY, []);
+	} catch (err) {
+		console.error('insertseq: history migration failed', err);
+	}
+}
 
 export function getHistory(ctx: vscode.ExtensionContext): string[] {
 	return ctx.globalState.get<string[]>(HISTORY_KEY, []) || [];
