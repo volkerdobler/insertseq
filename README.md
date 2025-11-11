@@ -1,49 +1,41 @@
 # VS Code Extension: Insert Sequences (InsertSeq)
 
-Insert Sequences is a small VS Code extension that helps you generate and insert all kinds of sequences into one or more cursors. It supports numeric sequences, alphabetic sequences, dates, user-defined or predefined lists, and inline JavaScript expressions. The syntax is compact and powerful, allowing repetition, stepping, frequency, custom formats, stop expressions, and much more.
+Insert Sequences is a small VS Code extension that helps you generate and insert various kinds of sequences into one or more cursors. It supports numeric sequences, alphabetic sequences, dates, user-defined or predefined lists, and inline JavaScript expressions. The syntax is compact and powerful, allowing repetition, stepping, frequency control, custom formats, stop expressions, and more.
 
 All inputs are previewed live (as a decoration) for the current selections, so you can verify the generated sequence before pressing Enter.
 
-> # ATTENTION! This is version 1.0 and a big update to previous versions. Read this documentation carfully!
+> ATTENTION: This is version 1.0 and a major update to previous versions. Read this documentation carefully!
 
 ## Usage
 
-## Important news in version 1.0
+## Important changes in version 1.0
 
-1. Most important, you now will see the current sequence as **preview/decoration** before pressing `ENTER`.
-1. The order of the inserted options are no longer fixed. You can insert the options in any order you like.
-1. Beside the (old short and often cryptical) delimiter-chars for the different options, you now can use text-delimiter as an alternative (_steps:_, _freq:_, _repeat:_, _startover:_, _expr:_, _stopif:_, _format:_)
-1. Beside predefined lists in your configuration file, you can insert directly a current list to use for this insertion.
-1. There is not specific insertations for months (previously starting with `%`). Instead, you now can define your own sequenes and insert all kind of (own) lists - maybe also months (but I would recommend to use dates instead).
+1. Most importantly, you now see the current sequence as a live preview/decoration before pressing `ENTER`.
+2. The order of the insertion options is no longer fixed. You can provide the options in any order.
+3. In addition to the short delimiter characters used previously, you can now use readable option keywords (for example: `steps:`, `freq:`, `repeat:`, `startover:`, `expr:`, `stopif:`, `format:`).
+4. Besides predefined lists in your configuration file, you can provide a list inline for a single insertion.
+5. There is no special insertion mode for months anymore (previously starting with `%`). You can define your own sequences and lists (including months), but using date sequences is recommended for calendar data.
 
-## Note regarding the insertion order:
+## Note about insertion order
 
-- By default the mapping from sequence items to your cursors depends on the order you created the selections (click order). That order might not match the visual document order (top→bottom).
-- Use `$` to force top→bottom (document) insertion order regardless of the click order.
-- Use `!` to invert the insertion order. Without `$` that means the click order is reversed; when combined with `$` it results in bottom→top document order.
+- By default the mapping from sequence items to your cursors follows the order you created the selections (click order). That order might not match the visual document order (top → bottom).
+- Use `$` to force top→bottom (document) insertion order regardless of click order.
+- Use `!` to invert the insertion order. Without `$` this reverses the click order; when combined with `$` it results in bottom→top document order.
   See the "Syntax details" section for more information.
 
-## Start extension(s):
+## Starting the extension
 
-You can start the extension either with the command palette and search for `insertseq` or with the (default) key binding `CTRL+ALT+.` (which can be change via configuration [Configuration](#configuration))
+You can start the extension from the Command Palette by searching for `insertseq`, or use the default key binding `CTRL+ALT+.` (this can be changed in settings).
 
-If you have already used this extension for a while, you can also use previous insertions with the second command `insertseq.history` (default key binding `CTRL+ALT+,`). With this command, you see all previous insertions and can run them again or edit them to get a new insertion. If you don't have any history entries, the "normal" input box is shown. More details below in the section [History](#history)
+If you have used this extension before, you can reuse previous inputs with the command `insertseq.history` (default key binding `CTRL+ALT+,`). This shows your previous insertions; you can run them again or edit them. If no history entries exist, the normal input box is shown. See the [History](#history) section for details.
 
-# Examples (simple → advanced):
+# Examples (simple → advanced)
 
-### We start with a multi-cursor selection of 5 lines:
+### Multi-cursor example (5 cursors)
 
-```
-|
-|
-|
-|
-|
-```
+With five empty cursors, start `insertseq` and you will see a preview of numbers 1 to 5 (the default start is 1).
 
-When starting the `insertseq`-command, you will see a preview of the numbers 1 to 5 (because, by default, the start-value is the number 1 if no input is typed).
-
-If you start typing the number 3, the preview will change to the number 3 to 7 - and if you press `ENTER` the preview will change to a real insertion of these numbers.
+If you type `3`, the preview updates to 3–7. Pressing `ENTER` inserts those numbers:
 
 ```
 3
@@ -53,13 +45,11 @@ If you start typing the number 3, the preview will change to the number 3 to 7 -
 7
 ```
 
-### You want to increase the number by another number?
+### Change the step
 
-To increase the sequence not by 1 but by any other number (positiv or negative) you can tell the extension the number either by typing `:<number>` or with more descriptive with `step:<number>`. The second alternative has to start with a word boundary, so either a space or comma - **not working** is `10step:2`!.
+Use `:<number>` or `step:<number>` to set the increment. The `step:` form requires a word boundary (space or comma) before it (for example, `10 step:2` works; `10step:2` does not).
 
-Example: with the input `10:2` (alternative: `10 step:2`) you get
-
-Output (for 5 selections):
+Input: `10:2` (or `10 step:2`) with 5 selections → output:
 
 ```
 10
@@ -71,11 +61,9 @@ Output (for 5 selections):
 
 ### Repeat sequence after a fixed number of insertions
 
-If you want to repeat the sequence after a defined number of insertions, you can do this with the char `#` or the alternative `rep:` (or `repeat:` or `repetition`) input.
+Use `#` or `rep:` / `repeat:` / `repetition:` to define the cycle length.
 
-Example: `1#5` (step is 1 by default, no need to include it for this sequence)
-
-Output (for 10 selections):
+Input: `1#5` with 10 selections → output:
 
 ```
 1
@@ -90,13 +78,11 @@ Output (for 10 selections):
 5
 ```
 
-### Repeat each value multiple times
+### Repeat each value multiple times (frequency)
 
-If you want to repeat each insertions multiple times, you can use the `*` char or `freq:` (or `frequency:`) option.
+Use `*` or `freq:` / `frequency:` to repeat each logical value several times.
 
-Example: `1 freq:2`
-
-Output (for 10 selections, each value repeated twice):
+Input: `1 freq:2` with 10 selections → output:
 
 ```
 1
@@ -111,13 +97,11 @@ Output (for 10 selections, each value repeated twice):
 5
 ```
 
-### Startover
+### Startover (overall cycle length)
 
-Sometime, you need to start the frequency not at a symetrical point, but anywhere in the sequence. This is the task for `##` or more describable `startover` or alternative `startagain`.
+Use `##` or `startover:` / `startagain:` to restart the entire emitted stream after N emitted items.
 
-Example: `1 rep:2 freq:3 startover:7` (shorter: 1#2\*3##7)
-
-Output (for 13 selections):
+Input: `1 rep:2 freq:3 startover:7` (short: `1#2*3##7`) with 13 selections → output:
 
 ```
 1
@@ -126,8 +110,7 @@ Output (for 13 selections):
 2
 2
 2
-1
-1         <== start of the sequence from the beginning
+1   <- restart of the sequence
 1
 1
 2
@@ -137,11 +120,9 @@ Output (for 13 selections):
 
 ### Formatting numbers
 
-The output can be formatted. Internally the d3-format library is used, so a lot of possible formatting can be done.
+Formatting uses d3-format style. Example: zero-pad to width 3 with `~03d`.
 
-Example: You want to prefix the output with zeros and want to have a total width for the numbers of 3 `1~03d`
-
-Output (for 5 selections):
+Input: `1~03d` with 5 selections → output:
 
 ```
 001
@@ -153,59 +134,17 @@ Output (for 5 selections):
 
 ### Stop expression
 
-Sometime, you want to insert less or more numbers than the current selection.
-Both can be done with the char `@` or the alternatives `stopif:` or `stopexpr:` or `stopexpression:`.
-This option needs a formular/expression, which has to be `true` to stop the insertion.
+Use `@` or `stopif:` / `stopexpr:` / `stopexpression:` to stop insertion based on a boolean expression. Use placeholders such as `i` for the current index (0-based).
 
-You can use special chars in this formular/expression to stop the insertion, whenever you need it. E.g. `i` is the current index of the insertions (starting with 0).
+Input: `1 stopif:(i>5)` with many selections will stop when `i > 5` (when the number would be 7).
 
-Easy forumlar/expressions can be inserted directly after the column, but I recommend to insert the forumlar/expression in parantisies.
+During preview no new lines are inserted; the preview shows future insertions on the last selected line.
 
-Example: `1 stopif:(i>5)
+### Alphabetic sequences
 
-Output (for 10 selections, the insertion stops if index is 6, which is when the number is 7):
+Alpha sequences use the configured alphabet (default `a`–`z`). All characters in the alphabet must be unique. If you have not defined a custom alphabet, the extension uses the default a–z alphabet (case handled by options).
 
-```
-1
-2
-3
-4
-5
-6
-
-
-
-
-```
-
-If the formular/expression is larger than the number of selections, additional lines will be included.
-
-Example: `1 stopif:(i>5)
-
-```
-1
-```
-
-Output (for 10 selections, the insertion stops if index is 6, which is when the number is 7):
-
-```
-1
-2
-3
-4
-5
-6
-```
-
-During the preview/decoration, no new lines are inserted. In this case, you see all future insertions in the last selected line.
-
-### Alpha sequences
-
-Beside numbers, you can insert alphabetic sequences. **Attention:** You can only use chars which are predefined in the "alphabet" you provided in your configuration. And all chars in the alphabet have to be uniq (no double char). If you have not defined your own alphabet, the program uses the default alphabet a-z (upper or lower chars)
-
-Example: `a`
-
-Output (for 5 selections):
+Input: `a` with 5 selections → output:
 
 ```
 a
@@ -215,13 +154,11 @@ d
 e
 ```
 
-### Formatting alpha sequences
+### Formatting alphabetic sequences
 
-Like the number formatting, you can also format the output of the alpha sequences.
+String formatting supports padding and alignment. Example: right-align in width 10 with `~>10`.
 
-With the following input you get an output with a width of 5 chars, right-aligned `a~>10`
-
-Output (for 5 selections)
+Input: `a~>10` with 5 selections → output:
 
 ```
          a
@@ -231,17 +168,13 @@ Output (for 5 selections)
          e
 ```
 
+Use `~w` to enable wrap behavior (for example, `z~w` yields `z, a, b, ...` if configured).
+
 ### Date sequences
 
-Another sequence you can use are dates. The date sequences start with `%`, followed by a date in the form yyyy-mm-dd.
-For step counter you can use wither days (default), weeks, months or years.
-The output language format can be changed as first part of the `~` option (see example below).
+Date sequences start with `%` followed by a date (e.g. `yyyy-mm-dd`) or a quoted date string. Steps support days (default), weeks, months, or years. You can specify a language for formatting with `lang:`.
 
-You want to insert every second week, starting with 2nd of March 2026, and want to output the format in a german language format (dd.MM.yyyy):
-
-Input: `%2025-03-02:1w~lang:de`
-
-Output (for 5 selections):
+Input: `%2025-03-02:1w~lang:de` with 5 selections → output:
 
 ```
 2.3.2025
@@ -253,13 +186,9 @@ Output (for 5 selections):
 
 ### Expressions
 
-Another flexible way of creating a sequence is to use expressions/formulars.
+Use the pipe `|` to create a sequence from an inline JavaScript expression. The expression is evaluated for each emission; parentheses or quotes are recommended for clarity.
 
-If you want to insert a sequence, where you double the previous value, you can use:
-`|(i>0?p * 2:1)` 
-(be aware the previous value is 0 or '' at the beginning! and also it is recommended to use brackets or quotes around any expression)
-
-Output (for 5 selections):
+Input: `|(i>0?p * 2:1)` with 5 selections → output:
 
 ```
 1
@@ -269,13 +198,11 @@ Output (for 5 selections):
 16
 ```
 
-### Own lists
+### Inline lists (Own sequences)
 
-If the above sequences don't fit to your needs, you can create your own sequence and insertation will use your list. The list has to start with `[` and should insert either numbers or strings
+Provide a list inline using square brackets. Items are treated as a circular list.
 
-Example: `["Jan","Feb","Mar"]`
-
-Output (for 5 selections):
+Input: `["Jan","Feb","Mar"]` with 5 selections → output:
 
 ```
 Jan
@@ -287,382 +214,293 @@ Feb
 
 ### Predefined lists
 
-If you have to insert individual sequences/lists more often, you can predefine them in your configuration.
+Predefined lists come from your configuration setting (for example, `insertseq.mysequences`). Use the `;` prefix to reference them.
 
-For example, if you have the configuration entry: `insertseq.ownsequences`
+Given configuration:
 
-## Syntax Definitions
+```json
+"insertseq.mysequences": [
+  ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+  ["foo","bar","foz"]
+]
+```
 
-The expression syntax is compact and built from segments. Each input type has its specific starting marker or format.
+Input: `;Mar` with 5 selections → output:
 
-General syntax elements (appear in many types):
-
-- start — optional start value. If omitted, the configured default (or `1`) is used.
-- :step — optional step/increment.
-- \*frequency — number of repetitions for each sequence value before advancing (e.g. `1*3` emits `1,1,1,2,2,2,...`).
-- #repeat — repetition / cycle length: how many distinct sequence values are emitted before the sequence restarts (e.g. `1#3` produces `1,2,3,1,2...`).
-- ##startover — overall output cycle length: after this many emitted output items the sequence restarts from the beginning, independent of `#` (cycle of distinct values) and `*` (per-value repetitions). Useful to bound the total output pattern.
-- ~format — output formatting for numbers, strings or dates (see type-specific details).
-- ::expr — inline transformation expression (applies per value).
-- @stopexpr — boolean expression evaluated each step to stop early.
-- $ force insertion order from top to bottom (document order), independent of the original click order. Use this when you want the sequence assigned in visual top→bottom order.
-- ! invert the insertion order. Without `$` this means "reverse click order"; combined with `$` it will insert from bottom→top (the opposite of the `$` top→bottom behavior).
-
-Input Types
-
-1. Decimal / numeric
-
-Syntax: `[<start>[R[+-]<number>]][:<step>][#<repeat>][*<frequency>][##startover][~<format>][::<expr>][@<stopexpr>][$][!]`
-
-- start: numeric start value (default `1`).
-    - Note: if the `start` value contains leading characters (for example `00001`), those leading characters will be preserved and used as padding in subsequent values (`00002`, `00003`, ...), unless a different format overrides this behavior.
-    - If an `R` follows the start value, a random sequence is produced: numbers are chosen between `start` and `<number>`, or — if a `+` or `-` sign is included — between `start` and `start +/- <number>`.
-    - If you want to insert more items than there are selections, you can choose which (max. 2-character) delimiter should be used after an underscore (`_`).
-    - If you add `?1` to the input at the end, hexadecimal, octal, and binary numbers will be shown with the prefixes `0x`, `0o`, or `0b`. This can also be achieved with a format string `#x`, `#o`, or `#b`.
-- step: numeric step (default `1`).
-- repeat: repetition / cycle length — the number of distinct sequence values emitted before the sequence cycles back to the start (e.g. `1#3` → `1,2,3,1,2...`).
-- frequency: per-value repetition — how many times each distinct value is emitted before advancing (e.g. `1*3` → `1,1,1,2,2,2,...`).
-- format: use `d3-format` formatting strings or simple zero padding like `03d`.
-- stop expression: JavaScript expression using `i` (index), `v` (current value) etc.
-
-Examples:
-
-- `5` → inserts `5` at first cursor.
-- `1:0.5#4` → `1, 1.5, 2.0, 2.5`.
-- `1~04d` → `0001, 0002, ...`.
-
-2. Hex / Octal / Binary
-
-- Start the input as a numeric value using hex/octal/binary notation (prefixes) and use the same numeric syntax.
-
-3. Alpha (strings)
-
-Syntax: `<start>[:<step>][#<repeat>][*<frequency>][##startover][~<format>][::<expr>][@<stopexpr>][$][!]`
-
-- start: a string or single char (e.g. `a` or `A`).
-- step: an integer that advances the alphabet by n positions.
-- format: alignment and padding options (e.g. `#<10`).
-
-4. Date
-
-Syntax: `%[<year>[-<month>[-<day>]]][:<step>[dwmy]][#<repeat>][*<frequency>][##startover][~<format>][$][!]`
-
-- Step unit: `d` (days), `w` (weeks), `m` (months), `y` (years).
-- Format: tokens like `yyyy`, `MM`, `dd`, `HH`, `mm`, `ss`.
-
-Examples:
-
-- `%[2025-01-01]:1d` → 2025-01-01, 2025-01-02, ...
-- `%[2025-01]:1m~MMMM yyyy` → January 2025, February 2025, ...
-
-5. Expressions
-
-Syntax: `|<expr>[~<format>][@<stopexpr>][$][!]`
-
-- `<expr>`: a JavaScript expression evaluated per step. Available variables typically include:
-    - `i` — zero-based iteration index
-    - `v` — current value (if applicable)
-    - `N` — number of cursors/selections
-    - `s` — original selected text (if any)
-
-Examples:
-
-- `| i * 2` → 0, 2, 4, 6...
-- `| (i+1).toString().padStart(3, '0')` → `001, 002, ...`
-
-6. Own / Predefined lists
-
-Syntax: `;name` or an inline array `["a","b","c"]` with optional modifiers like `#` and `##`.
-
-- If using configuration (insertseq.ownsequences) you can reference a named list.
-- `##startover` controls the overall output cycle length. Example:
-
-- With expression `1*2#3` (no `##`): the emitted stream is `1,1,2,2,3,3,1,1,2,2,3,3,...` (each value repeated twice, cycle of 3 distinct values).
-
-- If you add `##8` (i.e. `1*2#3##8`), the overall output is grouped in blocks of 8 emitted items before restarting. The emitted stream becomes:
-
-    `1,1,2,2,3,3,1,1,  1,1,2,2,3,3,1,1, ...`
-
-In other words: `##` enforces a total emitted-items period; after that many outputs the sequence restarts from its start, regardless of the internal `#` or `*` settings.
-
-Stopping conditions
-
-- Use `@<stopexpr>` to provide a JavaScript boolean expression evaluated each step. When true, insertion stops.
-- Example: `1@i>9` stops after index 9.
-
-History
-
-- The last used expressions are available via `Insert Sequences - History` and can be edited or deleted.
-
-Notes
-
-- Expressions are evaluated in a safe environment (node vm + eval5 fallback for web) where possible. Complex expressions or certain global APIs may not be available in the sandbox.
+```
+Mar
+Apr
+May
+Jun
+Jul
+```
 
 ---
 
-If you want, I can extend the README with screenshots, keybindings, or a quick reference table of tokens and examples. Also I can adjust the exact formatting tokens and examples to match the extension's current behavior if you want me to scan the code and adapt the README precisely to the implementation.
+## Input parts (overview)
+
+The syntax is built from segments. Each input type has a specific starting marker or format. Apart from the start token, the order of options does not matter.
+
+| Name      | Description                        | Delimiters / Aliases                               | Value / Notes                                          |
+| --------- | ---------------------------------- | -------------------------------------------------- | ------------------------------------------------------ |
+| start     | Start value                        | beginning of input                                 | integer, float, date, string                           |
+| step      | Step / increment                   | `:` or `step:`                                     | positive or negative (numeric), integer-only for alpha |
+| frequency | Repeat each value                  | `*` or `freq:` / `frequency:`                      | positive integer                                       |
+| repeat    | Cycle length of distinct values    | `#` or `rep:` / `repeat:` / `repetition:`          | positive integer                                       |
+| startover | Overall emitted-items cycle length | `##` or `startover:` / `startagain:`               | positive integer                                       |
+| format    | Output format                      | `~` or `format:`                                   | format string                                          |
+| expr      | Inline expression                  | `::` or `expr:` / `expression:`                    | JS expression (recommended in parentheses)             |
+| stopexpr  | Stop condition                     | `@` or `stopif:` / `stopexpr:` / `stopexpression:` | JS boolean expression                                  |
+| sorting   | Document order                     | `$`                                                | forces top→bottom                                      |
+| reverse   | Reverse order                      | `!`                                                | reverses insertion order                               |
+
+---
+
+### Numeric Sequences
+
+`[<start>[r<random>]][<steps>][<freq>][<repeat>][<startover>][<format>][<expression>][<stopexpression>][$][!]`
+
+- start
+    - Initial numeric value. Integer or float. Can include leading zeros for padding (for example, `0001`) or radix prefixes for non-decimal bases.
+    - Examples: `1`, `0001`, `+10`, `-5`, `0x1A`.
+    - Random option: append `r` with an optional sign and number (for example, `1r10`, `1R+5`).
+
+- steps
+    - Numeric step/increment.
+    - Syntax: `:<n>` or `step:<n>` / `steps:<n>`.
+    - Accepts signed integers or floats.
+    - Example: `1:2`, `10 step:-1`.
+
+- frequency
+    - How many times each logical value is emitted before advancing.
+    - Syntax: `*<n>` or `freq:<n>` / `frequency:<n>`.
+    - Example: `1*2` → 1,1,2,2,...
+
+- repeat
+    - Cycle length over distinct logical values.
+    - Syntax: `#<n>` or `rep:<n>` / `repeat:<n>` / `repetition:<n>`.
+
+- startover
+    - Overall emitted-items period; forces the stream to restart after N emitted items.
+    - Syntax: `##<n>` or `startover:<n>` / `startagain:<n>`.
+
+- format
+    - Formatting template for output values. Uses a compact format compatible with the project's formatting helper (based on d3/mini-Python style).
+    - Syntax: `~<format>` or `format:<format>`.
+    - Subparts: padding / lead characters, alignment `< > ^ =`, sign, alternate `#`, width/zero flag, thousands separator `,`, precision `.2`, output type specifier (for example, `b e E o x X %`).
+    - Examples: `~03d` → zero-padded width 3, `~>8` → right align in width 8.
+
+- expression
+    - Inline JavaScript expression that can compute or transform the current value before formatting.
+    - Syntax: `::<expr>` or `expr:<expr>` or `expression:<expr>`. It is recommended to quote the expression with `"..."`, `'...'` or parenthesize `( ... )`.
+    - Placeholders replaced before evaluation:
+        - `_` — current value (before expression)
+        - `p` — previous inserted value (`''` for the first value)
+        - `a` — start value
+        - `s` — step
+        - `n` — number of selections
+        - `i` — zero-based iteration index
+    - Example: `1::(i+1)*10` → outputs `10,20,30,...`.
+    - Expressions are evaluated in a sandbox; invalid expressions are ignored and the original value is used.
+
+- stopexpression
+    - Boolean JavaScript expression evaluated per emitted item; when true, insertion stops.
+    - Syntax: `@<expr>` or `stopif:<expr>` / `stopexpr:<expr>` / `stopexpression:<expr>`.
+    - Uses the same placeholders as expressions plus `c` for the current value after expression evaluation.
+    - Example: `1@i>9` stops once `i > 9`.
+    - If stopexpr evaluates to truthy, insertion stops; invalid or missing stopexpr fall back to stopping when emitted count ≥ number of selections.
+
+- sort / reverse
+    - `$` forces insertion order to be document order (top→bottom).
+    - `!` reverses insertion order. Combined: `!$` (or `$!`) yields bottom→top document order.
+
+More examples:
+
+- `1:2*2#3##8~03d`
+- `0001:1~>6`
+- `1::(i+1)*10@i>=4`
+
+---
+
+### Alphabetic / String Sequences
+
+`[<start>[?u|l|p]][<steps>][<freq>][<repeat>][<startover>][<format>][<expression>][<stopexpression>][$][!]`
+
+- start
+    - Start token drawn from the configured `alphabet`. Optional `?u` (upper), `?l` (lower), `?p` (pascal) to adjust case.
+- steps
+    - Integer steps only (no fractional steps). Negative steps allowed.
+- format
+    - Padding, alignment, width, wrap flag `w`, and left/right hint `l`/`r`.
+    - Examples: `a~>5`, `a~_>3`, `z~w`, `a~10l`.
+
+Other options (frequency, repeat, startover, expression, stopexpr, sort, reverse) behave the same as for numeric sequences.
+
+Examples:
+
+- `a:1` → a, b, c, ...
+- `a:2#3*2` → a,a,c,c,e,e,...
+- `x:-1~>4` → right-aligned width 4
+- `z~w` → z, a, b, c,...
+
+---
+
+### Date sequences
+
+Most options work like numeric sequences — the parts below differ.
+
+- start
+    - Begins with `%` followed by a date part (yyyy, yy, yyyy-mm, yyyy-mm-dd) or a quoted/parenthesized full date string. `%` alone uses today's date.
+- steps
+    - Numeric offset with optional unit: `d` (days), `w` (weeks), `m` (months), `y` (years). Default unit is days.
+    - Examples: `%2025-03-02:1`, `%2025-03-02:1w`, `%2025-03-02:-1m`.
+- format
+    - Supports optional `lang:` locale and a quoted format or a short token (for example, `iso`).
+    - Examples: `%2025-03-02~"dd.MM.yyyy"`, `%2025-03-02~lang:de~"dd.MM.yyyy"`.
+
+Notes:
+
+- Date arithmetic uses Temporal semantics to handle month lengths and leap years.
+- Placeholders and stopexpr work as in other sequence types.
+
+Examples:
+
+- `%2025-03-02:1w~lang:de`
+- `%:7` (start = today)
+- `%2025-01-31:1m`
+
+---
+
+### Expression sequences
+
+- Start with `|` followed by an expression. The expression is evaluated for each emission.
+- Does not accept step, repeat, frequency, or startover — implement such behavior inside the expression.
+- Format (`~`) and stopexpr (`@`) are allowed.
+- Placeholders: `_`, `o`, `c`, `p`, `a`, `s`, `n`, `i`.
+
+Examples:
+
+- `|(i+1)*10`
+- `| "Row-" + (i+1)~>8`
+- `| (i%2===0 ? "even" : "odd")@i>=5`
+
+---
+
+### Own sequences (inline lists)
+
+Inline lists in square brackets are treated as circular/custom lists.
+
+- Syntax: `[item1,item2,...]` or `[item1;item2;...]`.
+- Optional numeric start index after the closing `]` (1-based): `[a,b,c]2`.
+- Steps must be integers; indexing uses modulo the list length.
+
+Examples:
+
+- `[red,green,blue]` → red, green, blue, red, green
+- `[a;b;c] step:2` → a, c, b, a, c, ...
+- `[one,two]2` → two, one, two, ...
+
+---
+
+### Predefined sequences
+
+Predefined sequences are configured under `insertseq.mysequences` and referenced with the `;` prefix.
+
+- Syntax: `;name`, `;"My Seq"`, `;?1` (array index), or `;element`.
+- The resolver matches array names or elements and starts accordingly. If no match is found, the identifier is used as a single-item sequence.
+
+Examples:
+
+- `;Mar`
+- `;?1`
+- `;?1|3`
+
+Interaction with other options is the same as for other sequence types.
+
+---
+
+## History
+
+Default keybinding: `CTRL+ALT+,` (also available via the Command Palette as "Insert Sequences - History").
+
+What it shows:
+
+- A QuickPick list of recent inputs (most recent first). Each entry shows the raw input string and a preview.
+- The list is limited by the setting `insertseq.maxHistoryItems`.
+
+How to run an entry:
+
+- Select an entry and press Enter to run it again. You receive the live preview before final insertion.
+
+How to edit an entry:
+
+- Use the edit action on a history item to open the input box prefilled with that entry. Edit and press Enter to run.
+
+How to remove entries:
+
+- Use the trash action on an item to delete it, or use the toolbar trash to clear the entire history (confirmation requested).
+- Deletions are immediate and cannot be undone via the UI.
+
+Notes:
+
+- History entries store raw input strings only (not generated output). Entries are local to your VS Code profile.
+- If no history items exist, the History command falls back to the normal input box.
+
+---
 
 ## Configuration
 
-The extension exposes a set of workspace/user settings under the `insertseq` namespace. Below is a quick reference table of available settings, their types and defaults.
+The extension exposes settings under the `insertseq` namespace. A quick reference:
 
-| Setting                      |    Type | Default                        | Description                                                                                     |
-| ---------------------------- | ------: | ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `insertseq.start`            |  string | `"1"`                          | Default start value when none is provided in the input.                                         |
-| `insertseq.step`             |  string | `"1"`                          | Default step/increment.                                                                         |
-| `insertseq.repetition`       |  string | `""`                           | Default repetition / cycle (`#`) specification.                                                 |
-| `insertseq.frequency`        |  string | `"1"`                          | Default per-value repetition (`*`) / frequency.                                                 |
-| `insertseq.startover`        |  string | `""`                           | Default overall output cycle (`##`) when set.                                                   |
-| `insertseq.stringFormat`     |  string | `""`                           | Default format template for string outputs.                                                     |
-| `insertseq.numberFormat`     |  string | `""`                           | Default format template for numeric outputs (uses `d3-format`).                                 |
-| `insertseq.dateFormat`       |  string | `""`                           | Default date output format (see README date tokens).                                            |
-| `insertseq.alphaCapital`     |  string | `"preserve"`                   | Case handling for alpha sequences: `preserve`, `upper`, `lower`, `pascal`.                      |
-| `insertseq.language`         |  string | `""`                           | Default locale/language for month names and date formatting.                                    |
-| `insertseq.insertOrder`      |  string | `"cursor"`                     | Default insertion order: `cursor` (click order), `sorted` (top→bottom), `reverse` (bottom→top). |
-| `insertseq.century`          |  string | `"20"`                         | Default century for two-digit year inputs.                                                      |
-| `insertseq.centerString`     |  string | `"l"`                          | Centering bias for string padding: `l` (left), `r` (right).                                     |
-| `insertseq.dateStepUnit`     |  string | `"d"`                          | Default date step unit: `d` (days), `w` (weeks), `m` (months), `y` (years).                     |
-| `insertseq.delimiter`        |  string | `""`                           | Delimiter inserted between multiple insertions when appropriate.                                |
-| `insertseq.alphabet`         |  string | `"abcdefghijklmnopqrstuvwxyz"` | Alphabet used for alpha sequences.                                                              |
-| `insertseq.ownsequences`     |   array | see package.json               | User-defined sequences (array of arrays) available to reference by name.                        |
-| `insertseq.radixPrefix`      | boolean | `false`                        | When true, binary/octal/hex numbers are emitted with radix prefixes (`0b`, `0o`, `0x`).         |
-| `insertseq.previewColor`     |  string | `"#888888"`                    | Color used for the preview decoration in the editor.                                            |
-| `insertseq.maxInsertions`    |  number | `10000`                        | Hard limit on the number of insertions to avoid accidental large operations.                    |
-| `insertseq.history.maxItems` |  number | `100`                          | Maximum number of items stored in the history.                                                  |
+| Setting                     |    Type | Default                        | Description                                                                |
+| --------------------------- | ------: | ------------------------------ | -------------------------------------------------------------------------- |
+| `insertseq.start`           |  string | `"1"`                          | Default start value when none is provided.                                 |
+| `insertseq.step`            |  string | `"1"`                          | Default step/increment.                                                    |
+| `insertseq.repetition`      |  string | `""`                           | Default repetition / cycle (`#`).                                          |
+| `insertseq.frequency`       |  string | `"1"`                          | Default per-value repetition (`*`).                                        |
+| `insertseq.startover`       |  string | `""`                           | Default overall output cycle (`##`).                                       |
+| `insertseq.stringFormat`    |  string | `""`                           | Default format template for string outputs.                                |
+| `insertseq.numberFormat`    |  string | `""`                           | Default format template for numeric outputs (d3-format).                   |
+| `insertseq.dateFormat`      |  string | `""`                           | Default date output format.                                                |
+| `insertseq.alphaCapital`    |  string | `"preserve"`                   | Case handling for alpha sequences: `preserve`, `upper`, `lower`, `pascal`. |
+| `insertseq.language`        |  string | `""`                           | Default locale/language for date formatting.                               |
+| `insertseq.insertOrder`     |  string | `"cursor"`                     | Default insertion order: `cursor`, `sorted`, `reverse`.                    |
+| `insertseq.century`         |  string | `"20"`                         | Default century for two-digit year inputs.                                 |
+| `insertseq.centerString`    |  string | `"l"`                          | Centering bias for string padding: `l` (left), `r` (right).                |
+| `insertseq.dateStepUnit`    |  string | `"d"`                          | Default date step unit: `d`, `w`, `m`, `y`.                                |
+| `insertseq.delimiter`       |  string | `""`                           | Delimiter inserted between multiple insertions when appropriate.           |
+| `insertseq.alphabet`        |  string | `"abcdefghijklmnopqrstuvwxyz"` | Alphabet used for alpha sequences.                                         |
+| `insertseq.mysequences`     |   array | see package.json               | User-defined sequences (array of arrays).                                  |
+| `insertseq.radixPrefix`     | boolean | `false`                        | Emit binary/octal/hex numbers with `0b`, `0o`, `0x` when true.             |
+| `insertseq.previewColor`    |  string | `"#888888"`                    | Color used for the preview decoration.                                     |
+| `insertseq.maxInsertions`   |  number | `10000`                        | Hard limit on the number of insertions to avoid large operations.          |
+| `insertseq.maxHistoryItems` |  number | `100`                          | Maximum number of history items stored.                                    |
 
-You can edit these settings in your VS Code settings UI or in `settings.json` under the `insertseq` namespace.
-
-## History: deleting entries and keybindings
-
-You can edit or delete history entries directly from the history QuickPick. When you open the history (Insert Sequences → History), each entry has a small pen icon and trash icon at the right.
-Click the pen icon and you can edit this command in the "normal" input box.
-Click the trash icon to remove this entry.
-
-There is also a trash icon in the QuickPick toolbar to clear the entire history (it asks for confirmation).
+Edit these settings in the VS Code settings UI or in `settings.json` under the `insertseq` namespace.
 
 ---
-
-## Syntax details:
-
-Syntax for **numbers**:
-
-```
-
-[<start>][:<step>][#<repeat>][*<frequency>][~<format>]r[+]<random>][::<expr>][@<stopexpr>][$][!]
-
-```
-
-with
-
-```
-
-<start> ::= any integer or hex number starting with 0x
-<step> ::= any integer (positive or negative) or hex number starting with 0x
-<repeat> ::= any positive integer
-<frequency>::= any positive integer
-<format> ::= [<padding>][<align>][<sign>][#][0] any integer [.<precision>][<type>]
-<random> ::= any integer (if a plus-char is available, the number will be added to the <start> number)
-<expr> ::= any javascript expression, which can include the special chars (see below)
-<stopexpr> ::= any javascript expression, which can include the special chars (see below)
-$ ::= the selections will be "sorted" (without this option, new chars will be inserted in the order of the multiline clicks)
-! ::= reverts the output
-
-```
-
----
-
-Formatting can be done with the following options:
-
-```
-
-<padding> ::= any char except }
-<align> ::= "<" for left aligned, ">" for right aligned (default), "^" for centered, "=" for right aligned, but with any sign and symbol to the left of any padding
-<sign> ::= "-", "+" or " " (blank)
-
-# ::= option causes the “alternate form” to be used for the conversion (see Python documentation)
-
-<precision> ::= any positive number
-<type> ::= any one of the following chars "bcdeEfFgGnoxX%"
-
-```
-
-For more details about the formatting possibilities see the [d3-formatting documentation](https://github.com/d3/d3-format#locale_format) or the [Python mini-language documentation](https://docs.python.org/3.4/library/string.html#format-specification-mini-language).
-
----
-
-Syntax for **alpha**:
-
-```
-
-<start>[:<step>][#<repeat>][\*<frequency>][~<format>][w][@<stopexpr>][$][!]
-
-```
-
-with
-
-```
-
-<start> ::= any Ascii char
-<step> ::= any integer (positive or negative)
-<repeat> ::= any positive integer
-<frequency>::= any positive integer
-<format> ::= [<padding>][<align>][<integer>]
-w ::= wrap output to one char. E.g. after z, not aa will follow but only a (last char)
-<stopexpr> ::= any javascript expression with some special chars, see below
-$ ::= the selections will be "sorted" (without this option, new chars will be inserted in the order of the multiline clicks)
-! ::= reverts the output
-
-```
-
----
-
-Formatting can be done with the following options:
-
-```
-
-<padding> ::= any char except }
-<align> ::= "<" for left aligned, ">" for right aligned, "^" for centered
-<integer> ::= any positive integer (length of the string)
-
-```
-
----
-
-Syntax for **dates**:
-
-```
-
-%[<year>[-<month>[-<day>]]][:[dwmy]<step>][#<repeat>][*<frequency>][~<format>][$][!]
-
-```
-
-with
-
-```
-
-<year> ::= 2 digit year or 4 digit year
-<month> ::= any integer from 1 to 12
-<day> ::= any integer from 1 to 31 (note: there is no check for a valid date, e.g. 31.2. is possible)
-[dwmy] ::= unit to increment or decrement (_d_ay, _w_eek, _m_onth or _y_ear)
-<step> ::= any integer (positive or negative)
-<repeat> ::= any positive integer
-<frequency>::= any positive integer
-<format> ::= any valid date format. Internally, datefns.format is used, so have a look at [datefns documentation](https://date-fns.org/v3.6.0/docs/format)
-$ ::= the selections will be "sorted" (without this option, new chars will be inserted in the order of the multiline clicks)
-! ::= reverts the output
-
-```
-
----
-
-Syntax for **month names**:
-
-```
-
-;<start>[:<step>][#<repeat>][\*<frequency>][~<format>][@<stopexpr>][$][!]
-
-```
-
-with
-
-```
-
-<start> ::= any start of a month name or an integer from 1 to 12
-<step> ::= any integer (positive or negative)
-<repeat> ::= any positive integer
-<frequency>::= any positive integer
-<format> ::= s(hort)?|l(ong)?
-<stopexpr> ::= any javascript expression with some special chars, see below
-$ ::= the selections will be "sorted" (without this option, new chars will be inserted in the order of the multiline clicks)
-! ::= reverts the output
-
-```
-
-Formatting of month output can be done with the following options:
-
-```
-
-s(hort)? ::= output of month name is an abbreviation (e.g. Feb)
-l(ong)? ::= output of the month name is the full name (e.g. February)
-
-```
-
----
-
-Syntax for **expressions**:
-
-```
-
-[<cast>]|[~<format>::]<expr>[@<stopexpr>][$][!]
-
-```
-
-with
-
-```
-
-<cast> ::= "i", "f", "s", "b"
-<format> ::= same as for numbers
-<expr> ::= any javascript expression including special chars
-<stopexpr> ::= any javascript expression with some special chars, see below
-$ ::= the selections will be "sorted" (without this option, new chars will be inserted in the order of the multiline clicks)
-! ::= reverts the output
-
-```
-
-_Be aware: You can use the stop expression in expressions, but in contrast to numbers, the stop expression cannot extend the current selection (just stop at last selection). If the stop expression is shorter than the selection, the rest will not be changed. If you want to delete the rest, you have to provide an empty string as return code instead of true for the expression._
-
-The _"cast"_ information for expressions defines the output:
-
-```
-
-i ::= output is an integer
-s ::= output is a string (default)
-f ::= output is a float number
-b ::= output is a boolean
-
-```
-
----
-
-The following **_special chars_** can be used and will be replaced by some values:
-
-```
-
-\_ ::= current value (before expression or value under current selection)
-s ::= value of <step>
-n ::= number of selections
-p ::= previous value (last inserted)
-c ::= current value (only within expressions, includes value after expression)
-a ::= value of <start>
-i ::= counter, starting with 0 and increasing with each insertion
-
-```
 
 ## Release Notes
 
-All release notes are in the Changelog file
+See the Changelog file for release notes.
 
-## Contributors 🙏
+---
 
-A big thanks to the people that have contributed to improve this project:
+## Contributors
 
-- Yu [(@codingyu)](https://github.com/codingyu) &mdash; [contribution](https://github.com/codingyu/insertnums) added first version of history picklist in version 0.5.0
+Thanks to everyone who contributed:
 
-- Jesse Peden [(@JessePeden)](https://github.com/JessePeden) &mdash; [contribution](https://github.com/volkerdobler/insertnums/pull/12) corrected spelling errors in package.json file
+- Yu [(@codingyu)](https://github.com/codingyu) — added the history picklist (v0.5.0)
+- Jesse Peden [(@JessePeden)](https://github.com/JessePeden) — fixed package.json typos
+- Noah [(@nmay231)](https://github.com/nmay231) — inspired date sequences
 
-- Noah [(@nmay231)](https://github.com/nmay231) &mdash; inspired me to implement the date sequences
+---
 
-## Special thanks!
+## Special thanks
 
-This project would not be possible without the original Python code [insertnums](https://github.com/jbrooksuk/InsertNums) from James Brooks .
-I also used [d3-format](https://github.com/d3/d3-format) from the d3 group and [temporal-polyfill](https://github.com/fullcalendar/temporal-polyfill) for date calculations.
+This project builds on ideas from James Brooks' InsertNums (https://github.com/jbrooksuk/InsertNums). Formatting uses d3-format (https://github.com/d3/d3-format) and date calculations use a Temporal polyfill. Thanks also to contributors and to GitHub Copilot for suggestions.
 
-Thanks a lot!
+Enjoy!
 Volker
 
 **Enjoy!**
-
-```
-
-```
