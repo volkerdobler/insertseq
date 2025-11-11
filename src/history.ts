@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 const HISTORY_KEY = 'insertseq.history';
 const HISTORY_MAX =
 	Number(
-		vscode.workspace.getConfiguration('insertseq.history').get('maxItems'),
+		vscode.workspace.getConfiguration('insertseq').get('maxHistoryItems'),
 	) || 100;
 
 export function getHistory(ctx: vscode.ExtensionContext): string[] {
@@ -33,9 +33,11 @@ export async function clearHistory(ctx: vscode.ExtensionContext) {
 	await ctx.globalState.update(HISTORY_KEY, []);
 }
 
-export async function deleteFromHistory(ctx: vscode.ExtensionContext, item: string) {
+export async function deleteFromHistory(
+	ctx: vscode.ExtensionContext,
+	item: string,
+) {
 	if (!item) return;
 	const list = getHistory(ctx).filter((x) => x !== item);
 	await ctx.globalState.update(HISTORY_KEY, list);
 }
-

@@ -206,7 +206,7 @@
 					"default": 10000,
 					"description": "Maximum number of insertions to avoid performance issues - internal variable, be aware what you are doing if you change it"
 				},
-				"insertseq.history.maxItems": {
+				"insertseq.maxHistoryItems": {
 					"type": "number",
 					"default": 100,
 					"description": "Maximum items stored in history"

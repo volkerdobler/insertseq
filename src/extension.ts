@@ -10,10 +10,6 @@ Volker Dobler
 original from May 2020
 rewritten November 2025
 
-TO-DO:
-
-
-
 */
 
 // external modules
@@ -224,7 +220,9 @@ async function InsertSeqCommand(
 	) {
 		// insert final sequence (check if canceled will be done in insertNewSequence and in saveToHistory)
 		insertNewSequence(input, parameter, 'final');
-		saveToHistory(context, input);
+		if (input != null) {
+			saveToHistory(context, input);
+		}
 	});
 }
 
@@ -250,7 +248,7 @@ async function InsertSeqHistory(
 		qp.show();
 	} else {
 		// show normal input box if no items beside "new sequence" are in the history
-		InsertSeqCommand(context, value)
+		InsertSeqCommand(context, value);
 	}
 }
 
@@ -651,14 +649,18 @@ function createDecimalSeq(
 						? randomNumber
 						: start;
 
+			// determine range for random number, startRandom must be smaller than stopRandom
+			const startRandom = start < maxNumber ? start : maxNumber;
+			const stopRandom = start < maxNumber ? maxNumber : start;
+
 			// generate random number between start and maxNumber
 			if (start <= maxNumber) {
 				value = Number(
 					Number(
-						start +
+						startRandom +
 							Math.random() *
-								(maxNumber -
-									start +
+								(stopRandom -
+									startRandom +
 									0.5 * 10 ** (-randomDecimal.length - 1)),
 					).toFixed(randomDecimal.length),
 				);
@@ -1256,9 +1258,7 @@ function createExpressionSeq(
 	// return (i) => retFunction;
 
 	// check if valid expression is given
-	const expressionMatch = input.match(
-		parameter.segments['start_expression'],
-	);
+	const expressionMatch = input.match(parameter.segments['start_expression']);
 	if (!expressionMatch) {
 		const retFunction = { stringFunction: '', stopFunction: true };
 		return (i) => retFunction;
@@ -1267,10 +1267,10 @@ function createExpressionSeq(
 	// extract expression, if in quotes or brackets remove them
 	const expr = expressionMatch?.groups?.start
 		? expressionMatch.groups.indoublequotes ||
-				expressionMatch.groups.insinglequotes ||
-				expressionMatch.groups.inbrackets ||
-				expressionMatch.groups.stopexpr ||
-				''
+			expressionMatch.groups.insinglequotes ||
+			expressionMatch.groups.inbrackets ||
+			expressionMatch.groups.stopexpr ||
+			''
 		: '';
 	// extract stop expression
 	const stopexpr = getStopExpression(input, parameter);
@@ -1309,7 +1309,7 @@ function createExpressionSeq(
 			} else if (typeof exprResult === 'number') {
 				replacableValues.currentValueStr = exprResult.toString();
 			} else if (parameter.origTextSel[i].length === 0) {
-				replacableValues.currentValueStr = (i+1).toString();
+				replacableValues.currentValueStr = (i + 1).toString();
 			}
 		} catch {}
 
@@ -1336,7 +1336,8 @@ function createExpressionSeq(
 			stopExprResult = i >= parameter.origCursorPos.length;
 		}
 
-		replacableValues.previousValueStr = replacableValues.valueAfterExpressionStr;
+		replacableValues.previousValueStr =
+			replacableValues.valueAfterExpressionStr;
 
 		return {
 			stringFunction: replacableValues.currentValueStr,
@@ -1620,14 +1621,12 @@ function createPredefinedSeq(
 			i < parameter.origTextSel.length ? parameter.origTextSel[i] : '';
 
 		const value =
-				ownSeq[
-						(start +
-							steps *
-								Math.trunc(
-									((i % startover) % (freq * repe)) / freq,
-								)) %
-							ownSeq.length
-					]
+			ownSeq[
+				(start +
+					steps *
+						Math.trunc(((i % startover) % (freq * repe)) / freq)) %
+					ownSeq.length
+			];
 
 		replacableValues.currentValueStr = value;
 
@@ -1744,9 +1743,15 @@ function createQuickPick(
 		cmd: '',
 	});
 
+	const maxHistoryItems =
+		Number(parameter.config.get('maxHistoryItems')) || 100;
+
 	// create items with a delete button each (trash icon)
 	const history = getHistory(context) || [];
 	for (const h of history) {
+		if (items.length >= maxHistoryItems) {
+			break;
+		}
 		items.push({
 			label: h,
 			description: '',
@@ -2213,11 +2218,12 @@ function getRegExpressions(): RuleTemplate {
 									)*
 								)
 								\\]
+								\\s*
 								(?:
-									\\s*
+									(?: start(?:seq(?:uence)?)?: )?
 									(?<startseq>
 										\\d+
-									)?
+									)
 								)?
 								(?: {{sequencedelimiter}} )?
 								(?= {{delimiter}} )
