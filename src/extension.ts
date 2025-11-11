@@ -22,6 +22,7 @@ import {
 	saveToHistory,
 	clearHistory,
 	deleteFromHistory,
+	migrateOldHistory,
 } from './history';
 import * as formatting from './formatting';
 import { safeEvaluate } from './safeEval';
@@ -35,6 +36,10 @@ function printToConsole(str: string): void {
 
 // this method is called when your extension is activated
 export function activate(context: vscode.ExtensionContext) {
+	// migrate any legacy history into the new key before registering commands
+	migrateOldHistory(context).catch(() => {
+		/* ignore migration errors */
+	});
 	// register insertseq command (normal insertion)
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
