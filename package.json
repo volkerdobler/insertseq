@@ -1,5 +1,5 @@
 {
-	"name": "insertseq",
+	"name": "insertnums",
 	"version": "1.0.0",
 	"publisher": "volkerdobler",
 	"displayName": "Insert Sequences",
@@ -17,13 +17,13 @@
 	],
 	"license": "MIT",
 	"bugs": {
-		"url": "https://github.com/volkerdobler/insertnums/issues",
+		"url": "https://github.com/volkerdobler/insertseq/issues",
 		"email": "vscode.insertsequences.ext@volker-dobler.de"
 	},
-	"homepage": "https://github.com/volkerdobler/insertnums/blob/master/README.md",
+	"homepage": "https://github.com/volkerdobler/insertseq/blob/master/README.md",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/volkerdobler/insertnums.git"
+		"url": "https://github.com/volkerdobler/insertseq.git"
 	},
 	"engines": {
 		"vscode": "^1.105.0"
