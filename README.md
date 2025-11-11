@@ -1,4 +1,4 @@
-# VS Code Extension: Insert Sequences (InsertSeq)
+# VS Code Extension: Insert Sequences (InsertSeq formarly Insertnums)
 
 Insert Sequences is a small VS Code extension that helps you generate and insert various kinds of sequences into one or more cursors. It supports numeric sequences, alphabetic sequences, dates, user-defined or predefined lists, and inline JavaScript expressions. The syntax is compact and powerful, allowing repetition, stepping, frequency control, custom formats, stop expressions, and more.
 
