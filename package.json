@@ -231,6 +231,10 @@
 				"title": "InsertSeq: Clear history"
 			}
 		],
+		"activationEvents": [
+			"onCommand:extension.insertseq",
+			"onCommand:extension.insertseq.history"
+		],
 		"keybindings": [
 			{
 				"command": "extension.insertseq",

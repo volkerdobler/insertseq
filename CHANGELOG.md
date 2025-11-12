@@ -2,6 +2,10 @@
 
 All notable changes to this extension (newest first):
 
+# Version 1.0.1
+
+added activationEvents in package.json vor web-version
+
 # Version 1.0.0
 
 This is a brand new version, completely rewritten from scratch with a major version bump.
