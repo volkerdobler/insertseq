@@ -2,6 +2,10 @@
 
 All notable changes to this extension (newest first):
 
+# Version 1.0.2
+
+Remove web version as it does not work (hopyfully only temporary until I found the problem)
+
 # Version 1.0.1
 
 added activationEvents in package.json vor web-version
