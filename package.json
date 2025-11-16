@@ -32,9 +32,8 @@
 		"Other"
 	],
 	"main": "./dist/extension.js",
-	"browser": "./dist/extension-web.js",
 	"files": [
-		"dist/**",
+		"dist",
 		"README.md",
 		"CHANGELOG.md",
 		"LICENSE.md",
