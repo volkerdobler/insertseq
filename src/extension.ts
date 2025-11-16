@@ -567,7 +567,10 @@ function createDecimalSeq(
 	// extract start value (with possible decimals), random number and delimiter
 	const start =
 		Number(startMatch?.groups?.start ?? parameter.config.get('start')) ?? 1;
-	const startDecimals = startMatch?.groups?.startDecimals || '';
+	const startDecimals =
+		startMatch?.groups?.startDecimals1 ||
+		startMatch?.groups?.startDecimals2 ||
+		'';
 	const randomNumber = Number(startMatch?.groups?.rndNumber) || 0;
 	const randomDecimal = startMatch?.groups?.rndDecimals || '';
 	const randomPlusMinus = startMatch?.groups?.rndPlusMinus || null;
@@ -2089,10 +2092,11 @@ function getRegExpressions(): RuleTemplate {
 										(?<seqdelimiter> .{1,2})
 									)`;
 	ruleTemplate.integer = `(?:[1-9]\\d*|0)`;
-	ruleTemplate.pointfloat = `(?: (?: [1-9]\\d*|0 )? \\. (?<startDecimals> \\d+ ) )`;
+	ruleTemplate.pointfloat1 = `(?: (?: [1-9]\\d*|0 )? \\. (?<startDecimals1> \\d+ ) )`;
+	ruleTemplate.pointfloat2 = `(?: (?: [1-9]\\d*|0 )? \\. (?<startDecimals2> \\d+ ) )`;
 	ruleTemplate.pointfloatForExpression = `(?: (?: [1-9]\\d*|0 )? \\. \\d+ )`;
-	ruleTemplate.exponentfloat = `(?:(?:{{integer}} | {{pointfloat}}) [e] [+-]? \\d+)`;
-	ruleTemplate.float = `(?:{{pointfloat}} | {{exponentfloat}})`;
+	ruleTemplate.exponentfloat = `(?:(?:{{integer}} | {{pointfloat2}}) [e] [+-]? \\d+)`;
+	ruleTemplate.float = `(?:{{pointfloat1}} | {{exponentfloat}})`;
 	ruleTemplate.hexNum = `(?:0[x](?<hex>0|[1-9a-f][0-9a-f]*))`;
 	ruleTemplate.octNum = `(?:0[o](?<oct>0|[1-7][0-7]*))`;
 	ruleTemplate.binNum = `(?:0[b](?<bin>[01]+))`;
