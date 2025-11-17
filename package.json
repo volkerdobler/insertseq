@@ -32,6 +32,7 @@
 		"Other"
 	],
 	"main": "./dist/extension.js",
+	"browser": "./dist/extension-web.js",
 	"files": [
 		"dist",
 		"README.md",
@@ -257,7 +258,7 @@
 		"build:desk": "npm run check-types && node esbuild.js --production",
 		"build:web": "npm run check-types && node esbuild-web.js --production",
 		"build:all": "npm run clean && npm run build:desk && npm run build:web",
-		"vscode:prepublish": "npm run build:desk"
+		"vscode:prepublish": "npm run build:all"
 	},
 	"dependencies": {
 		"d3-format": "^3.1.0",

@@ -2,7 +2,6 @@ const esbuild = require('esbuild');
 const path = require('path');
 
 const production = process.argv.includes('--production');
-const watch = process.argv.includes('--watch');
 
 async function build() {
 	const entry = path.resolve(__dirname, 'src', 'extension.ts');
