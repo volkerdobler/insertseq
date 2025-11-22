@@ -22,17 +22,6 @@ export type SafeEvalResult =
 	| { ok: true; value: unknown }
 	| { ok: false; error: string };
 
-// function tryIfToTernary(code: string): string | null {
-// 	const re =
-// 		/^\s*if\s*\(([\s\S]*?)\)\s*\{\s*([\s\S]*?)\s*\}\s*else\s*\{\s*([\s\S]*?)\s*\}\s*$/i;
-// 	const m = code.match(re);
-// 	if (!m) return null;
-// 	const cond = m[1].trim();
-// 	const thenB = m[2].trim();
-// 	const elseB = m[3].trim();
-// 	return `(${cond}) ? (${thenB}) : (${elseB})`;
-// }
-
 function tryIfToTernary(code: string): string | null {
 	// if (...) { then } else { else }
 	const reElse =
@@ -56,6 +45,52 @@ function tryIfToTernary(code: string): string | null {
 
 	return null;
 }
+
+// -- add: reusable serializer for context values (extracted from eval5 branch) --
+const serializeValue = (v: unknown, seen = new WeakSet()): string => {
+	try {
+		if (v === null) return 'null';
+		if (v === undefined) return 'undefined';
+		const t = typeof v;
+		if (t === 'number' || t === 'boolean') return String(v);
+		if (t === 'string') return JSON.stringify(v);
+		if (t === 'function') {
+			try {
+				return (v as Function).toString();
+			} catch {
+				return 'undefined';
+			}
+		}
+		if (v instanceof Date) return `new Date(${(v as Date).getTime()})`;
+		if (v instanceof RegExp) return (v as RegExp).toString();
+		if (Array.isArray(v)) {
+			if (seen.has(v as object)) return 'null';
+			seen.add(v as object);
+			return (
+				'[' +
+				(v as Array<unknown>)
+					.map((e) => serializeValue(e, seen))
+					.join(',') +
+				']'
+			);
+		}
+		if (t === 'object') {
+			if (seen.has(v as object)) return 'null';
+			seen.add(v as object);
+			const obj = v as Record<string, unknown>;
+			const entries = Object.keys(obj).map((k) => {
+				const key = /^[A-Za-z$_][A-Za-z0-9$_]*$/.test(k)
+					? k
+					: JSON.stringify(k);
+				return `${key}:${serializeValue(obj[k], seen)}`;
+			});
+			return '{' + entries.join(',') + '}';
+		}
+		return JSON.stringify(v);
+	} catch {
+		return 'null';
+	}
+};
 
 function runInVmAssignResult(
 	code: string,
@@ -81,107 +116,89 @@ function runInVmAssignResult(
 	// 2) Fallback to eval5 (works in browser and node if bundled)
 	if (eval5) {
 		try {
-			// Serializer that produces JS literal/source for common types
-			const serialize = (v: unknown, seen = new WeakSet()): string => {
-				try {
-					if (v === null) return 'null';
-					if (v === undefined) return 'undefined';
-					const t = typeof v;
-					if (t === 'number' || t === 'boolean') return String(v);
-					if (t === 'string') return JSON.stringify(v);
-					if (t === 'function') {
-						// inject function source (may be unsafe but useful)
-						try {
-							return (v as Function).toString();
-						} catch {
-							return 'undefined';
-						}
-					}
-					if (v instanceof Date)
-						return `new Date(${(v as Date).getTime()})`;
-					if (v instanceof RegExp) return (v as RegExp).toString();
-					if (Array.isArray(v)) {
-						if (seen.has(v as object)) return 'null';
-						seen.add(v as object);
-						return (
-							'[' +
-							(v as Array<unknown>)
-								.map((e) => serialize(e, seen))
-								.join(',') +
-							']'
-						);
-					}
-					if (t === 'object') {
-						if (seen.has(v as object)) return 'null';
-						seen.add(v as object);
-						const obj = v as Record<string, unknown>;
-						const entries = Object.keys(obj).map((k) => {
-							const key = /^[A-Za-z$_][A-Za-z0-9$_]*$/.test(k)
-								? k
-								: JSON.stringify(k);
-							return `${key}:${serialize(obj[k], seen)}`;
-						});
-						return '{' + entries.join(',') + '}';
-					}
-					// fallback
-					return JSON.stringify(v);
-				} catch {
-					// on any serialization error, fall back to null to keep wrapper safe
-					return 'null';
-				}
-			};
-
-			const ctx = context || {};
-			const keys = Object.keys(ctx);
-
-			// serialized literal values for __ctx (guard each serialization)
-			const ctxEntries = keys
-				.map((k) => {
-					let val: string;
-					try {
-						val = serialize((ctx as any)[k]);
-					} catch {
-						val = 'null';
-					}
-					return `${JSON.stringify(k)}:${val}`;
-				})
-				.join(',');
-
-			// create local const declarations for keys that are valid JS identifiers
-			const validId = (k: string) => /^[A-Za-z$_][A-Za-z0-9$_]*$/.test(k);
-			const declarations = keys
-				.filter(validId)
-				.map((k) => `const ${k} = __ctx[${JSON.stringify(k)}];`)
-				.join('\n');
-
-			// wrapper: provide __ctx, local declarations, and a mutable `result` variable
-			// return `result` if set, otherwise return the IIFE's return value
-			const wrapped =
-				`(function(){\n` +
-				`const __ctx = {${ctxEntries}};\n` +
-				`${declarations}\n` +
-				`let result = undefined;\n` +
-				`const __ret = (function(){\n${code}\n})();\n` +
-				`return (typeof result !== 'undefined') ? result : __ret;\n` +
-				`})()`;
-
+			// If eval5 is present, prefer it for safer evaluation
 			if (typeof eval5.evaluate === 'function') {
-				return eval5.evaluate(wrapped);
+				return eval5.evaluate(code);
 			}
 			if (typeof eval5.eval === 'function') {
-				return eval5.eval(wrapped);
+				return eval5.eval(code);
 			}
 			if (typeof eval5 === 'function') {
-				return eval5(wrapped);
+				return eval5(code);
 			}
 		} catch (e) {
-			// provide a clearer error message for callers
 			throw new Error(`eval5 execution failed: ${String(e)}`);
 		}
 	}
 
-	// 3) Last resort: no sandbox available
-	throw new Error('No VM or eval5 available to execute code');
+	// 3) Browser fallback: try new Function, then window.eval
+	//    - Build a small __ctx from provided context (JSON-serializable best-effort)
+	//    - Execute wrapped code via new Function; if that fails, attempt window.eval
+	try {
+		const ctx = context || {};
+		const keys = Object.keys(ctx);
+
+		// simple serializer: JSON for primitives/objects, function -> toString, fallback null
+		const serializeValue = (v: unknown): string => {
+			try {
+				if (v === undefined) return 'undefined';
+				if (v === null) return 'null';
+				if (typeof v === 'function') return (v as Function).toString();
+				// JSON.stringify may throw on cycles; catch below
+				return JSON.stringify(v);
+			} catch {
+				return 'null';
+			}
+		};
+
+		const ctxEntries = keys
+			.map(
+				(k) =>
+					`${JSON.stringify(k)}:${serializeValue((ctx as any)[k])}`,
+			)
+			.join(',');
+
+		const validId = (k: string) => /^[A-Za-z$_][A-Za-z0-9$_]*$/.test(k);
+		const declarations = keys
+			.filter(validId)
+			.map((k) => `const ${k} = __ctx[${JSON.stringify(k)}];`)
+			.join('\n');
+
+		const wrapped =
+			`(function(){\n` +
+			`const __ctx = {${ctxEntries}};\n` +
+			`${declarations}\n` +
+			`let result = undefined;\n` +
+			`const __ret = (function(){\n${code}\n})();\n` +
+			`return (typeof result !== 'undefined') ? result : __ret;\n` +
+			`})()`;
+
+		// Attempt new Function first
+		try {
+			const fn = new Function(`"use strict"; return (${wrapped});`);
+			return fn();
+		} catch (eNewFn) {
+			// If new Function fails (CSP or other), try window.eval if available
+			try {
+				// prefer window.eval when available in the browser
+				const win = (globalThis as any).window;
+				const evalFn =
+					win && typeof win.eval === 'function'
+						? win.eval
+						: (globalThis as any).eval;
+				if (typeof evalFn === 'function') {
+					return evalFn(wrapped);
+				}
+			} catch (eEval) {
+				// fall through to error below
+			}
+			throw eNewFn;
+		}
+	} catch (e) {
+		throw new Error(
+			'No VM, eval5 or browser eval fallback available: ' + String(e),
+		);
+	}
 }
 
 export function safeEvaluate(

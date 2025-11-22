@@ -1,26 +1,33 @@
 {
-  "cSpell.words": [
-    "Alexandru",
-    "Gnox",
-    "Mărășteanu",
-    "Nums",
-    "dobler",
-    "exprmode",
-    "ifsb",
-    "insertnums",
-    "insertseq",
-    "sprintf",
-    "stopexpr",
-    "sublimecode",
-    "sublimetext",
-    "volker"
-  ],
-  "workbench.colorCustomizations": {
-    "editorStickyScroll.background": "#3333ff",
-    "editorStickyScrollHover.background": "#0000ff",
-    "[Cobalt2]": {
-      "editor.findMatchHighlightBackground": "#b6c700",
-      "editor.findMatchBackground": "#869e00"
-    }
-  }
+	"cSpell.words": [
+		"Alexandru",
+		"Gnox",
+		"Mărășteanu",
+		"Nums",
+		"dobler",
+		"exprmode",
+		"ifsb",
+		"insertnums",
+		"insertseq",
+		"sprintf",
+		"stopexpr",
+		"sublimecode",
+		"sublimetext",
+		"volker"
+	],
+	"workbench.colorCustomizations": {
+		"editorStickyScroll.background": "#3333ff",
+		"editorStickyScrollHover.background": "#0000ff",
+		"[Cobalt2]": {
+			"editor.findMatchHighlightBackground": "#b6c700",
+			"editor.findMatchBackground": "#869e00"
+		}
+	},
+	"files.exclude": {
+		"dist": false // set this to true to hide the dist folder with the compiled JS files
+	},
+	"search.exclude": {
+		"dist": true // set this to false to include the dist folder in search results
+	},
+	"typescript.tsc.autoDetect": "off"
 }

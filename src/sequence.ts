@@ -18,53 +18,53 @@
  * - If both `repe` and `startover` are set, `startover` takes precedence for unconditional restart; `repe` restarts only when its boundary is reached.
  */
 export function generateSequence(
-    start: number,
-    step: number,
-    count: number,
-    freq?: number,
-    repe?: number,
-    startover?: number
+	start: number,
+	step: number,
+	count: number,
+	freq?: number,
+	repe?: number,
+	startover?: number,
 ): number[] {
-    const out: number[] = [];
-    if (count <= 0) return out;
-    const f = (freq && freq > 0) ? Math.floor(freq) : 1;
-    const r = (repe && repe > 0) ? Math.floor(repe) : 0;
-    const s = (startover && startover > 0) ? Math.floor(startover) : 0;
+	const out: number[] = [];
+	if (count <= 0) return out;
+	const f = freq && freq > 0 ? Math.floor(freq) : 1;
+	const r = repe && repe > 0 ? Math.floor(repe) : 0;
+	const s = startover && startover > 0 ? Math.floor(startover) : 0;
 
-    let emitted = 0; // number of emitted values so far
-    let logicalIndex = 0; // i for computing value = start + i*step
-    let repeatCountForLogical = 0; // how many times current logical value has been emitted
+	let emitted = 0; // number of emitted values so far
+	let logicalIndex = 0; // i for computing value = start + i*step
+	let repeatCountForLogical = 0; // how many times current logical value has been emitted
 
-    while (emitted < count) {
-        // compute current value
-        const value = start + logicalIndex * step;
-        out.push(value);
-        emitted++;
+	while (emitted < count) {
+		// compute current value
+		const value = start + logicalIndex * step;
+		out.push(value);
+		emitted++;
 
-        // check unconditional restart (startover) first
-        if (s > 0 && emitted % s === 0) {
-            // restart sequence
-            logicalIndex = 0;
-            repeatCountForLogical = 0;
-            continue;
-        }
+		// check unconditional restart (startover) first
+		if (s > 0 && emitted % s === 0) {
+			// restart sequence
+			logicalIndex = 0;
+			repeatCountForLogical = 0;
+			continue;
+		}
 
-        // check repe restart
-        if (r > 0 && emitted % r === 0) {
-            logicalIndex = 0;
-            repeatCountForLogical = 0;
-            continue;
-        }
+		// check repe restart
+		if (r > 0 && emitted % r === 0) {
+			logicalIndex = 0;
+			repeatCountForLogical = 0;
+			continue;
+		}
 
-        // advance repetition logic
-        repeatCountForLogical++;
-        if (repeatCountForLogical >= f) {
-            logicalIndex++;
-            repeatCountForLogical = 0;
-        }
-    }
+		// advance repetition logic
+		repeatCountForLogical++;
+		if (repeatCountForLogical >= f) {
+			logicalIndex++;
+			repeatCountForLogical = 0;
+		}
+	}
 
-    return out;
+	return out;
 }
 
 export default generateSequence;

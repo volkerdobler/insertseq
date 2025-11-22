@@ -1,8 +1,9 @@
 import { formatString, formatDateStr } from './formatting';
 
 function assertEqual(a: any, b: any, msg?: string) {
-	if (a !== b)
+	if (a !== b) {
 		throw new Error(`Assertion failed: ${a} !== ${b}. ${msg || ''}`);
+	}
 }
 
 // Basic padding right (default right-align)
