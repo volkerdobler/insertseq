@@ -28,10 +28,19 @@ import * as formatting from './formatting';
 import { safeEvaluate } from './safeEval';
 
 // internal console.log command, if debug is true
-const debug = false;
+let debugInsertseq = false;
+
+let outputChannel: vscode.OutputChannel | null = null;
 
 function printToConsole(str: string): void {
-	if (debug) console.log('Debugging: ' + str);
+	if (!debugInsertseq) {
+		return;
+	}
+	if (outputChannel) {
+		outputChannel.appendLine('Debugging insertseq: ' + str);
+	} else {
+		console.log('Debugging insertseq: ' + str);
+	}
 }
 
 // this method is called when your extension is activated
@@ -41,6 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
 		/* ignore migration errors */
 	});
 	// register insertseq command (normal insertion)
+	outputChannel = vscode.window.createOutputChannel('InsertSeq');
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
 			'extension.insertseq',
@@ -66,7 +76,12 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 }
 
-export function deactivate() {}
+export function deactivate() {
+	if (outputChannel) {
+		outputChannel.dispose();
+		outputChannel = null;
+	}
+}
 
 const appName: string = 'insertseq';
 
@@ -116,11 +131,6 @@ type TSpecialReplacementValues = {
 // Default configuration values (will be overwritten by user settings)
 let previewDecorationType: vscode.TextEditorDecorationType | null = null;
 
-// current shown history quickpick (if any) - used by delete/clear commands
-let currentHistoryQuickPick: vscode.QuickPick<
-	vscode.QuickPickItem & { cmd?: string }
-> | null = null;
-
 // sort function: sort and/or reverse selections. If neither sort nor reverse is set, returns the original array.
 function sortSelectionsByPosition(
 	selections: vscode.Selection[],
@@ -156,6 +166,8 @@ async function initApp(editor: vscode.TextEditor): Promise<TParameter> {
 		vscode.workspace.getConfiguration(appName),
 	);
 
+	debugInsertseq = debugInsertseq || config.get('debug') || false;
+
 	// read regular Expression for segmenting the input string
 	const regexpInputSegments = getRegExpressions();
 
@@ -175,6 +187,14 @@ async function initApp(editor: vscode.TextEditor): Promise<TParameter> {
 	const origCursorPositions = editor.selections.map(
 		(selection) => new vscode.Selection(selection.start, selection.start),
 	);
+
+	printToConsole('UI Kind: ' + vscode.env.uiKind.toString());
+	const isWeb = vscode.env.uiKind === vscode.UIKind.Web;
+	if (isWeb) {
+		printToConsole('Running in web (vscode.dev / web extension host)');
+	} else {
+		printToConsole('Running in desktop VS Code (local extension host)');
+	}
 
 	// global parameter for sequence creation which will be passed to subfunctions
 	return {
@@ -201,6 +221,7 @@ async function InsertSeqCommand(
 
 	// get global parameter (config, regex, original selections etc.) - will be passed to subfunctions
 	const parameter: TParameter = await initApp(editor);
+	printToConsole('Initialized parameters for InsertSeqCommand');
 
 	// get current alphabet from configuration and replace placeholder in regex
 	const currentAlphabet: string = parameter.config.get('alphabet') || '\u{0}';
@@ -214,6 +235,7 @@ async function InsertSeqCommand(
 			'[<start>][:<step>][*<frequency>][#<repeat>][##startover][~<format>][::<expr>][@<stopexpr>][$][!]',
 		value: value,
 		validateInput: function (input) {
+			printToConsole('Previewing input: ' + input);
 			insertNewSequence(input, parameter, 'preview');
 			return '';
 		},
@@ -281,7 +303,9 @@ function insertNewSequence(
 	) {
 		// build strList-Array until stop expression is true or maxInsertions reached
 		const res = currSeqFunction(i);
-		if (res.stopFunction) break;
+		if (res.stopFunction) {
+			break;
+		}
 		strList.push(res.stringFunction);
 	}
 
@@ -374,7 +398,9 @@ function insertNewSequence(
 			parameter.editor.setDecorations(previewDecorationType, []);
 			try {
 				previewDecorationType.dispose();
-			} catch {}
+			} catch {
+				printToConsole('Error disposing previewDecorationType');
+			}
 			previewDecorationType = null;
 
 			parameter.editor.edit((builder) => {
@@ -454,7 +480,7 @@ function getSequenceFunction(
 	// if input was "undefined" (canceled), return stopFunction true
 	if (input == null) {
 		const retStr = { stringFunction: '', stopFunction: true };
-		return (i) => retStr;
+		return (_) => retStr;
 	}
 
 	// determine input type (based on input string beginning)
@@ -484,7 +510,7 @@ function getSequenceFunction(
 			return createTextSelectedSeq(input, p); // no input - just use the originally selected text
 		default:
 			const retStr = { stringFunction: '', stopFunction: true };
-			return (i) => retStr; // no valid input type detected, stop function
+			return (_) => retStr; // no valid input type detected, stop function
 	}
 }
 
@@ -696,9 +722,12 @@ function createDecimalSeq(
 			let exprResult = runExpression(
 				replaceSpecialChars(expr, replacableValues),
 			);
-			if (Number.isFinite(exprResult)) value = Number(exprResult);
+			if (Number.isFinite(exprResult)) {
+				value = Number(exprResult);
+			}
 		} catch {
 			// ignore errors in expression evaluation - keep current value;
+			printToConsole('Error evaluating expression for decimal sequence');
 		}
 
 		// set value after expression evaluation
@@ -721,6 +750,9 @@ function createDecimalSeq(
 						i >= parameter.origCursorPos.length;
 				}
 			} catch {
+				printToConsole(
+					'Error evaluating stop expression for decimal sequence - falling back to default stop condition.',
+				);
 				stopExpressionTriggered = i >= parameter.origCursorPos.length;
 			}
 		} else {
@@ -802,7 +834,9 @@ function createStringSeq(
 
 		while (true) {
 			const combinations = Math.pow(alphabetLen, length);
-			if (index < count + combinations) break;
+			if (index < count + combinations) {
+				break;
+			}
 			count += combinations;
 			length++;
 		}
@@ -826,7 +860,9 @@ function createStringSeq(
 
 	// default return if start is empty
 	const defaultReturn = { stringFunction: '', stopFunction: true };
-	if (start === '') return (i) => defaultReturn;
+	if (start === '') {
+		return (_) => defaultReturn;
+	}
 
 	// extract steps, repetition, frequency, startover, stop expression, expression and format
 	const steps =
@@ -903,8 +939,12 @@ function createStringSeq(
 		charToIndex.set(char, i);
 		const lower = char.toLowerCase();
 		const upper = char.toUpperCase();
-		if (!charToIndex.has(lower)) charToIndex.set(lower, i);
-		if (!charToIndex.has(upper)) charToIndex.set(upper, i);
+		if (!charToIndex.has(lower)) {
+			charToIndex.set(lower, i);
+		}
+		if (!charToIndex.has(upper)) {
+			charToIndex.set(upper, i);
+		}
 	});
 	const alphabetLen = alphabetArr.length;
 
@@ -953,7 +993,9 @@ function createStringSeq(
 			if (typeof tempValue === 'string' || tempValue instanceof String) {
 				value = String(tempValue);
 			}
-		} catch {}
+		} catch {
+			printToConsole('Error evaluating expression for string sequence');
+		}
 
 		// set value after expression evaluation
 		replacableValues.valueAfterExpressionStr = value;
@@ -973,6 +1015,9 @@ function createStringSeq(
 					stopExprResult = i >= parameter.origCursorPos.length;
 				}
 			} catch {
+				printToConsole(
+					'Error evaluating stop expression for string sequence - falling back to default stop condition.',
+				);
 				stopExprResult = i >= parameter.origCursorPos.length;
 			}
 		} else {
@@ -1036,11 +1081,15 @@ function createDateSeq(
 	let start = input.match(parameter.segments['start_date'])?.groups?.start;
 
 	// if start date is empty, use current date
-	if (start === '') start = Temporal.Now.plainDateISO().toString();
+	if (start === '') {
+		start = Temporal.Now.plainDateISO().toString();
+	}
 
 	// if no start date found, return empty function
 	const defaultReturn = { stringFunction: '', stopFunction: true };
-	if (!start) return (i) => defaultReturn;
+	if (!start) {
+		return (_) => defaultReturn;
+	}
 
 	const startGroups = input.match(parameter.segments['start_date'])?.groups;
 
@@ -1050,8 +1099,9 @@ function createDateSeq(
 		let yearStr =
 			input.match(parameter.segments['start_date'])?.groups?.year ||
 			Temporal.Now.plainDateISO().year.toString();
-		if (yearStr.length === 2)
+		if (yearStr.length === 2) {
 			yearStr = parameter.config.get('century') + yearStr;
+		}
 		dateParts.year = Number(yearStr) || Temporal.Now.plainDateISO().year;
 		dateParts.month =
 			Number(
@@ -1064,7 +1114,7 @@ function createDateSeq(
 	} else {
 		// currently no valie date input - might change in the future
 		vscode.window.showInformationMessage('No date found!');
-		return (i) => defaultReturn;
+		return (_) => defaultReturn;
 	}
 
 	const steps =
@@ -1217,6 +1267,7 @@ function createDateSeq(
 				});
 			}
 		} catch {
+			printToConsole('Error evaluating expression for date sequence');
 			// ignore errors in expression evaluation - keep current value;
 		}
 		replacableValues.valueAfterExpressionStr = value
@@ -1236,6 +1287,9 @@ function createDateSeq(
 					stopExprResult = i >= parameter.origCursorPos.length;
 				}
 			} catch {
+				printToConsole(
+					'Error evaluating stop expression for date sequence - falling back to default stop condition.',
+				);
 				stopExprResult = i >= parameter.origCursorPos.length;
 			}
 		} else {
@@ -1269,7 +1323,7 @@ function createExpressionSeq(
 	const expressionMatch = input.match(parameter.segments['start_expression']);
 	if (!expressionMatch) {
 		const retFunction = { stringFunction: '', stopFunction: true };
-		return (i) => retFunction;
+		return (_) => retFunction;
 	}
 
 	// extract expression, if in quotes or brackets remove them
@@ -1319,7 +1373,11 @@ function createExpressionSeq(
 			} else if (parameter.origTextSel[i].length === 0) {
 				replacableValues.currentValueStr = (i + 1).toString();
 			}
-		} catch {}
+		} catch {
+			printToConsole(
+				'Error evaluating expression for expression sequence',
+			);
+		}
 
 		// set value after expression evaluation (not different from current value here, but for consistency, but to work with stopexpr)
 		replacableValues.valueAfterExpressionStr =
@@ -1338,6 +1396,9 @@ function createExpressionSeq(
 					stopExprResult = i >= parameter.origCursorPos.length;
 				}
 			} catch {
+				printToConsole(
+					'Error evaluating stop expression for expression sequence - falling back to default stop condition.',
+				);
 				stopExprResult = i >= parameter.origCursorPos.length;
 			}
 		} else {
@@ -1446,6 +1507,9 @@ function createOwnSeq(
 						stopExprResult = i >= parameter.origCursorPos.length;
 					}
 				} catch {
+					printToConsole(
+						'Error evaluating stop expression for own sequence - falling back to default stop condition.',
+					);
 					stopExprResult = i >= parameter.origCursorPos.length;
 				}
 			} else {
@@ -1500,8 +1564,12 @@ function createPredefinedSeq(
 			startsWith = false,
 		} = options || {};
 
-		if (x == null) return -1;
-		if (x.length === 0 && !emptyMatchesAll) return -1;
+		if (x == null) {
+			return -1;
+		}
+		if (x.length === 0 && !emptyMatchesAll) {
+			return -1;
+		}
 
 		switch (true) {
 			case fullMatch && ignoreCase:
@@ -1657,6 +1725,9 @@ function createPredefinedSeq(
 						stopExprTrigger = i >= parameter.origCursorPos.length;
 					}
 				} catch {
+					printToConsole(
+						'Error evaluating stop expression for predefined sequence - falling back to default stop condition.',
+					);
 					stopExprTrigger = i >= parameter.origCursorPos.length;
 				}
 			} else {
@@ -1716,6 +1787,9 @@ function createTextSelectedSeq(
 				value = String(exprResult);
 			}
 		} catch {
+			printToConsole(
+				'Error evaluating expression for text selected sequence',
+			);
 			// ignore errors in expression evaluation - keep current value;
 		}
 
@@ -1784,8 +1858,9 @@ function createQuickPick(
 	function schedulePreview(cmd: string | undefined) {
 		if (!cmd) {
 			// clear preview decorations
-			if (previewDecorationType)
+			if (previewDecorationType) {
 				parameter.editor.setDecorations(previewDecorationType, []);
+			}
 		} else {
 			// call preview
 			try {
@@ -1810,7 +1885,9 @@ function createQuickPick(
 	// handle clicking the per-item buttons (delete / edit)
 	qp.onDidTriggerItemButton(async (e) => {
 		const item = e.item as vscode.QuickPickItem & { cmd?: string };
-		if (!item || !item.cmd) return;
+		if (!item || !item.cmd) {
+			return;
+		}
 		const tooltip = (e.button && (e.button as any).tooltip) || '';
 		if (tooltip === 'Delete this history entry') {
 			// delete from storage
@@ -1838,14 +1915,16 @@ function createQuickPick(
 			tooltip: 'Clear all history',
 		} as any,
 	];
-	qp.onDidTriggerButton(async (button) => {
+	qp.onDidTriggerButton(async (_) => {
 		// Confirm
 		const ans = await vscode.window.showWarningMessage(
 			'Clear entire history?',
 			{ modal: true },
 			'Clear',
 		);
-		if (ans !== 'Clear') return;
+		if (ans !== 'Clear') {
+			return;
+		}
 		await clearHistory(context);
 		// reset quickpick items to only New sequence
 		qp.items = [
@@ -1886,8 +1965,9 @@ function createQuickPick(
 
 	qp.onDidHide(() => {
 		// clear preview decorations
-		if (previewDecorationType)
+		if (previewDecorationType) {
 			parameter.editor.setDecorations(previewDecorationType, []);
+		}
 		qp.dispose();
 	});
 	return qp;
@@ -1946,28 +2026,27 @@ function runExpression(str: string): any {
 		str = str.slice(1, -1);
 	}
 
+	printToConsole('Evaluating expression: ' + str);
+	let res: any;
 	try {
-		let res: any;
-		try {
-			// dynamically require the safeEval helper if available
-			// eslint-disable-next-line @typescript-eslint/no-var-requires
-			// const se = require('./safeEval');
-			res = safeEvaluate ? safeEvaluate(str, 1000) : null;
-		} catch {
-			res = null;
-		}
-
-		if (res && typeof res === 'object') {
-			if (!res.ok) return null;
+		res = safeEvaluate ? safeEvaluate(str, 1000) : null;
+		if (res && res.ok) {
 			return res.value;
 		}
-		// // fallback to eval if safeEvaluate not available
-		// const result = eval(str);
-		// return result;
 		return null;
 	} catch {
-		return null;
+		printToConsole(
+			'Error evaluating expression: ' +
+				str +
+				' , res=' +
+				res.ok +
+				':' +
+				res.value,
+		);
+		res = null;
 	}
+
+	return null;
 }
 
 function getStopExpression(input: string, parameter: TParameter): string {

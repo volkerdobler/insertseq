@@ -210,6 +210,11 @@
 					"type": "number",
 					"default": 100,
 					"description": "Maximum items stored in history"
+				},
+				"insertseq.debug": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable debug output in console"
 				}
 			}
 		},
@@ -221,19 +226,7 @@
 			{
 				"command": "extension.insertseq.history",
 				"title": "Insert Sequences-History"
-			},
-			{
-				"command": "insertseq._history.deleteActive",
-				"title": "InsertSeq: Delete active history item"
-			},
-			{
-				"command": "insertseq._history.clearAll",
-				"title": "InsertSeq: Clear history"
 			}
-		],
-		"activationEvents": [
-			"onCommand:extension.insertseq",
-			"onCommand:extension.insertseq.history"
 		],
 		"keybindings": [
 			{
@@ -252,12 +245,19 @@
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
-		"compile": "tsc -p ./",
-		"watch": "npm run clean && tsc -watch -p ./",
 		"clean": "rimraf ./dist/* -g",
-		"build:desk": "npm run check-types && node esbuild.js --production",
-		"build:web": "npm run check-types && node esbuild-web.js --production",
+		"compile": "tsc -p ./",
+		"compile:desk": "npm run check-types && node esbuild.js",
+		"compile:web": "npm run check-types && node esbuild-web.js",
+		"compile:all": "npm run clean && npm run compile:desk && npm run compile:web",
+		"build:desk": "npm run check-types && npm run lint && node esbuild.js --production",
+		"build:web": "npm run check-types && npm run lint && node esbuild-web.js --production",
 		"build:all": "npm run clean && npm run build:desk && npm run build:web",
+		"lint": "eslint src --ext .ts",
+		"watch:desk": "tsc -watch -p ./",
+		"watch:web": "tsc -watch -project tsconfig.json & node esbuild-web.js --watch",
+		"watch:all": "npm run clean && npm-run-all --parallel watch:desk watch:web",
+		"run-in-browser": "vscode-test-web --browserType=chromium ./dist/extension-web.js",
 		"vscode:prepublish": "npm run build:all"
 	},
 	"dependencies": {
@@ -266,17 +266,23 @@
 		"temporal-polyfill": "^0.3.0"
 	},
 	"devDependencies": {
+		"@esbuild-plugins/node-globals-polyfill": "^0.2.3",
 		"@types/assert": "^1.5.11",
 		"@types/d3-format": "^3.0.4",
 		"@types/node": "^24.10.0",
 		"@types/vscode": "^1.105.0",
+		"@vscode/test-web": "^0.0.76",
 		"assert": "^2.1.0",
 		"esbuild": "^0.27.0",
 		"eslint": "^9.2.0",
+		"eslint-formatter-unix": "^9.0.1",
+		"eslint-plugin-prettier": "^5.5.4",
+		"glob": "^13.0.0",
 		"npm-run-all": "^4.1.5",
 		"prettier": "^3.2.5",
 		"ts-loader": "^9.5.1",
-		"typescript": "^5.1.6"
+		"typescript": "^5.1.6",
+		"typescript-eslint": "^8.47.0"
 	},
 	"icon": "insertseq.png",
 	"galleryBanner": {

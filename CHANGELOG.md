@@ -2,6 +2,12 @@
 
 All notable changes to this extension (newest first):
 
+# Version 1.0.4
+
+Web version is now working
+
+New configuration option "debug" for internal use
+
 # Version 1.0.3
 
 Fix in regexp to run in Linux environments / container
@@ -38,7 +44,7 @@ Most other commands did not change. 😎
 
 ---
 
-## Preview version history
+## previous version history
 
 - 0.10.2
 

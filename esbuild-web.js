@@ -1,27 +1,104 @@
 const esbuild = require('esbuild');
+const glob = require('glob');
 const path = require('path');
+const polyfill = require('@esbuild-plugins/node-globals-polyfill');
 
 const production = process.argv.includes('--production');
+const watch = process.argv.includes('--watch');
 
-async function build() {
-	const entry = path.resolve(__dirname, 'src', 'extension.ts');
-	await esbuild.build({
-		entryPoints: [entry],
+/**
+ * This plugin hooks into the build process to print errors in a format that the problem matcher in
+ * Visual Studio Code can understand.
+ * @type {import('esbuild').Plugin}
+ */
+const esbuildProblemMatcherPlugin = {
+	name: 'esbuild-problem-matcher',
+
+	setup(build) {
+		build.onStart(() => {
+			console.log('[watch] build started');
+		});
+		build.onEnd((result) => {
+			result.errors.forEach(({ text, location }) => {
+				console.error(`✘ [ERROR] ${text}`);
+				console.error(
+					`    ${location.file}:${location.line}:${location.column}:`,
+				);
+			});
+			console.log('[watch] build finished');
+		});
+	},
+};
+
+/**
+ * For web extension, all tests, including the test runner, need to be bundled into
+ * a single module that has a exported `run` function .
+ * This plugin bundles implements a virtual file extensionTests.ts that bundles all these together.
+ * @type {import('esbuild').Plugin}
+ */
+const testBundlePlugin = {
+	name: 'testBundlePlugin',
+	setup(build) {
+		build.onResolve({ filter: /[\/\\]extensionTests\.ts$/ }, (args) => {
+			if (args.kind === 'entry-point') {
+				return { path: path.resolve(args.path) };
+			}
+		});
+		build.onLoad({ filter: /[\/\\]extensionTests\.ts$/ }, async (args) => {
+			const testsRoot = path.join(__dirname, 'src/web/test/suite');
+			const files = await glob.glob('*.test.{ts,tsx}', {
+				cwd: testsRoot,
+				posix: true,
+			});
+			return {
+				contents:
+					`export { run } from './mochaTestRunner.ts';` +
+					files.map((f) => `import('./${f}');`).join(''),
+				watchDirs: files.map((f) =>
+					path.dirname(path.resolve(testsRoot, f)),
+				),
+				watchFiles: files.map((f) => path.resolve(testsRoot, f)),
+			};
+		});
+	},
+};
+
+async function main() {
+	const ctx = await esbuild.context({
+		entryPoints: ['src/extension.ts'],
 		bundle: true,
-		platform: 'browser',
-		target: ['es2020'],
-		outfile: path.resolve(__dirname, 'dist', 'extension-web.js'),
+		format: 'cjs',
+		minify: production,
 		sourcemap: !production,
-		// Exclude Node builtins from the browser bundle so the bundler doesn't try to include them
+		sourcesContent: false,
+		platform: 'browser',
+		// outdir: 'dist/',
+		outfile: 'dist/extension-web.js',
 		external: ['vscode'],
-		define: { 'process.env.NODE_ENV': '"production"' },
-		minify: true,
-		logLevel: 'info',
+		logLevel: 'silent',
+		// Node.js global to browser globalThis
+		define: {
+			global: 'globalThis',
+		},
+
+		plugins: [
+			polyfill.NodeGlobalsPolyfillPlugin({
+				process: true,
+				buffer: true,
+			}),
+			// testBundlePlugin, /* only needed when building tests */
+			esbuildProblemMatcherPlugin /* add to the end of plugins array */,
+		],
 	});
-	console.log('Web bundle written to dist/extension-web.js');
+	if (watch) {
+		await ctx.watch();
+	} else {
+		await ctx.rebuild();
+		await ctx.dispose();
+	}
 }
 
-build().catch((err) => {
-	console.error(err);
+main().catch((e) => {
+	console.error(e);
 	process.exit(1);
 });
