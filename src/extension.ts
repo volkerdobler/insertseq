@@ -101,6 +101,7 @@ type TInput =
 	| 'expression' // expressions (JavaScript)
 	| 'own' // own (war "months") - custom alphabetic sequences (inserted as [...] array)
 	| 'predefined' // predefined text sequences (based on predefined lists in configuration)
+	| 'function' // predefined functions (based on predefined functions in configuration)
 	| 'textSelected' // no input - just use the originally selected text
 	| null; // no valid input type detected
 
@@ -127,6 +128,15 @@ type TSpecialReplacementValues = {
 	numberOfSelectionsStr: string;
 	currentIndexStr: string;
 };
+
+type TOwnFunction = (
+	i: number,
+	start?: number,
+	step?: number,
+	freq?: number,
+	repeat?: number,
+	startOver?: number,
+) => string;
 
 // Default configuration values (will be overwritten by user settings)
 let previewDecorationType: vscode.TextEditorDecorationType | null = null;
@@ -506,6 +516,8 @@ function getSequenceFunction(
 			return createOwnSeq(input, p); // own (war "months" in version 0.x) - custom alphabetic sequences
 		case 'predefined':
 			return createPredefinedSeq(input, p); // predefined text sequences (predefined lists in configuration)
+		case 'function':
+			return createFunctionSeq(input, p); // predefined functions (predefined functions in configuration)
 		case 'textSelected':
 			return createTextSelectedSeq(input, p); // no input - just use the originally selected text
 		default:
@@ -527,7 +539,10 @@ function getInputType(input: string, p: TParameter): TInput | null {
 
 	// define regex for alphabetic characters based on current alphabet (from configuration)
 	const chars = Array.from(alphabet).map(escapeForRegex).join('');
-	const reAlphabetCharClass = new RegExp('^[' + chars + ']', 'iu');
+	const reAlphabetCharClass = new RegExp(
+		'^\s*(?:alpha(?:bet)?:)?[' + chars + ']',
+		'iu',
+	);
 
 	// What kind of input is it (check regex from begin)
 	switch (true) {
@@ -548,7 +563,7 @@ function getInputType(input: string, p: TParameter): TInput | null {
 			type = 'decimal';
 			break;
 		// expression
-		case /^\|/i.test(input):
+		case /^\s*(?:\||expr(?:ession)?:)/i.test(input):
 			type = 'expression';
 			break;
 		// strings (alphabetic)
@@ -556,16 +571,20 @@ function getInputType(input: string, p: TParameter): TInput | null {
 			type = 'alpha';
 			break;
 		// date values
-		case /^%/i.test(input):
+		case /^\s*(?:%|date:)/i.test(input):
 			type = 'date';
 			break;
 		// own sequences
-		case /^\[/i.test(input):
+		case /^\s*(?:\[|(?:own(?:seq(?:uence)?)?:))/i.test(input):
 			type = 'own';
 			break;
 		// predefined sequences
-		case /^;/i.test(input):
+		case /^\s*(?:;|predef(?:ined)?(?:seq(?:uence)?)?:)/i.test(input):
 			type = 'predefined';
+			break;
+		// predefined functions
+		case /^\s*(?:=|func(?:tion)?:)/i.test(input):
+			type = 'function';
 			break;
 		// empty input (when input box is empty) - use selected text if available or decimal as default
 		case /^$/i.test(input):
@@ -1745,6 +1764,165 @@ function createPredefinedSeq(
 	};
 }
 
+// create sequence for a predefined function
+function createFunctionSeq(
+	input: string,
+	parameter: TParameter,
+): (i: number) => { stringFunction: string; stopFunction: boolean } {
+	function loadUserFunctionsFromConfig(
+		cfg: vscode.WorkspaceConfiguration,
+	): TOwnFunction[] {
+		const raw = cfg.get('myfunctions') as any;
+		let res: TOwnFunction[] = [];
+
+		if (!Array.isArray(raw)) return res;
+
+		for (const item of raw) {
+			try {
+				if (typeof item === 'string') {
+					const s = item.trim();
+					// Try evaluating a function expression "(i)=>..." or "function(...) {...}"
+					const fn = safeEvaluate(`(${s})`);
+					if (fn.ok && typeof fn.value === 'function') {
+						res.push(fn.value as TOwnFunction);
+						continue;
+					}
+
+					// Optional: if string is a JSON object like "{name:'x', code:'...'}"
+					try {
+						const obj = JSON.parse(
+							s.replace(/(['"])?([a-zA-Z0-9_]+)\1\s*:/g, '"$2":'),
+						);
+						if (obj && obj.code) {
+							const fn2 = safeEvaluate(`(${obj.code})`);
+							if (fn2.ok && typeof fn2.value === 'function')
+								res.push(fn2.value as TOwnFunction);
+						}
+					} catch {
+						/* ignore */
+					}
+				} else if (item && typeof item === 'object') {
+					const code = (item as any).code || (item as any).function;
+					if (typeof code === 'string') {
+						const fn = safeEvaluate(`(${code})`);
+						if (fn.ok && typeof fn.value === 'function')
+							res.push(fn.value as TOwnFunction);
+					}
+				}
+			} catch (e) {
+				printToConsole(`Failed parsing user function: ${String(e)}`);
+			}
+		}
+		return res;
+	}
+
+	const functionArray: TOwnFunction[] = loadUserFunctionsFromConfig(
+		parameter.config,
+	);
+
+	const functionParameter = input.match(parameter.segments['start_function']);
+	// if start_predefined group exists, extract sequence text (could be within quotes or plain text)
+	const functionNr =
+		Number(functionParameter?.groups?.funcNr) ||
+		parameter.config.get('defaultFunctionNr') ||
+		1;
+
+	const myFunc = functionArray && functionArray.at(functionNr - 1);
+
+	if (!myFunc) {
+		return (i) => ({ stringFunction: '', stopFunction: true });
+	}
+
+	const functionStartAt = Number(
+		functionParameter?.groups?.funcStartAt || '1',
+	);
+
+	const steps =
+		Number(input.match(parameter.segments['steps_other'])?.groups?.steps) ||
+		Number(parameter.config.get('step')) ||
+		1;
+	const repe =
+		Number(
+			input.match(parameter.segments['repetition'])?.groups?.repeat ??
+				parameter.config.get('repetition'),
+		) || Number.MAX_SAFE_INTEGER;
+	const freq =
+		Number(
+			input.match(parameter.segments['frequency'])?.groups?.freq ??
+				parameter.config.get('frequency'),
+		) || 1;
+	const startover =
+		Number(
+			input.match(parameter.segments['startover'])?.groups?.startover ??
+				parameter.config.get('startover'),
+		) || Number.MAX_SAFE_INTEGER;
+
+	const stopexpr = getStopExpression(input, parameter);
+
+	const replacableValues: TSpecialReplacementValues = {
+		currentValueStr: '',
+		valueAfterExpressionStr: '', // only for stopexpression
+		previousValueStr: '',
+		currentIndexStr: '',
+		origTextStr: '',
+		startStr: parameter.config.get('start') || '1',
+		stepStr: parameter.config.get('step') || '1',
+		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
+	};
+
+	return (i) => {
+		replacableValues.currentIndexStr = i.toString();
+		replacableValues.origTextStr =
+			i < parameter.origTextSel.length ? parameter.origTextSel[i] : '';
+
+		const value = myFunc(i, functionStartAt, steps, freq, repe, startover);
+
+		// set special replacement values for origTextStr and currentIndexStr
+		if (i <= parameter.origTextSel.length) {
+			replacableValues.origTextStr = parameter.origTextSel[i];
+		}
+		replacableValues.currentIndexStr = i.toString();
+
+		// set current value string before expression evaluation
+		replacableValues.currentValueStr = value.toString();
+		replacableValues.valueAfterExpressionStr = '';
+
+		// default: stop expression triggered if i >= number of original selections
+		let stopExpressionTriggered = i >= parameter.origCursorPos.length;
+
+		// check stop expression if given
+		if (stopexpr.length > 0) {
+			// calculate possible stop expression. If stop expression is true, a "\u{0}" char will be returned. If stop expression is invalid or false, the newValue will be returned
+			try {
+				const stopExprResult = runExpression(
+					replaceSpecialChars(stopexpr, replacableValues),
+				);
+				if (stopExprResult != null) {
+					stopExpressionTriggered = Boolean(stopExprResult);
+				} else {
+					stopExpressionTriggered =
+						i >= parameter.origCursorPos.length;
+				}
+			} catch {
+				printToConsole(
+					'Error evaluating stop expression for own function sequence - falling back to default stop condition.',
+				);
+				stopExpressionTriggered = i >= parameter.origCursorPos.length;
+			}
+		} else {
+			stopExpressionTriggered = i >= parameter.origCursorPos.length;
+		}
+
+		// set previous value string for next iteration
+		replacableValues.previousValueStr = value.toString();
+
+		return {
+			stringFunction: value.toString(),
+			stopFunction: stopExpressionTriggered,
+		};
+	};
+}
+
 // Create sequence based on original selected text
 function createTextSelectedSeq(
 	input: string,
@@ -2080,6 +2258,7 @@ function getRegExpressions(): RuleTemplate {
 		start_own: '', // Start-Wert bei eigenen Listen (string)
 		start_predefined: '', // Start-Wert in der Configuration vordefinierte Listen (string)
 		start_expression: '', // Start-Wert bei Ausdrücken
+		start_function: '', // Start-Wert bei Funktionen
 		steps_decimal: '', // Schritte bei Zahlen (auch mit Nachkommastellen möglich)
 		steps_date: '', // Schritte bei einem Datum (es wird d, w, m oder y nach einer Zahl geschrieben, um zu sagen, welche Einheit die Steps sind)
 		steps_other: '', // Schritte bei anderen Typen (nur Ganzzahl-Schritte)
@@ -2110,10 +2289,11 @@ function getRegExpressions(): RuleTemplate {
 	// i ::= counter, starting with 0 and increasing with each insertion
 	const ruleTemplate: RuleTemplate = {};
 	// start of input, which defines input types
-	ruleTemplate.charStartDate = `^%`;
-	ruleTemplate.charStartOwnSequence = `^\\[`;
-	ruleTemplate.charStartPredefinedSequence = `^;`;
-	ruleTemplate.charStartExpr = `^\\|`;
+	ruleTemplate.charStartDate = `^\\s*(?:%|date:)`;
+	ruleTemplate.charStartOwnSequence = `^\\s*(?:\\[|(?:own(?:seq(?:uence)?)?:))`;
+	ruleTemplate.charStartPredefinedSequence = `^\\s*(?:;|predef(?:ined)?(?:seq(?:uence)?)?:)`;
+	ruleTemplate.charStartExpr = `^\\s*(?:\\||expr(?:ession)?:)`;
+	ruleTemplate.charStartFunction = `^\\s*(?:=|func(?:tion)?:)`;
 	// rules, which are normally not at the beginning of an input (but could be, when <start> is omitted/defaulted)
 	ruleTemplate.charStartSteps = `(?:(?<!^)\\bsteps?:|(?<!:|format|freq|frequency|rep|repeat|repetition|startat|startagain|startover|expr|expression|stop|stopexpr|stopexpression|option|options):)`;
 	ruleTemplate.charStartFormat = `(?:(?<!^)\\bformat:|~)`;
@@ -2368,6 +2548,14 @@ function getRegExpressions(): RuleTemplate {
 								(?: {{sequencedelimiter}} )?
 								(?= {{delimiter}} )
 							)`;
+	ruleTemplate.start_function = `^(?: 
+										{{charStartFunction}}
+										(?<funcNr> \\d+ )
+										(?: \\s* ;
+											\\s* (?<funcStartAt> \\d+ )
+										)?
+										(?= {{delimiter}} )
+									)`;
 	ruleTemplate.steps_decimal = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedNum}}) (?= {{delimiter}} ))`;
 	ruleTemplate.steps_date = `(?:
 									(?<!{{charStartSteps}})

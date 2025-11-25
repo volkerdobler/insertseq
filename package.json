@@ -191,6 +191,19 @@
 					],
 					"description": "Own defined Sequences (Array of arrays)"
 				},
+				"insertseq.myfunctions": {
+					"type": "array",
+					"default": [
+						"(i, start=1, step=1) => start + (i ** step)",
+						"(i) => Math.PI.toString().split('').splice(i,1)"
+					],
+					"description": "Own defined Functions (Array of objects with name and function code) - function arguments are (i, start, step, frequency, repeat, startover), where i is the zero-based index of the insertion, start is the start value, step is the step value, frequency is the frequency value, repeat is the repetition value, and startover is the startover value (all beside i are optional and may be undefined)"
+				},
+				"insertseq.defaultFunctionNr": {
+					"type": "number",
+					"default": 1,
+					"description": "Default function number (1 = first function in 'myfunctions' list)"
+				},
 				"insertseq.radixPrefix": {
 					"type": "boolean",
 					"default": false,
