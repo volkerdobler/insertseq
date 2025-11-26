@@ -214,7 +214,7 @@ Feb
 
 ### Predefined lists
 
-Predefined lists come from your configuration setting (for example, `insertseq.mysequences`). Use the `;` prefix to reference them.
+Predefined lists come from your configuration setting (`insertseq.mysequences`). Use the `;` prefix to reference them.
 
 Given configuration:
 
@@ -235,7 +235,30 @@ Jun
 Jul
 ```
 
----
+### Predefined functions
+
+Predefined functions come from your configuration settings (`insertseq.myfunctions`). Use `=` to reference them, followed by the number (1-based) of the function you want to use.
+
+Given configuration:
+
+```json
+"insertseq.myfunctions": [
+	"(i, start=1, step=1) => start + (i ** step)",
+	"(i) => Math.PI.toString().split('').splice(i,1)"
+]
+```
+
+Input: `=2` with 5 selections → output:
+
+```
+3
+.
+1
+4
+1
+```
+
+As the function can include `start`, `step`, `repeat`, `frequency` and `startover` (in this order!), the start value will be add with a `;`. The other values will come from the options you can provide.
 
 ## Content of full syntax description
 
@@ -244,6 +267,7 @@ Jul
 - [Dates](#date-sequences-details)
 - [Own](#own-sequences-details)
 - [Predefined](#predefined-sequences-details)
+- [Function](#function-sequences-details)
 
 - [History command](#history)
 
@@ -434,6 +458,37 @@ Examples:
 
 Interaction with other options is the same as for other sequence types.
 
+### Function sequences details
+
+Function sequences let you reference user-defined JS functions configured in `insertseq.myfunctions`. Each configured entry is a JavaScript function expression (typically an arrow function) stored as a string.
+
+Prefixes accepted: `=` (short), `func:`, or `function:` (readable). Functions may be referenced by 1‑based index (e.g. `=1`, `func:2`).
+
+- Typical expected type:
+  (i: number, start?: number, step?: number, frequency?: number, repeat?: number, startover?: number) => string | number
+
+- Syntax and options
+    - Basic reference: `=1`, `=2`, ...
+    - Readable forms: `func:1`, `function:1`, ...
+    - Override start value: append `;` and the start value immediately after the function reference — e.g. `=1;5` or `func:2;10`.
+    - The following standard sequence options are supported after the function reference and are parsed as for numeric or list sequences:
+        - step: `:n` or `step:n`
+        - frequency: `*n` or `freq:n`
+        - repeat: `#n` or `rep:n`
+        - startover: `##n` or `startover:n`
+    - Function indexes are 1‑based (first configured function is `=1`). Options after the reference are passed into the function parameters as appropriate.
+
+- Return value and formatting
+    - The function has to return a string. Returned values are inserted verbatim.
+
+- Evaluation and errors
+    - Predefined functions are evaluated in a sandbox or a resilient fallback evaluator depending on the host. If evaluation fails for a particular emission, the extension logs the error (when debug is enabled) and emits an empty/undefined insertion for that emission, but continues processing other emissions.
+
+- Tips
+    - Keep functions deterministic and side‑effect free.
+    - Use parentheses around complex expressions or include parameters via the standard options (`:|step:`, `*|freq:`, `#|repeat:`, `##|startover:`).
+    - Use the History command (`insertseq.history`) to quickly reuse or adjust previously working function calls.
+
 ---
 
 ## History
@@ -469,29 +524,32 @@ Notes:
 
 The extension exposes settings under the `insertseq` namespace. A quick reference:
 
-| Setting                     |    Type | Default                        | Description                                                                |
-| --------------------------- | ------: | ------------------------------ | -------------------------------------------------------------------------- |
-| `insertseq.start`           |  string | `"1"`                          | Default start value when none is provided.                                 |
-| `insertseq.step`            |  string | `"1"`                          | Default step/increment.                                                    |
-| `insertseq.repetition`      |  string | `""`                           | Default repetition / cycle (`#`).                                          |
-| `insertseq.frequency`       |  string | `"1"`                          | Default per-value repetition (`*`).                                        |
-| `insertseq.startover`       |  string | `""`                           | Default overall output cycle (`##`).                                       |
-| `insertseq.stringFormat`    |  string | `""`                           | Default format template for string outputs.                                |
-| `insertseq.numberFormat`    |  string | `""`                           | Default format template for numeric outputs (d3-format).                   |
-| `insertseq.dateFormat`      |  string | `""`                           | Default date output format.                                                |
-| `insertseq.alphaCapital`    |  string | `"preserve"`                   | Case handling for alpha sequences: `preserve`, `upper`, `lower`, `pascal`. |
-| `insertseq.language`        |  string | `""`                           | Default locale/language for date formatting.                               |
-| `insertseq.insertOrder`     |  string | `"cursor"`                     | Default insertion order: `cursor`, `sorted`, `reverse`.                    |
-| `insertseq.century`         |  string | `"20"`                         | Default century for two-digit year inputs.                                 |
-| `insertseq.centerString`    |  string | `"l"`                          | Centering bias for string padding: `l` (left), `r` (right).                |
-| `insertseq.dateStepUnit`    |  string | `"d"`                          | Default date step unit: `d`, `w`, `m`, `y`.                                |
-| `insertseq.delimiter`       |  string | `""`                           | Delimiter inserted between multiple insertions when appropriate.           |
-| `insertseq.alphabet`        |  string | `"abcdefghijklmnopqrstuvwxyz"` | Alphabet used for alpha sequences.                                         |
-| `insertseq.mysequences`     |   array | see package.json               | User-defined sequences (array of arrays).                                  |
-| `insertseq.radixPrefix`     | boolean | `false`                        | Emit binary/octal/hex numbers with `0b`, `0o`, `0x` when true.             |
-| `insertseq.previewColor`    |  string | `"#888888"`                    | Color used for the preview decoration.                                     |
-| `insertseq.maxInsertions`   |  number | `10000`                        | Hard limit on the number of insertions to avoid large operations.          |
-| `insertseq.maxHistoryItems` |  number | `100`                          | Maximum number of history items stored.                                    |
+| Setting                       |    Type | Default                        | Description                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------- | ------: | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `insertseq.start`             |  string | `"1"`                          | Default start value when none is provided.                                                                                                                                                                                                                                                                                                                                                        |
+| `insertseq.step`              |  string | `"1"`                          | Default step/increment.                                                                                                                                                                                                                                                                                                                                                                           |
+| `insertseq.repetition`        |  string | `""`                           | Default repetition / cycle (`#`).                                                                                                                                                                                                                                                                                                                                                                 |
+| `insertseq.frequency`         |  string | `"1"`                          | Default per-value repetition (`*`).                                                                                                                                                                                                                                                                                                                                                               |
+| `insertseq.startover`         |  string | `""`                           | Default overall output cycle (`##`).                                                                                                                                                                                                                                                                                                                                                              |
+| `insertseq.stringFormat`      |  string | `""`                           | Default format template for string outputs.                                                                                                                                                                                                                                                                                                                                                       |
+| `insertseq.numberFormat`      |  string | `""`                           | Default format template for numeric outputs (d3-format).                                                                                                                                                                                                                                                                                                                                          |
+| `insertseq.dateFormat`        |  string | `""`                           | Default date output format.                                                                                                                                                                                                                                                                                                                                                                       |
+| `insertseq.alphaCapital`      |  string | `"preserve"`                   | Case handling for alpha sequences: `preserve`, `upper`, `lower`, `pascal`.                                                                                                                                                                                                                                                                                                                        |
+| `insertseq.language`          |  string | `""`                           | Default locale/language for date formatting.                                                                                                                                                                                                                                                                                                                                                      |
+| `insertseq.insertOrder`       |  string | `"cursor"`                     | Default insertion order: `cursor`, `sorted`, `reverse`.                                                                                                                                                                                                                                                                                                                                           |
+| `insertseq.century`           |  string | `"20"`                         | Default century for two-digit year inputs.                                                                                                                                                                                                                                                                                                                                                        |
+| `insertseq.centerString`      |  string | `"l"`                          | Centering bias for string padding: `l` (left), `r` (right).                                                                                                                                                                                                                                                                                                                                       |
+| `insertseq.dateStepUnit`      |  string | `"d"`                          | Default date step unit: `d`, `w`, `m`, `y`.                                                                                                                                                                                                                                                                                                                                                       |
+| `insertseq.delimiter`         |  string | `""`                           | Delimiter inserted between multiple insertions when appropriate (when empty string, newlines will be inserted).                                                                                                                                                                                                                                                                                   |
+| `insertseq.alphabet`          |  string | `"abcdefghijklmnopqrstuvwxyz"` | Alphabet used for alpha sequences.                                                                                                                                                                                                                                                                                                                                                                |
+| `insertseq.mysequences`       |   array | see package.json               | User-defined sequences (array of arrays).                                                                                                                                                                                                                                                                                                                                                         |
+| `insertseq.myfunctions`       |   array | see package.json               | Own defined Functions (Array of functions) - function arguments are (i, start, step, frequency, repeat, startover), where i is the zero-based index of the insertion, start is the start value, step is the step value, frequency is the frequency value, repeat is the repetition value, and startover is the startover value (all beside i are optional, if you use them, give default values). |
+| `insertseq.defaultFunctionNr` |  number | `1`                            | Default function index for myfunctions.                                                                                                                                                                                                                                                                                                                                                           |
+| `insertseq.radixPrefix`       | boolean | `false`                        | Emit binary/octal/hex numbers with `0b`, `0o`, `0x` when true.                                                                                                                                                                                                                                                                                                                                    |
+| `insertseq.previewColor`      |  string | `"#888888"`                    | Color used for the preview decoration.                                                                                                                                                                                                                                                                                                                                                            |
+| `insertseq.maxInsertions`     |  number | `10000`                        | Hard limit on the number of insertions to avoid large operations.                                                                                                                                                                                                                                                                                                                                 |
+| `insertseq.maxHistoryItems`   |  number | `100`                          | Maximum number of history items stored.                                                                                                                                                                                                                                                                                                                                                           |
+| `insertseq.debug`             | boolean | `false`                        | Enable debug output                                                                                                                                                                                                                                                                                                                                                                               |
 
 Edit these settings in the VS Code settings UI or in `settings.json` under the `insertseq` namespace.
 
