@@ -28,7 +28,7 @@ import * as formatting from './formatting';
 import { safeEvaluate } from './safeEval';
 
 // internal console.log command, if debug is true
-let debugInsertseq = false;
+let debugInsertseq = true;
 
 let outputChannel: vscode.OutputChannel | null = null;
 
@@ -1782,7 +1782,14 @@ function createFunctionSeq(
 				if (typeof item === 'string') {
 					const s = item.trim();
 					// Try evaluating a function expression "(i)=>..." or "function(...) {...}"
+					printToConsole(`Parsing user function 1: ${s}`);
 					const fn = safeEvaluate(`(${s})`);
+					printToConsole(
+						`Evaluation result: ${fn.ok}` +
+							(fn.ok
+								? `value: ${fn.value}`
+								: `error: ${fn.error}`),
+					);
 					if (fn.ok && typeof fn.value === 'function') {
 						res.push(fn.value as TOwnFunction);
 						continue;
@@ -1794,7 +1801,16 @@ function createFunctionSeq(
 							s.replace(/(['"])?([a-zA-Z0-9_]+)\1\s*:/g, '"$2":'),
 						);
 						if (obj && obj.code) {
+							printToConsole(
+								`Parsing user function 2: ${obj.code}`,
+							);
 							const fn2 = safeEvaluate(`(${obj.code})`);
+							printToConsole(
+								`Evaluation result: ${fn2.ok}` +
+									(fn2.ok
+										? `value: ${fn2.value}`
+										: `error: ${fn2.error}`),
+							);
 							if (fn2.ok && typeof fn2.value === 'function')
 								res.push(fn2.value as TOwnFunction);
 						}
@@ -1804,7 +1820,14 @@ function createFunctionSeq(
 				} else if (item && typeof item === 'object') {
 					const code = (item as any).code || (item as any).function;
 					if (typeof code === 'string') {
+						printToConsole(`Parsing user function 3: ${code}`);
 						const fn = safeEvaluate(`(${code})`);
+						printToConsole(
+							`Evaluation result: ${fn.ok}` +
+								(fn.ok
+									? `value: ${fn.value}`
+									: `error: ${fn.error}`),
+						);
 						if (fn.ok && typeof fn.value === 'function')
 							res.push(fn.value as TOwnFunction);
 					}
@@ -1869,6 +1892,8 @@ function createFunctionSeq(
 		stepStr: parameter.config.get('step') || '1',
 		numberOfSelectionsStr: parameter.origCursorPos.length.toString(),
 	};
+
+	printToConsole(`Current function: ${myFunc.toString()}`);
 
 	return (i) => {
 		replacableValues.currentIndexStr = i.toString();
@@ -2295,9 +2320,9 @@ function getRegExpressions(): RuleTemplate {
 	ruleTemplate.charStartExpr = `^\\s*(?:\\||expr(?:ession)?:)`;
 	ruleTemplate.charStartFunction = `^\\s*(?:=|func(?:tion)?:)`;
 	// rules, which are normally not at the beginning of an input (but could be, when <start> is omitted/defaulted)
-	ruleTemplate.charStartSteps = `(?:(?<!^)\\bsteps?:|(?<!:|format|freq|frequency|rep|repeat|repetition|startat|startagain|startover|expr|expression|stop|stopexpr|stopexpression|option|options):)`;
+	ruleTemplate.charStartSteps = `(?:(?<!^)\\bsteps?:|(?<!:|format|freq|frequency|func|function|rep|repeat|repetition|startat|startagain|startover|expr|expression|stop|stopexpr|stopexpression|option|options):)`;
 	ruleTemplate.charStartFormat = `(?:(?<!^)\\bformat:|~)`;
-	ruleTemplate.charStartFrequency = `(?:(?<!^)\\bfreq(?:uency)?:|\\*)`;
+	ruleTemplate.charStartFrequency = `(?:(?<!^)\\bfreq(?:uency)?:|(?:(?<!\\*)\\*))`;
 	ruleTemplate.charStartRepetition = `(?:(?<!^)\\brep(?:eat|etition)?:|(?<!#)#)`;
 	ruleTemplate.charStartStartover = `(?:(?<!^)\\bstart(?:again|over):|##)`;
 	ruleTemplate.charStartExpression = `(?:(?<!^)\\bexpr(?:ession)?:|::)`;
@@ -2608,7 +2633,7 @@ function getRegExpressions(): RuleTemplate {
 									)?
 									(?= {{delimiter}} )
 								)`;
-	ruleTemplate.frequency = `(?:(?:{{charStartFrequency}}) \\s* (?<freq> \\d+) (?= {{delimiter}} ))`;
+	ruleTemplate.frequency = `(?:(?<!{{charStartFrequency}})(?:{{charStartFrequency}}) \\s* (?<freq> \\d+) (?= {{delimiter}} ))`;
 	ruleTemplate.repetition = `(?:(?<!{{charStartRepetition}})(?: {{charStartRepetition}}) \\s* (?<repeat> \\d+ ) (?= {{delimiter}} ))`;
 	ruleTemplate.startover = `(?:(?:{{charStartStartover}}) \\s* (?<startover> \\d+) (?= {{delimiter}} ))`;
 	ruleTemplate.expression = `(?: {{charStartExpression}} \\s* 

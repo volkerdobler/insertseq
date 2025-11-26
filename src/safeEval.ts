@@ -118,6 +118,7 @@ function runInVmAssignResult(
 		try {
 			// If eval5 is present, prefer it for safer evaluation
 			if (typeof eval5.evaluate === 'function') {
+				// eval5.evaluate returns the evaluated value
 				return eval5.evaluate(code);
 			}
 			if (typeof eval5.eval === 'function') {
@@ -126,8 +127,9 @@ function runInVmAssignResult(
 			if (typeof eval5 === 'function') {
 				return eval5(code);
 			}
-		} catch (e) {
-			throw new Error(`eval5 execution failed: ${String(e)}`);
+		} catch {
+			// don't throw here: eval5 may fail for some inputs (e.g. leading '='),
+			// fall through to the browser/new Function fallback instead of aborting.
 		}
 	}
 
@@ -139,7 +141,7 @@ function runInVmAssignResult(
 		const keys = Object.keys(ctx);
 
 		// simple serializer: JSON for primitives/objects, function -> toString, fallback null
-		const serializeValue = (v: unknown): string => {
+		const serializeValueLocal = (v: unknown): string => {
 			try {
 				if (v === undefined) return 'undefined';
 				if (v === null) return 'null';
@@ -154,7 +156,7 @@ function runInVmAssignResult(
 		const ctxEntries = keys
 			.map(
 				(k) =>
-					`${JSON.stringify(k)}:${serializeValue((ctx as any)[k])}`,
+					`${JSON.stringify(k)}:${serializeValueLocal((ctx as any)[k])}`,
 			)
 			.join(',');
 
@@ -189,7 +191,7 @@ function runInVmAssignResult(
 				if (typeof evalFn === 'function') {
 					return evalFn(wrapped);
 				}
-			} catch (eEval) {
+			} catch {
 				// fall through to error below
 			}
 			throw eNewFn;
@@ -206,6 +208,17 @@ export function safeEvaluate(
 	timeout = 1000,
 	context: Record<string, unknown> | null = null,
 ): SafeEvalResult {
+	// normalize code: trim and remove leading '=' if present (users often type "=2")
+	if (typeof code !== 'string') {
+		code = String(code);
+	}
+	code = code.trim();
+	if (code.startsWith('=')) {
+		code = code.slice(1).trim();
+	}
+
+	let lastErr: unknown = null;
+
 	// 1) try evaluating as an expression by assigning to `result`
 	try {
 		const exprAssign = runInVmAssignResult(
@@ -215,15 +228,17 @@ export function safeEvaluate(
 		);
 		if (typeof exprAssign !== 'undefined')
 			return { ok: true, value: exprAssign };
-	} catch {
-		// continue
+	} catch (err) {
+		lastErr = err;
+		// continue to other attempts
 	}
 
 	// 2) try direct run (code may set result itself)
 	try {
 		const direct = runInVmAssignResult(code, context, timeout);
 		if (typeof direct !== 'undefined') return { ok: true, value: direct };
-	} catch {
+	} catch (err) {
+		lastErr = err;
 		// continue
 	}
 
@@ -239,7 +254,8 @@ export function safeEvaluate(
 			if (typeof exprRes !== 'undefined')
 				return { ok: true, value: exprRes };
 		}
-	} catch {
+	} catch (err) {
+		lastErr = err;
 		// continue
 	}
 
@@ -248,9 +264,14 @@ export function safeEvaluate(
 		const wrapped = `(function(){\n${code}\n})()`;
 		const w = runInVmAssignResult('result = ' + wrapped, context, timeout);
 		if (typeof w !== 'undefined') return { ok: true, value: w };
-	} catch (err: unknown) {
-		return { ok: false, error: String(err) };
+	} catch (err) {
+		lastErr = err;
+		// continue
 	}
 
+	// if nothing returned a value, but an error was captured, return it; otherwise return undefined success
+	if (lastErr !== null) {
+		return { ok: false, error: String(lastErr) };
+	}
 	return { ok: true, value: undefined };
 }
