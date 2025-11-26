@@ -28,7 +28,7 @@ import * as formatting from './formatting';
 import { safeEvaluate } from './safeEval';
 
 // internal console.log command, if debug is true
-let debugInsertseq = false;
+let debugInsertseq = true;
 
 let outputChannel: vscode.OutputChannel | null = null;
 
