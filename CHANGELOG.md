@@ -2,6 +2,10 @@
 
 All notable changes to this extension (newest first):
 
+# Version 1.0.6
+
+Quickfix: disable default debug mode
+
 # Version 1.0.5
 
 - Added own (predefined) functions (via config files) with the start char "=" or "func[tion]:" - it's similar to expressions, but you can predefine them upfront and use them easily.
