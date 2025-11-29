@@ -214,6 +214,11 @@
 					"default": "#888888",
 					"description": "Color of preview decoration"
 				},
+				"insertseq.previewStatus": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show preview of insertions"
+				},
 				"insertseq.maxInsertions": {
 					"type": "number",
 					"default": 10000,

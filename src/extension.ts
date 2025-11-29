@@ -9,6 +9,7 @@ Version 1.0 has some inspirations from the extension "VSCodeExtensionInsertSeque
 Volker Dobler
 original from May 2020
 rewritten November 2025
+last update December 2025
 
 */
 
@@ -231,6 +232,7 @@ async function InsertSeqCommand(
 
 	// get global parameter (config, regex, original selections etc.) - will be passed to subfunctions
 	const parameter: TParameter = await initApp(editor);
+
 	printToConsole('Initialized parameters for InsertSeqCommand');
 
 	// get current alphabet from configuration and replace placeholder in regex
@@ -245,8 +247,10 @@ async function InsertSeqCommand(
 			'[<start>][:<step>][*<frequency>][#<repeat>][##startover][~<format>][::<expr>][@<stopexpr>][$][!]',
 		value: value,
 		validateInput: function (input) {
-			printToConsole('Previewing input: ' + input);
-			insertNewSequence(input, parameter, 'preview');
+			if (parameter.config.get('previewStatus') !== false) {
+				printToConsole('Previewing input: ' + input);
+				insertNewSequence(input, parameter, 'preview');
+			}
 			return '';
 		},
 	};
@@ -2676,3 +2680,17 @@ function getRegExpressions(): RuleTemplate {
 
 	return matchRule;
 }
+
+// von Copilot erzeugte Funktion zum Finden von '* <Zahl>' außerhalb von Klammern und Strings
+function findStarsOutsideParens(s: string): string[] {
+	// Strings entfernen (inkl. escaped quotes)
+	s = s.replace(/"(?:[^"\\]|\\.)*"/g, '');
+	// Iterativ innerste Klammern löschen, bis keine mehr übrig sind
+	while (/\([^()]*\)/.test(s)) s = s.replace(/\([^()]*\)/g, '');
+	// Treffer außerhalb von Klammern/Strings finden
+	return s.match(/\*\s*\d+/g) || [];
+}
+
+// // Beispiele:
+// findStarsOutsideParens('( 5 + (3 - 2) * 5 )'); // -> []
+// findStarsOutsideParens('(xxx 5 * yyy) * 3');   // -> ['* 3']
