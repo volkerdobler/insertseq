@@ -31,6 +31,8 @@ If you have used this extension before, you can reuse previous inputs with the c
 
 # Examples (simple → advanced)
 
+## If you want to see the examples as "live" GIF film [click here](./EXAMPLES.md).
+
 ### Multi-cursor example (5 cursors)
 
 With five empty cursors, start `insertseq` and you will see a preview of numbers 1 to 5 (the default start is 1).

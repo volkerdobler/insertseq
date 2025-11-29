@@ -2,9 +2,21 @@
 
 All notable changes to this extension (newest first):
 
+# Version 1.0.7
+
+- Added a new configuration option to disable the sequence preview ('insertseq.previewStatus' [true (default) | false])
+- Improved identifier parsing: ignore content inside parentheses, double quotes, and single quotes
+- Add Examples.md with "live" GIF examples
+
+- Fixed bug in replacableValues: start and step values in the input were not respected
+- Fixed bug in checkStopExpression
+- Fixed regular expression for predefined values to non-space chars
+- Refactored extension.ts
+- Update package.json engine "vscode" to 1.106.0
+
 # Version 1.0.6
 
-Quickfix: disable default debug mode
+- Quickfix: disable default debug mode
 
 # Version 1.0.5
 
