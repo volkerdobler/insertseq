@@ -253,7 +253,7 @@ export function getRegExpressions(): RuleTemplate {
 								(?<start_predefined>
 									{{doublestring}}
 									| {{singlestring}}
-									| \\w+
+									| \\S+
 								)?
 								(?:
 									{{charStartOptions}}

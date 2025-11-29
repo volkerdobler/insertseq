@@ -123,7 +123,7 @@ export function checkStopExpression(
 		const exprResult = runExpression(
 			replaceSpecialChars(stopexpr, replacableValues),
 		);
-		if (exprResult) {
+		if (exprResult != null) {
 			stopExpressionTriggered = Boolean(exprResult);
 		} else {
 			stopExpressionTriggered = currentIndex >= selections;
