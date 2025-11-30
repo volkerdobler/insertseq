@@ -18,6 +18,7 @@ export function createFunctionSeq(
 	input: string,
 	parameter: TParameter,
 ): (i: number) => { stringFunction: string; stopFunction: boolean } {
+	// utility to load user-defined functions from configuration
 	function loadUserFunctionsFromConfig(
 		cfg: vscode.WorkspaceConfiguration,
 	): TOwnFunction[] {
@@ -88,6 +89,7 @@ export function createFunctionSeq(
 		return res;
 	}
 
+	// get all user-defined functions from configuration
 	const functionArray: TOwnFunction[] = loadUserFunctionsFromConfig(
 		parameter.config,
 	);

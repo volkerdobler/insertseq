@@ -24,6 +24,21 @@ export function getRegExpressions(): RuleTemplate {
 		stopexpression: '',
 		outputSort: '',
 		outputReverse: '',
+		charStartAlpha: '',
+		charStartDate: '',
+		charStartOwnSequence: '',
+		charStartPredefinedSequence: '',
+		charStartExpressionfunction: '',
+		charStartFunction: '',
+		charStartSteps: '',
+		charStartFormat: '',
+		charStartFrequency: '',
+		charStartRepetition: '',
+		charStartStartover: '',
+		charStartExpression: '',
+		charStartStopExpression: '',
+		charStartOptions: '',
+		easyexpression: '',
 	};
 
 	// String-Eingabe: (?:"(?:(?:(?<!\\\\)\\\\")|[^"])+")
@@ -43,18 +58,20 @@ export function getRegExpressions(): RuleTemplate {
 	ruleTemplate.charStartDate = `^\\s*(?:%|date:)`;
 	ruleTemplate.charStartOwnSequence = `^\\s*(?:\\[|(?:own(?:seq(?:uence)?)?:))`;
 	ruleTemplate.charStartPredefinedSequence = `^\\s*(?:;|predef(?:ined)?(?:seq(?:uence)?)?:)`;
-	ruleTemplate.charStartExpr = `^\\s*(?:\\||expr(?:ession)?:)`;
+	ruleTemplate.charStartExpressionfunction = `^\\s*(?:\\||expr(?:ession)?:)`;
 	ruleTemplate.charStartFunction = `^\\s*(?:=|func(?:tion)?:)`;
+	ruleTemplate.charStartAlpha = `^(^\\s*(?:(?:alpha(?:bet)?|string):)?)`;
 	// rules, which are normally not at the beginning of an input (but could be, when <start> is omitted/defaulted)
-	ruleTemplate.charStartSteps = `(?:(?<!^)\\bsteps?:|(?<!:|format|freq|frequency|func|function|rep|repeat|repetition|startat|startagain|startover|expr|expression|stop|stopexpr|stopexpression|option|options):)`;
-	ruleTemplate.charStartFormat = `(?:(?<!^)\\bformat:|~)`;
-	ruleTemplate.charStartFrequency = `(?:(?<!^)\\bfreq(?:uency)?:|(?:(?<!\\*)\\*))`;
-	ruleTemplate.charStartRepetition = `(?:(?<!^)\\brep(?:eat|etition)?:|(?<!#)#)`;
-	ruleTemplate.charStartStartover = `(?:(?<!^)\\bstart(?:again|over):|##)`;
-	ruleTemplate.charStartExpression = `(?:(?<!^)\\bexpr(?:ession)?:|::)`;
-	ruleTemplate.charStartStopExpression = `(?:(?<!^)\\bstop(?:expr(?:ession)?|if)?:|@)`;
+	ruleTemplate.charStartSteps = `(?:\\bsteps?:|(?<!:|format|freq|frequency|func|function|rep|repeat|repetition|startat|startagain|startover|expr|expression|stop|stopexpr|stopexpression|option|options):)`;
+	ruleTemplate.charStartFormat = `(?:\\bformat:|~)`;
+	ruleTemplate.charStartFrequency = `(?:\\bfreq(?:uency)?:|(?:(?<!\\*)\\*))`;
+	ruleTemplate.charStartRepetition = `(?:\\brep(?:eat|etition)?:|(?<!#)#)`;
+	ruleTemplate.charStartStartover = `(?:\\bstart(?:again|over):|##)`;
+	ruleTemplate.charStartExpression = `(?:\\bexpr(?:ession)?:|::)`;
+	ruleTemplate.charStartStopExpression = `(?:\\bstop(?:expr(?:ession)?|if)?:|@)`;
 	// optional information after charStartOptions
-	ruleTemplate.charStartOptions = `(?:(?<!^)\\bopt(?:ion(?:s)?)?:|\\?)`;
+	ruleTemplate.charStartOptions = `(?:\\bopt(?:ion(?:s)?)?:|\\?)`;
+	// sub-rules
 	ruleTemplate.specialchars = `(?:[_epasni])`;
 	ruleTemplate.dateunits = `(?:[dDwWmMyY])`;
 	ruleTemplate.predefinedoptions = `(?: [ifsIFS]+ )`;
@@ -178,7 +195,9 @@ export function getRegExpressions(): RuleTemplate {
 									(?= {{delimiter}} )
 								)`;
 	ruleTemplate.start_alpha = `^(?:
-									(?<start> [\\w]+ )
+									(?: {{charStartAlpha}} )
+									\\s*
+									(?<start> [\\u0]+ )
 									(?:
 										{{charStartOptions}}
 										(?<alphacapital> {{alphacapitalchars}} )
@@ -214,7 +233,7 @@ export function getRegExpressions(): RuleTemplate {
 									(?= {{delimiter}} )
 								)`;
 	ruleTemplate.start_expression = `^(?:
-										(?:{{charStartExpr}})
+										(?:{{charStartExpressionfunction}})
 										\\s*
 										(?<start>
 											{{doublestring}}
@@ -317,6 +336,9 @@ export function getRegExpressions(): RuleTemplate {
 									(?= {{delimiter}} )
 								)`;
 	ruleTemplate.steps_other = `(?:(?<!{{charStartSteps}})(?:{{charStartSteps}}) \\s* (?<steps> {{signedInt}}) (?= {{delimiter}} ))`;
+	ruleTemplate.repetition = `(?:(?<!{{charStartRepetition}})(?: {{charStartRepetition}}) \\s* (?<repeat> \\d+ ) (?= {{delimiter}} ))`;
+	ruleTemplate.frequency = `(?:(?<!{{charStartFrequency}})(?:{{charStartFrequency}}) \\s* (?<freq> \\d+) (?= {{delimiter}} ))`;
+	ruleTemplate.startover = `(?:(?:{{charStartStartover}}) \\s* (?<startover> \\d+) (?= {{delimiter}} ))`;
 	ruleTemplate.format_decimal = `(?:
 									{{charStartFormat}}
 									(?<format_decimal>
@@ -359,9 +381,6 @@ export function getRegExpressions(): RuleTemplate {
 									)?
 									(?= {{delimiter}} )
 								)`;
-	ruleTemplate.frequency = `(?:(?<!{{charStartFrequency}})(?:{{charStartFrequency}}) \\s* (?<freq> \\d+) (?= {{delimiter}} ))`;
-	ruleTemplate.repetition = `(?:(?<!{{charStartRepetition}})(?: {{charStartRepetition}}) \\s* (?<repeat> \\d+ ) (?= {{delimiter}} ))`;
-	ruleTemplate.startover = `(?:(?:{{charStartStartover}}) \\s* (?<startover> \\d+) (?= {{delimiter}} ))`;
 	ruleTemplate.expression = `(?: {{charStartExpression}} \\s* 
 								(?<expr>
 									{{doublestring}}

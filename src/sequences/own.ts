@@ -9,6 +9,7 @@ import {
 	getRepeatValue,
 	getStartOverValue,
 	getStopExpression,
+	getInputPart,
 	checkStopExpression,
 	getExpression,
 } from '../utils';
@@ -33,8 +34,10 @@ export function createOwnSeq(
 	const expr = getExpression(input, parameter);
 
 	const format =
-		input.match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
-		'';
+		getInputPart(
+			input,
+			new RegExp(parameter.segments['charStartFormat'], 'i'),
+		).match(parameter.segments['format_alpha'])?.groups?.format_alpha || '';
 
 	let ownSeq: string[] = [];
 

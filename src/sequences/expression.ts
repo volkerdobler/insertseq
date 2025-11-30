@@ -7,6 +7,7 @@ import {
 	getFrequencyValue,
 	getRepeatValue,
 	getStartOverValue,
+	getInputPart,
 	getStopExpression,
 	checkStopExpression,
 	getExpression,
@@ -28,7 +29,7 @@ export function createExpressionSeq(
 		? expressionMatch.groups.indoublequotes ||
 			expressionMatch.groups.insinglequotes ||
 			expressionMatch.groups.inbrackets ||
-			expressionMatch.groups.stopexpr ||
+			expressionMatch.groups.start ||
 			''
 		: '';
 	// extract stop expression

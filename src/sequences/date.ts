@@ -11,6 +11,7 @@ import {
 	getStartOverValue,
 	getStopExpression,
 	checkStopExpression,
+	getInputPart,
 	getExpression,
 } from '../utils';
 
@@ -75,7 +76,10 @@ export function createDateSeq(
 	const stopexpr = getStopExpression(input, parameter);
 	const expr = getExpression(input, parameter);
 
-	const parameterFormatDate = input.match(parameter.segments['format_date']);
+	const parameterFormatDate = getInputPart(
+		input,
+		new RegExp(parameter.segments['charStartFormat'], 'i'),
+	).match(parameter.segments['format_date']);
 	const format = parameterFormatDate?.groups?.dateformat
 		? parameterFormatDate?.groups?.indoublequotes ||
 			parameterFormatDate?.groups?.insinglequotes ||

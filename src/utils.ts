@@ -2,15 +2,18 @@ import * as vscode from 'vscode';
 import { TParameter, TSpecialReplacementValues } from './types';
 import { safeEvaluate } from './safeEval';
 
-// internal console.log command, if debug is true
+// global debug flag
 let debugInsertseq = false;
 
+// output channel for debug messages
 let outputChannel: vscode.OutputChannel | null = null;
 
+// functions to manage output channel
 export function setOutputChannel(name: string): void {
 	outputChannel = vscode.window.createOutputChannel(name);
 }
 
+// dispose output channel
 export function removeOutputChannel(): void {
 	if (outputChannel) {
 		outputChannel.dispose();
@@ -18,10 +21,12 @@ export function removeOutputChannel(): void {
 	}
 }
 
+// set debug mode (depends on global flag and configuration)
 export function setDebugMode(enabled: boolean): void {
 	debugInsertseq = debugInsertseq || enabled;
 }
 
+// print debug message to output channel or console
 export function printToConsole(str: string): void {
 	if (!debugInsertseq) {
 		return;
@@ -87,11 +92,34 @@ export function getStartOverValue(
 	);
 }
 
+export function getInputPart(input: string, regExpr: RegExp): string {
+	const maskedInput = maskPairedAndQuoted(input);
+	const startIndex = maskedInput.search(regExpr);
+	if (startIndex === -1) {
+		return '';
+	}
+	return input.slice(startIndex);
+}
+
 export function getStopExpression(
 	input: string,
 	parameter: TParameter,
 ): string {
-	const parameterStopexpr = input.match(parameter.segments['stopexpression']);
+	// mask paired and quoted segments to avoid misinterpreting @ inside them
+	const maskedInput = maskPairedAndQuoted(input);
+	// find stopexpression starting from first @
+	const startIndex = maskedInput.search(
+		new RegExp(parameter.segments['charStartStopExpression'], 'i'),
+	);
+	// if no stop expression is found, return empty string
+	if (startIndex === -1) {
+		return '';
+	}
+	// extract stopexpression from original input starting at found index
+	const parameterStopexpr = input
+		.slice(startIndex)
+		.match(parameter.segments['stopexpression']);
+	// return extracted stopexpression or empty string
 	return parameterStopexpr?.groups?.stopexpr
 		? parameterStopexpr.groups.indoublequotes ||
 				parameterStopexpr.groups.insinglequotes ||
@@ -102,7 +130,17 @@ export function getStopExpression(
 }
 
 export function getExpression(input: string, parameter: TParameter): string {
-	const parameterExpression = input.match(parameter.segments['expression']);
+	const maskedInput = maskPairedAndQuoted(input);
+	const startIndex = maskedInput.search(
+		new RegExp(parameter.segments['charStartExpression'], 'i'),
+	);
+	if (startIndex === -1) {
+		return '';
+	}
+
+	const parameterExpression = input
+		.slice(startIndex)
+		.match(parameter.segments['expression']);
 	return parameterExpression?.groups?.expr
 		? parameterExpression.groups.indoublequotes ||
 				parameterExpression.groups.insinglequotes ||
@@ -365,6 +403,143 @@ function removePairedAndQuoted(input: string): string {
 		}
 
 		// normal character -> keep
+		out.push(ch);
+		i++;
+	}
+	return out.join('');
+}
+
+export function maskPairedAndQuoted(input: string): string {
+	const opens: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
+	const openChars = new Set(Object.keys(opens));
+	const closeChars = new Set(Object.values(opens));
+
+	const isEscaped = (s: string, pos: number): boolean => {
+		let k = pos - 1;
+		let count = 0;
+		while (k >= 0 && s[k] === '\\') {
+			count++;
+			k--;
+		}
+		return count % 2 === 1;
+	};
+
+	const findQuoteEnd = (s: string, start: number): number => {
+		const quote = s[start];
+		let j = start + 1;
+		while (j < s.length) {
+			if (s[j] === quote && !isEscaped(s, j)) return j;
+			if (s[j] === '\\' && !isEscaped(s, j)) {
+				j += 2;
+				continue;
+			}
+			j++;
+		}
+		return -1;
+	};
+
+	const findMatchingBracket = (s: string, start: number): number => {
+		const opening = s[start];
+		const expectedStack: string[] = [opens[opening]];
+		let j = start + 1;
+		while (j < s.length) {
+			const ch = s[j];
+
+			if (isEscaped(s, j)) {
+				j++;
+				continue;
+			}
+
+			if (ch === '\\') {
+				j += 2;
+				continue;
+			}
+
+			if ((ch === '"' || ch === "'") && !isEscaped(s, j)) {
+				const qend = findQuoteEnd(s, j);
+				if (qend === -1) {
+					j++;
+				} else {
+					j = qend + 1;
+				}
+				continue;
+			}
+
+			if (openChars.has(ch) && !isEscaped(s, j)) {
+				expectedStack.push(opens[ch]);
+				j++;
+				continue;
+			}
+
+			if (closeChars.has(ch) && !isEscaped(s, j)) {
+				if (
+					expectedStack.length > 0 &&
+					ch === expectedStack[expectedStack.length - 1]
+				) {
+					expectedStack.pop();
+					if (expectedStack.length === 0) return j;
+				}
+			}
+
+			j++;
+		}
+		return -1;
+	};
+
+	let i = 0;
+	const out: string[] = [];
+	while (i < input.length) {
+		const ch = input[i];
+
+		// If this char is escaped, copy literally
+		if (isEscaped(input, i)) {
+			out.push(ch);
+			i++;
+			continue;
+		}
+
+		// Preserve escaped pair as-is (backslash + next char)
+		if (ch === '\\') {
+			if (i + 1 < input.length) {
+				out.push(ch, input[i + 1]);
+				i += 2;
+			} else {
+				out.push(ch);
+				i++;
+			}
+			continue;
+		}
+
+		// Quotes: replace entire quoted segment (including delimiters) with spaces
+		if ((ch === '"' || ch === "'") && !isEscaped(input, i)) {
+			const qend = findQuoteEnd(input, i);
+			if (qend === -1) {
+				// unclosed quote -> replace quote char with a space and continue
+				out.push(' ');
+				i++;
+			} else {
+				const len = qend - i + 1;
+				for (let k = 0; k < len; k++) out.push(' ');
+				i = qend + 1;
+			}
+			continue;
+		}
+
+		// Opening brackets: replace entire bracketed segment with spaces
+		if (openChars.has(ch) && !isEscaped(input, i)) {
+			const bend = findMatchingBracket(input, i);
+			if (bend === -1) {
+				out.push(ch);
+				i++;
+			} else {
+				const len = bend - i + 1;
+				for (let k = 0; k < len; k++) out.push(' ');
+				i = bend + 1;
+			}
+			continue;
+		}
+
+		// Normal character -> keep
 		out.push(ch);
 		i++;
 	}

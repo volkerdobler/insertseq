@@ -11,6 +11,7 @@ import {
 	getStopExpression,
 	checkStopExpression,
 	getExpression,
+	getInputPart,
 } from '../utils';
 
 export function createStringSeq(
@@ -66,9 +67,43 @@ export function createStringSeq(
 		return chars.join('');
 	}
 
+	// support string or array in configuration
+	const alphabetRaw: string | string[] =
+		parameter.config.get('alphabet') || 'abcdefghijklmnopqrstuvwxyz';
+	const alphabetArr: string[] = Array.isArray(alphabetRaw)
+		? alphabetRaw.map(String)
+		: Array.from(String(alphabetRaw));
+
+	// check alphabet for unique entries
+	const uniqAlphabet = new Set(alphabetArr);
+	if (uniqAlphabet.size !== alphabetArr.length) {
+		throw new Error('Alphabet includes double entries!');
+	}
+
+	const charToIndex = new Map<string, number>();
+	// Build mapping that accepts both lower/upper input forms but keeps alphabetArr as canonical output values
+	alphabetArr.forEach((char: string, i: number) => {
+		charToIndex.set(char, i);
+		const lower = char.toLowerCase();
+		const upper = char.toUpperCase();
+		if (!charToIndex.has(lower)) {
+			charToIndex.set(lower, i);
+		}
+		if (!charToIndex.has(upper)) {
+			charToIndex.set(upper, i);
+		}
+	});
+	const alphabetLen = alphabetArr.length;
+
+	// replace character class in start_alpha segment with current / allowed alphabet characters (\\u0)
+	parameter.segments['start_alpha'] = parameter.segments[
+		'start_alpha'
+	].replace(/\\u0/, alphabetArr.join(''));
+
 	// extract start value as regex group to allow lowercase/uppercase detection
-	const startRegEx = new RegExp(parameter.segments['start_alpha'], 'i');
-	const startMatch = input.match(startRegEx);
+	const startMatch = input.match(
+		new RegExp(parameter.segments['start_alpha'], 'i'),
+	);
 
 	const start = startMatch?.groups?.start || '';
 
@@ -86,7 +121,10 @@ export function createStringSeq(
 	const stopexpr = getStopExpression(input, parameter);
 	const expr = getExpression(input, parameter);
 	const format =
-		input.match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
+		getInputPart(
+			input,
+			new RegExp(parameter.segments['charStartFormat'], 'i'),
+		).match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
 		String(parameter.config.get('stringFormat')) ||
 		'';
 
@@ -119,34 +157,6 @@ export function createStringSeq(
 			capital = 'pascal';
 			break;
 	}
-
-	// support string or array in configuration
-	const alphabetRaw =
-		parameter.config.get('alphabet') || 'abcdefghijklmnopqrstuvwxyz';
-	const alphabetArr: string[] = Array.isArray(alphabetRaw)
-		? alphabetRaw.map(String)
-		: Array.from(String(alphabetRaw));
-
-	// check alphabet for unique entries
-	const uniqAlphabet = new Set(alphabetArr);
-	if (uniqAlphabet.size !== alphabetArr.length) {
-		throw new Error('Alphabet includes double entries!');
-	}
-
-	const charToIndex = new Map<string, number>();
-	// Build mapping that accepts both lower/upper input forms but keeps alphabetArr as canonical output values
-	alphabetArr.forEach((char: string, i: number) => {
-		charToIndex.set(char, i);
-		const lower = char.toLowerCase();
-		const upper = char.toUpperCase();
-		if (!charToIndex.has(lower)) {
-			charToIndex.set(lower, i);
-		}
-		if (!charToIndex.has(upper)) {
-			charToIndex.set(upper, i);
-		}
-	});
-	const alphabetLen = alphabetArr.length;
 
 	// prepare special replacement values for expressions and stop expressions
 	const replacableValues: TSpecialReplacementValues = {

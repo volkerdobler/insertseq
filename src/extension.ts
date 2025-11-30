@@ -483,7 +483,8 @@ function getInputType(input: string, p: TParameter): TInput | null {
 	let type: TInput = null;
 
 	// get current alphabet from configuration
-	const alphabet: string = p.config.get('alphabet') || '';
+	const alphabet: string =
+		p.config.get('alphabet') || 'abcdefghijklmnopqrstuvwxyz';
 
 	// helper: regex-escape
 	const escapeForRegex = (s: string) =>
@@ -492,7 +493,7 @@ function getInputType(input: string, p: TParameter): TInput | null {
 	// define regex for alphabetic characters based on current alphabet (from configuration)
 	const chars = Array.from(alphabet).map(escapeForRegex).join('');
 	const reAlphabetCharClass = new RegExp(
-		'^\s*(?:alpha(?:bet)?:)?[' + chars + ']',
+		p.segments['charStartAlpha'] + '\\s*[' + chars + ']',
 		'iu',
 	);
 
@@ -515,7 +516,9 @@ function getInputType(input: string, p: TParameter): TInput | null {
 			type = 'decimal';
 			break;
 		// expression
-		case /^\s*(?:\||expr(?:ession)?:)/i.test(input):
+		case new RegExp(p.segments['charStartExpressionfunction'], 'i').test(
+			input,
+		):
 			type = 'expression';
 			break;
 		// strings (alphabetic)
@@ -523,19 +526,21 @@ function getInputType(input: string, p: TParameter): TInput | null {
 			type = 'alpha';
 			break;
 		// date values
-		case /^\s*(?:%|date:)/i.test(input):
+		case new RegExp(p.segments['charStartDate'], 'i').test(input):
 			type = 'date';
 			break;
 		// own sequences
-		case /^\s*(?:\[|(?:own(?:seq(?:uence)?)?:))/i.test(input):
+		case new RegExp(p.segments['charStartOwnSequence'], 'i').test(input):
 			type = 'own';
 			break;
 		// predefined sequences
-		case /^\s*(?:;|predef(?:ined)?(?:seq(?:uence)?)?:)/i.test(input):
+		case new RegExp(p.segments['charStartPredefinedSequence'], 'i').test(
+			input,
+		):
 			type = 'predefined';
 			break;
 		// predefined functions
-		case /^\s*(?:=|func(?:tion)?:)/i.test(input):
+		case new RegExp(p.segments['charStartFunction'], 'i').test(input):
 			type = 'function';
 			break;
 		// empty input (when input box is empty) - use selected text if available or decimal as default

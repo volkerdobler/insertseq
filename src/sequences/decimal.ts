@@ -8,6 +8,7 @@ import {
 	getFrequencyValue,
 	getRepeatValue,
 	getStartOverValue,
+	getInputPart,
 	getStopExpression,
 	checkStopExpression,
 	getExpression,
@@ -67,7 +68,10 @@ export function createDecimalSeq(
 		: radixPrefix
 			? basePrefix
 			: String(
-					input.match(parameter.segments['format_decimal'])?.groups
+					getInputPart(
+						input,
+						new RegExp(parameter.segments['charStartFormat'], 'i'),
+					).match(parameter.segments['format_decimal'])?.groups
 						?.format_decimal ??
 						String(parameter.config.get('numberFormat')) ??
 						'',

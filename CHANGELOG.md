@@ -4,15 +4,15 @@ All notable changes to this extension (newest first):
 
 # Version 1.0.7
 
-- Added a new configuration option to disable the sequence preview ('insertseq.previewStatus' [true (default) | false])
-- Improved identifier parsing: ignore content inside parentheses, double quotes, and single quotes
-- Add Examples.md with "live" GIF examples
+- Added a configuration option (`insertseq.previewStatus`) to enable or disable the live sequence preview (default: true)
+- Improved identifier parsing: ignore content inside parentheses, double quotes, and single quotes when identifying options
+- Added `EXAMPLES.md` with live GIF examples
 
-- Fixed bug in replacableValues: start and step values in the input were not respected
-- Fixed bug in checkStopExpression
-- Fixed regular expression for predefined values to non-space chars
-- Refactored extension.ts
-- Update package.json engine "vscode" to 1.106.0
+- Fixed a bug in `replaceableValues` so start and step values in the input are respected if reasonable
+- Fixed a bug in `checkStopExpression`
+- Fixed regular-expression bugs and improved others
+- Refactored `extension.ts`
+- Updated the `vscode` engine in `package.json` to `1.106.0`
 
 # Version 1.0.6
 
