@@ -64,7 +64,7 @@ export function createDecimalSeq(
 
 	// format string: leading string (if given) or radixPrefix if given or format from input or configuration or empty
 	const format = leadString
-		? leadString[0] + '>' + input.length
+		? leadString[0] + '>' + (leadString.length + start.toString().length)
 		: radixPrefix
 			? basePrefix
 			: String(
@@ -141,7 +141,7 @@ export function createDecimalSeq(
 			let exprResult = runExpression(
 				replaceSpecialChars(expr, replacableValues),
 			);
-			if (Number.isFinite(exprResult)) {
+			if (Number(exprResult)) {
 				value = Number(exprResult);
 			}
 		} catch {

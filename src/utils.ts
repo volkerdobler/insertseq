@@ -138,9 +138,13 @@ export function getExpression(input: string, parameter: TParameter): string {
 		return '';
 	}
 
-	const parameterExpression = input
-		.slice(startIndex)
-		.match(parameter.segments['expression']);
+	const regExpString = replaceLeadingWrappedParenthesesWithQuotes(
+		input.slice(startIndex),
+	);
+
+	const parameterExpression = regExpString.match(
+		parameter.segments['expression'],
+	);
 	return parameterExpression?.groups?.expr
 		? parameterExpression.groups.indoublequotes ||
 				parameterExpression.groups.insinglequotes ||
@@ -191,9 +195,10 @@ export function replaceSpecialChars(
 	return st
 		.replace(
 			/\b_\b/gi,
-			Number(para.currentValueStr)
-				? para.currentValueStr
-				: `'${para.currentValueStr}'`,
+			// Number(para.currentValueStr)
+			// 	? para.currentValueStr
+			// 	: `'${para.currentValueStr}'`,
+			`'${para.currentValueStr}'`,
 		)
 		.replace(
 			/\bo\b/gi,
@@ -262,7 +267,17 @@ function clearInput(input: string | undefined): string {
 	return removePairedAndQuoted(input);
 }
 
-function removePairedAndQuoted(input: string): string {
+function isEscaped(s: string, pos: number): boolean {
+	let k = pos - 1;
+	let count = 0;
+	while (k >= 0 && s[k] === '\\') {
+		count++;
+		k--;
+	}
+	return count % 2 === 1;
+}
+
+export function removePairedAndQuoted(input: string): string {
 	const opens: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
 	const openChars = new Set(Object.keys(opens));
 	const closeChars = new Set(Object.values(opens));
@@ -424,11 +439,14 @@ export function maskPairedAndQuoted(input: string): string {
 		return count % 2 === 1;
 	};
 
+	// Helper: find end of quote starting at `start` (handles escapes)
 	const findQuoteEnd = (s: string, start: number): number => {
 		const quote = s[start];
 		let j = start + 1;
 		while (j < s.length) {
+			// if this quote char is not escaped, it's the end
 			if (s[j] === quote && !isEscaped(s, j)) return j;
+			// if an unescaped backslash, skip next char
 			if (s[j] === '\\' && !isEscaped(s, j)) {
 				j += 2;
 				continue;
@@ -438,6 +456,8 @@ export function maskPairedAndQuoted(input: string): string {
 		return -1;
 	};
 
+	// Find matching closing bracket for bracket at `start`.
+	// Skips escaped characters and quoted subsections.
 	const findMatchingBracket = (s: string, start: number): number => {
 		const opening = s[start];
 		const expectedStack: string[] = [opens[opening]];
@@ -445,16 +465,19 @@ export function maskPairedAndQuoted(input: string): string {
 		while (j < s.length) {
 			const ch = s[j];
 
+			// if this char is escaped (i.e. preceded by an odd number of backslashes), treat literal
 			if (isEscaped(s, j)) {
 				j++;
 				continue;
 			}
 
+			// handle unescaped backslash: skip next char
 			if (ch === '\\') {
 				j += 2;
 				continue;
 			}
 
+			// skip quoted sections inside brackets (only if quote is not escaped)
 			if ((ch === '"' || ch === "'") && !isEscaped(s, j)) {
 				const qend = findQuoteEnd(s, j);
 				if (qend === -1) {
@@ -465,12 +488,14 @@ export function maskPairedAndQuoted(input: string): string {
 				continue;
 			}
 
+			// opening bracket -> push its closer (only if not escaped)
 			if (openChars.has(ch) && !isEscaped(s, j)) {
 				expectedStack.push(opens[ch]);
 				j++;
 				continue;
 			}
 
+			// closing bracket -> check stack top (only if not escaped)
 			if (closeChars.has(ch) && !isEscaped(s, j)) {
 				if (
 					expectedStack.length > 0 &&
@@ -544,4 +569,108 @@ export function maskPairedAndQuoted(input: string): string {
 		i++;
 	}
 	return out.join('');
+}
+
+export function replaceLeadingWrappedParenthesesWithQuotes(
+	input: string,
+): string {
+	// skip initial non-alphanumeric chars (unless escaped)
+	let i = 0;
+	while (i < input.length) {
+		if (isEscaped(input, i)) break;
+		if (!/[:@#\*]/.test(input[i])) break;
+		i++;
+	}
+	// skip spaces after them (unless escaped)
+	while (i < input.length && input[i] === ' ' && !isEscaped(input, i)) i++;
+
+	if (i >= input.length) return input;
+
+	// next must be an unescaped opening parenthesis
+	if (input[i] !== '(' || isEscaped(input, i)) return input;
+
+	// helper: find end of quote starting at `start` (handles escapes)
+	const findQuoteEnd = (s: string, start: number): number => {
+		const quote = s[start];
+		let j = start + 1;
+		while (j < s.length) {
+			if (s[j] === quote && !isEscaped(s, j)) return j;
+			if (s[j] === '\\' && !isEscaped(s, j)) {
+				j += 2;
+				continue;
+			}
+			j++;
+		}
+		return -1;
+	};
+
+	// find matching closing parenthesis handling nesting, quotes and escapes
+	const findMatchingParen = (s: string, start: number): number => {
+		let depth = 1;
+		let j = start + 1;
+		while (j < s.length) {
+			if (isEscaped(s, j)) {
+				j++;
+				continue;
+			}
+			const ch = s[j];
+			if (ch === '\\') {
+				j += 2;
+				continue;
+			}
+			if (ch === '"' || ch === "'") {
+				const qend = findQuoteEnd(s, j);
+				j = qend === -1 ? j + 1 : qend + 1;
+				continue;
+			}
+			if (ch === '(') {
+				depth++;
+			} else if (ch === ')') {
+				depth--;
+				if (depth === 0) return j;
+			}
+			j++;
+		}
+		return -1;
+	};
+
+	const bend = findMatchingParen(input, i);
+	if (bend === -1) return input; // no matching closer -> unchanged
+
+	// helper: test for unescaped presence of a char inside range [a,b)
+	const hasUnescaped = (
+		s: string,
+		a: number,
+		b: number,
+		chTest: string,
+	): boolean => {
+		for (let k = a; k < b; k++) {
+			if (s[k] === chTest && !isEscaped(s, k)) return true;
+			if (s[k] === '\\' && !isEscaped(s, k)) k++; // skip next
+		}
+		return false;
+	};
+
+	const innerStart = i + 1;
+	const innerEnd = bend;
+	const hasDouble = hasUnescaped(input, innerStart, innerEnd, '"');
+	const hasSingle = hasUnescaped(input, innerStart, innerEnd, "'");
+
+	// decide replacement char:
+	// - if no double quotes inside -> use double quotes
+	// - else if double inside but no single inside -> use single quotes
+	// - else (both present) -> leave input unchanged
+	let replacementQuote: string | null = null;
+	if (!hasDouble) replacementQuote = '"';
+	else if (hasDouble && !hasSingle) replacementQuote = "'";
+	else return input;
+
+	// construct result: keep everything, but replace outer '(' and ')' with the chosen quote
+	return (
+		input.slice(0, i) +
+		replacementQuote +
+		input.slice(innerStart, innerEnd) +
+		replacementQuote +
+		input.slice(bend + 1)
+	);
 }
