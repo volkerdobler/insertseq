@@ -138,6 +138,7 @@ export function getExpression(input: string, parameter: TParameter): string {
 		return '';
 	}
 
+	// replace leading wrapped parentheses with quotes to simplify extraction (because regex can't handle nested parentheses)
 	const regExpString = replaceLeadingWrappedParenthesesWithQuotes(
 		input.slice(startIndex),
 	);

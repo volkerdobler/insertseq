@@ -10,7 +10,8 @@ All notable changes to this extension (newest first):
 
 - Fixed a bug in `replaceableValues` so start and step values in the input are respected if reasonable
 - Fixed a bug in `checkStopExpression`
-- Fixed regular-expression bugs and improved others
+- Fixed regular-expression bugs
+- Fixed a bug with leading characters in decimals
 - Refactored `extension.ts`
 - Updated the `vscode` engine in `package.json` to `1.106.0`
 
