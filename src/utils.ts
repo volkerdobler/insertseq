@@ -23,7 +23,7 @@ export function removeOutputChannel(): void {
 
 // set debug mode (depends on global flag and configuration)
 export function setDebugMode(enabled: boolean): void {
-	debugInsertseq = debugInsertseq || enabled;
+	debugInsertseq = enabled;
 }
 
 // print debug message to output channel or console

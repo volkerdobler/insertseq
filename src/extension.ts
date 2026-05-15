@@ -367,19 +367,20 @@ function insertNewSequence(
 
 			parameter.editor.edit((builder) => {
 				let addStr = '';
+				const overflowLines: string[] = [];
 
 				// if no strings created, use original selected text as backup
 				if (strList.length === 0) {
 					parameter.origTextSel.map((s) => strList.push(s));
 				}
 
+				const maxIndex =
+					delimiter == null
+						? insertCursorPos.length
+						: insertCursorPos.length - 1;
+
 				// for each created string, insert at original cursor position. If more strings than original cursors, insert the rest at the end (with delimiter or newline symbol)
 				strList.forEach((str, index) => {
-					// insert strings in original Selection
-					const maxIndex =
-						delimiter == null
-							? insertCursorPos.length
-							: insertCursorPos.length - 1;
 					if (index < maxIndex) {
 						const currSel = new vscode.Selection(
 							insertCursorPos[index].start.line,
@@ -389,30 +390,35 @@ function insertNewSequence(
 						);
 						builder.replace(currSel, str);
 					} else {
-						// insert additional insertions as newlines
 						if (delimiter == null) {
-							// insert decoration at new line as long as not end of document
-
-							// at the end of document, insert additional lines
-							const currSel = new vscode.Position(
-								insertCursorPos[maxIndex - 1].start.line + 1,
-								0,
-							);
-							// insert new line first if insert at last line of document
-							if (
-								currSel.line ===
-								parameter.editor.document.lineCount
-							) {
-								builder.insert(currSel, eolString + str);
-							} else {
-								builder.insert(currSel, str + eolString);
-							}
+							overflowLines.push(str);
 						} else {
-							// insert additional strings with "delimiter"
 							addStr += str + delimiter;
 						}
 					}
 				});
+
+				// insert all overflow lines as a single operation to preserve correct order
+				if (overflowLines.length > 0) {
+					const lastLine =
+						insertCursorPos[maxIndex - 1].start.line;
+					const insertPos = new vscode.Position(lastLine + 1, 0);
+					if (
+						insertPos.line ===
+						parameter.editor.document.lineCount
+					) {
+						builder.insert(
+							insertPos,
+							eolString + overflowLines.join(eolString),
+						);
+					} else {
+						builder.insert(
+							insertPos,
+							overflowLines.join(eolString) + eolString,
+						);
+					}
+				}
+
 				if (addStr.length > 0) {
 					const lastPos = insertCursorPos[insertCursorPos.length - 1];
 					const currSel = new vscode.Range(
@@ -421,10 +427,7 @@ function insertNewSequence(
 						lastPos.end.line,
 						lastPos.end.character,
 					);
-					builder.replace(
-						currSel,
-						addStr.slice(0, -1).replace(/\s/g, '\u00A0'),
-					);
+					builder.replace(currSel, addStr.slice(0, -1));
 				}
 			});
 			break;

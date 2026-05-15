@@ -175,7 +175,7 @@ export function createStringSeq(
 
 	// return the sequence function (i = current index of insertion, starting with 0)
 	return (i) => {
-		if (i <= parameter.origTextSel.length) {
+		if (i < parameter.origTextSel.length) {
 			replacableValues.origTextStr = parameter.origTextSel[i];
 		} else {
 			replacableValues.origTextStr = '';

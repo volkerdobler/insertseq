@@ -153,9 +153,11 @@ export function createPredefinedSeq(
 
 		replacableValues.currentValueStr =
 			ownSeq[
-				(start +
+				(((start +
 					step *
 						Math.trunc(((i % startover) % (freq * repe)) / freq)) %
+					ownSeq.length) +
+					ownSeq.length) %
 					ownSeq.length
 			];
 

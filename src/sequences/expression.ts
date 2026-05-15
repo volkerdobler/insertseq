@@ -48,7 +48,7 @@ export function createExpressionSeq(
 
 	// return function for each index/item
 	return (i) => {
-		if (i <= parameter.origTextSel.length) {
+		if (i < parameter.origTextSel.length) {
 			replacableValues.origTextStr = parameter.origTextSel[i];
 			// set current value to original selection text for use in expression
 			replacableValues.currentValueStr = parameter.origTextSel[i];

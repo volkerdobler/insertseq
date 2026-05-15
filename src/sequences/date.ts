@@ -67,7 +67,7 @@ export function createDateSeq(
 
 	const unit =
 		input.match(parameter.segments['steps_date'])?.groups?.date_unit ||
-		parameter.config.get('date_unit') ||
+		parameter.config.get('dateStepUnit') ||
 		'd';
 
 	const freq = getFrequencyValue(input, parameter);
@@ -168,7 +168,7 @@ export function createDateSeq(
 			return value;
 		}
 
-		if (i <= parameter.origTextSel.length) {
+		if (i < parameter.origTextSel.length) {
 			replacableValues.origTextStr = parameter.origTextSel[i];
 		} else {
 			replacableValues.origTextStr = '';

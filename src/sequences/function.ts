@@ -139,7 +139,7 @@ export function createFunctionSeq(
 		const value = myFunc(i, functionStartAt, steps, freq, repe, startover);
 
 		// set special replacement values for origTextStr and currentIndexStr
-		if (i <= parameter.origTextSel.length) {
+		if (i < parameter.origTextSel.length) {
 			replacableValues.origTextStr = parameter.origTextSel[i];
 		}
 		replacableValues.currentIndexStr = i.toString();
