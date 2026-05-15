@@ -8,6 +8,17 @@ import {
 	runExpression,
 } from '../utils';
 
+/**
+ * Build the sequence function that re-inserts the originally selected text.
+ *
+ * Used when the input box is left empty and text was selected before the
+ * command was invoked. An optional `::expr` can transform each selection
+ * before re-insertion, and `~format` applies string padding/alignment.
+ *
+ * @param input - Raw user input string (typically empty or format/expression only).
+ * @param parameter - Shared command context.
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
 export function createTextSelectedSeq(
 	input: string,
 	parameter: TParameter,

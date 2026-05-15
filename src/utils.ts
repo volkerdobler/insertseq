@@ -8,12 +8,19 @@ let debugInsertseq = false;
 // output channel for debug messages
 let outputChannel: vscode.OutputChannel | null = null;
 
-// functions to manage output channel
+/**
+ * Create (or recreate) the named output channel used for debug messages.
+ *
+ * @param name - Display name shown in the VS Code Output panel.
+ */
 export function setOutputChannel(name: string): void {
 	outputChannel = vscode.window.createOutputChannel(name);
 }
 
-// dispose output channel
+/**
+ * Dispose the output channel and release its resources.
+ * Called from the extension's `deactivate` hook.
+ */
 export function removeOutputChannel(): void {
 	if (outputChannel) {
 		outputChannel.dispose();
@@ -21,12 +28,21 @@ export function removeOutputChannel(): void {
 	}
 }
 
-// set debug mode (depends on global flag and configuration)
+/**
+ * Enable or disable debug logging for the current session.
+ *
+ * @param enabled - Pass `true` to activate debug output.
+ */
 export function setDebugMode(enabled: boolean): void {
 	debugInsertseq = enabled;
 }
 
-// print debug message to output channel or console
+/**
+ * Write a debug message to the output channel (or `console.log` as fallback).
+ * Does nothing when debug mode is off.
+ *
+ * @param str - Message to log.
+ */
 export function printToConsole(str: string): void {
 	if (!debugInsertseq) {
 		return;
@@ -38,6 +54,15 @@ export function printToConsole(str: string): void {
 	}
 }
 
+/**
+ * Extract the step value from the input string, falling back to the
+ * workspace configuration and finally to `1`.
+ *
+ * @param input - Raw user input string.
+ * @param parameter - Shared command context.
+ * @param which - Which step regex segment to use (`"steps_decimal"` by default).
+ * @returns Parsed step as a number (never `NaN` — defaults to `1`).
+ */
 export function getStepValue(
 	input: string,
 	parameter: TParameter,
@@ -53,6 +78,14 @@ export function getStepValue(
 	);
 }
 
+/**
+ * Extract the frequency value from the input string, falling back to the
+ * workspace configuration and finally to `1`.
+ *
+ * @param input - Raw user input string.
+ * @param parameter - Shared command context.
+ * @returns Parsed frequency as a number (minimum 1).
+ */
 export function getFrequencyValue(
 	input: string,
 	parameter: TParameter,
@@ -67,6 +100,15 @@ export function getFrequencyValue(
 	);
 }
 
+/**
+ * Extract the repetition value from the input string, falling back to the
+ * workspace configuration and finally to `Number.MAX_SAFE_INTEGER` (= no
+ * repetition limit).
+ *
+ * @param input - Raw user input string.
+ * @param parameter - Shared command context.
+ * @returns Parsed repetition count, or `Number.MAX_SAFE_INTEGER` when absent.
+ */
 export function getRepeatValue(input: string, parameter: TParameter): number {
 	const stripInput = clearInput(input);
 
@@ -78,6 +120,15 @@ export function getRepeatValue(input: string, parameter: TParameter): number {
 	);
 }
 
+/**
+ * Extract the startover value from the input string, falling back to the
+ * workspace configuration and finally to `Number.MAX_SAFE_INTEGER` (= never
+ * restart unconditionally).
+ *
+ * @param input - Raw user input string.
+ * @param parameter - Shared command context.
+ * @returns Parsed startover interval, or `Number.MAX_SAFE_INTEGER` when absent.
+ */
 export function getStartOverValue(
 	input: string,
 	parameter: TParameter,
@@ -92,6 +143,15 @@ export function getStartOverValue(
 	);
 }
 
+/**
+ * Return the suffix of `input` starting at the first position where `regExpr`
+ * matches, after masking paired brackets and quoted strings so that delimiters
+ * inside them are not accidentally treated as segment boundaries.
+ *
+ * @param input - Raw user input string.
+ * @param regExpr - Regex that identifies the start of the desired segment.
+ * @returns The tail of `input` from the match position onward, or `""` if not found.
+ */
 export function getInputPart(input: string, regExpr: RegExp): string {
 	const maskedInput = maskPairedAndQuoted(input);
 	const startIndex = maskedInput.search(regExpr);
@@ -101,6 +161,18 @@ export function getInputPart(input: string, regExpr: RegExp): string {
 	return input.slice(startIndex);
 }
 
+/**
+ * Extract the stop-expression string from the input, or return `""` when
+ * none is present.
+ *
+ * Paired brackets and quoted strings are masked before searching so that an
+ * `@` inside an expression body is not mistaken for the stop-expression
+ * delimiter.
+ *
+ * @param input - Raw user input string.
+ * @param parameter - Shared command context.
+ * @returns The stop-expression source string (without surrounding delimiters/quotes).
+ */
 export function getStopExpression(
 	input: string,
 	parameter: TParameter,
@@ -129,6 +201,14 @@ export function getStopExpression(
 		: '';
 }
 
+/**
+ * Extract the inline expression (`::expr`) from the input string, or return
+ * `""` when none is present.
+ *
+ * @param input - Raw user input string.
+ * @param parameter - Shared command context.
+ * @returns The expression source string (without surrounding delimiters/quotes).
+ */
 export function getExpression(input: string, parameter: TParameter): string {
 	const maskedInput = maskPairedAndQuoted(input);
 	const startIndex = maskedInput.search(
@@ -155,6 +235,19 @@ export function getExpression(input: string, parameter: TParameter): string {
 		: '';
 }
 
+/**
+ * Evaluate the stop expression for insertion index `currentIndex` and return
+ * whether the sequence should stop.
+ *
+ * Falls back to `currentIndex >= selections` when the expression is empty,
+ * evaluates to `null`, or throws.
+ *
+ * @param currentIndex - Zero-based index of the current insertion.
+ * @param stopexpr - Stop-expression source string (may be empty).
+ * @param selections - Total number of cursor positions.
+ * @param replacableValues - Token values substituted before evaluation.
+ * @returns `true` when the sequence should stop, `false` to continue.
+ */
 export function checkStopExpression(
 	currentIndex: number,
 	stopexpr: string,
@@ -180,6 +273,27 @@ export function checkStopExpression(
 	return stopExpressionTriggered;
 }
 
+/**
+ * Substitute the single-letter expression tokens in `st` with their current
+ * runtime values from `para`.
+ *
+ * Token mapping:
+ * - `_` → current value before expression
+ * - `o` → original selected text
+ * - `c` → current value after expression
+ * - `p` → previous value
+ * - `a` → start value
+ * - `s` → step value
+ * - `n` → number of selections
+ * - `i` → current zero-based index
+ *
+ * Numeric values are substituted bare; string values are wrapped in single
+ * quotes so the resulting string is valid JavaScript.
+ *
+ * @param st - Expression or stop-expression string containing tokens.
+ * @param para - Current token values.
+ * @returns The string with all tokens replaced by their current values.
+ */
 export function replaceSpecialChars(
 	st: string,
 	para: TSpecialReplacementValues,
@@ -196,9 +310,6 @@ export function replaceSpecialChars(
 	return st
 		.replace(
 			/\b_\b/gi,
-			// Number(para.currentValueStr)
-			// 	? para.currentValueStr
-			// 	: `'${para.currentValueStr}'`,
 			`'${para.currentValueStr}'`,
 		)
 		.replace(
@@ -225,6 +336,17 @@ export function replaceSpecialChars(
 		.replace(/\bi\b/gi, para.currentIndexStr);
 }
 
+/**
+ * Evaluate `str` as a JavaScript expression via {@link safeEvaluate} and
+ * return its result, or `null` on error or empty input.
+ *
+ * Surrounding quote characters (`"..."` or `'...'`) are stripped before
+ * evaluation so that quoted string literals from the regex parser are handled
+ * transparently.
+ *
+ * @param str - Expression source string, optionally surrounded by quotes.
+ * @returns The evaluated value, or `null` when evaluation fails or yields nothing.
+ */
 export function runExpression(str: string): any {
 	// strip surrounding quotes
 	if (!str || str.length === 0) return null;
@@ -235,7 +357,6 @@ export function runExpression(str: string): any {
 		str = str.slice(1, -1);
 	}
 
-	// lightweight debug output (extension's printToConsole isn't available here)
 	printToConsole('Evaluating expression: ' + str);
 	let res: any;
 	try {
@@ -261,6 +382,13 @@ export function runExpression(str: string): any {
 	return null;
 }
 
+/**
+ * Strip all paired-bracket and quoted segments from `input` so that
+ * delimiter characters inside them cannot be misread as segment boundaries.
+ *
+ * @param input - Raw input string, or `undefined` / empty.
+ * @returns The input with all bracket/quote content removed, or `""`.
+ */
 function clearInput(input: string | undefined): string {
 	if (!input) {
 		return '';
@@ -278,6 +406,16 @@ function isEscaped(s: string, pos: number): boolean {
 	return count % 2 === 1;
 }
 
+/**
+ * Remove all paired-bracket (`(…)`, `[…]`, `{…}`) and quoted (`"…"`, `'…'`)
+ * segments from `input`, preserving every character that lies outside them.
+ *
+ * Escaped delimiters (`\"`, `\)`, etc.) inside segments are handled correctly.
+ * An unmatched opening bracket or quote is kept as a literal character.
+ *
+ * @param input - The string to process.
+ * @returns The input with all bracketed/quoted content removed.
+ */
 export function removePairedAndQuoted(input: string): string {
 	const opens: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
 	const openChars = new Set(Object.keys(opens));
@@ -425,6 +563,17 @@ export function removePairedAndQuoted(input: string): string {
 	return out.join('');
 }
 
+/**
+ * Replace all paired-bracket and quoted segments in `input` with space
+ * characters of the same length, preserving the overall string length.
+ *
+ * This lets downstream code use positional `search()` / `slice()` on the
+ * masked string to locate delimiters while still being able to extract the
+ * original content from the unmasked string at the same indices.
+ *
+ * @param input - The string to process.
+ * @returns A same-length string where bracketed/quoted content is replaced by spaces.
+ */
 export function maskPairedAndQuoted(input: string): string {
 	const opens: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
 	const openChars = new Set(Object.keys(opens));
@@ -572,6 +721,25 @@ export function maskPairedAndQuoted(input: string): string {
 	return out.join('');
 }
 
+/**
+ * If `input` starts with an unescaped `(…)` block (after optional leading
+ * operator characters and whitespace), replace the outer parentheses with
+ * quote characters so that the regex parser can handle the content as a
+ * quoted string.
+ *
+ * The replacement quote is chosen to avoid conflicting with quotes already
+ * present inside the parentheses:
+ * - No inner double quotes → use `"`
+ * - Inner double quotes but no single quotes → use `'`
+ * - Both quote types present → leave unchanged
+ *
+ * This is needed because the regex engine cannot handle arbitrarily nested
+ * parentheses, but can handle quoted strings.
+ *
+ * @param input - The string to process, typically the tail of the input from
+ *   the `::` expression delimiter onward.
+ * @returns The (possibly rewritten) string.
+ */
 export function replaceLeadingWrappedParenthesesWithQuotes(
 	input: string,
 ): string {

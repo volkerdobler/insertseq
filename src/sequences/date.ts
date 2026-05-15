@@ -15,6 +15,20 @@ import {
 	getExpression,
 } from '../utils';
 
+/**
+ * Build the sequence function for date sequences.
+ *
+ * The start date is extracted from the input (defaulting to today when absent).
+ * Each value is offset from the start by `i * step` units, where the unit is
+ * one of `d` (days), `w` (weeks), `m` (months), or `y` (years).
+ *
+ * The output format is controlled by the `~format` segment or the
+ * `dateFormat` / `language` configuration entries.
+ *
+ * @param input - Raw user input string beginning with `%` or `date:`.
+ * @param parameter - Shared command context.
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
 export function createDateSeq(
 	input: string,
 	parameter: TParameter,

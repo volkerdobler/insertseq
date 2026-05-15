@@ -13,6 +13,18 @@ import {
 	getExpression,
 } from '../utils';
 
+/**
+ * Build the sequence function for JavaScript expression sequences.
+ *
+ * The expression (introduced by `|` or `expr:`) is evaluated once per
+ * insertion with the single-letter tokens (`_`, `i`, `n`, …) substituted
+ * by their current values. The result of the expression becomes the inserted
+ * string.
+ *
+ * @param input - Raw user input string beginning with `|` or `expr:`.
+ * @param parameter - Shared command context.
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
 export function createExpressionSeq(
 	input: string,
 	parameter: TParameter,

@@ -9,7 +9,7 @@ Version 1.0 has some inspirations from the extension "VSCodeExtensionInsertSeque
 Volker Dobler
 original from May 2020
 rewritten November 2025
-last update December 2025
+last update May 2026
 
 */
 
@@ -47,7 +47,14 @@ import { createPredefinedSeq } from './sequences/predefined';
 import { createFunctionSeq } from './sequences/function';
 import { createTextSelectedSeq } from './sequences/textSelected';
 
-// this method is called when your extension is activated
+/**
+ * Extension entry point called by VS Code when the extension is first activated.
+ *
+ * Registers the two commands (`extension.insertseq` and
+ * `extension.insertseq.history`) and migrates any legacy history data.
+ *
+ * @param context - The extension context provided by VS Code.
+ */
 export function activate(context: vscode.ExtensionContext) {
 	// migrate any legacy history into the new key before registering commands
 	migrateOldHistory(context).catch(() => {
@@ -81,6 +88,7 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 }
 
+/** Extension teardown hook — disposes the debug output channel. */
 export function deactivate() {
 	removeOutputChannel();
 }
@@ -90,7 +98,15 @@ const appName: string = 'insertseq';
 // Default configuration values (will be overwritten by user settings)
 let previewDecorationType: vscode.TextEditorDecorationType | null = null;
 
-// sort function: sort and/or reverse selections. If neither sort nor reverse is set, returns the original array.
+/**
+ * Return `selections` optionally sorted top-to-bottom and/or reversed.
+ * When neither flag is set the original order (multi-cursor click order) is preserved.
+ *
+ * @param selections - Array of cursor selections to reorder.
+ * @param sort - Sort top-to-bottom before reversing.
+ * @param reverse - Reverse the (possibly sorted) array.
+ * @returns A new array in the requested order.
+ */
 function sortSelectionsByPosition(
 	selections: vscode.Selection[],
 	sort: boolean = false,
@@ -117,7 +133,17 @@ function sortSelectionsByPosition(
 // own (war "months"): ;<start>[:<step>][#<repeat>][\*<frequency>][##startover][~<format>][@<stopexpr>][$][!]
 // predefined: <predefinedList as array>[?[whicharray[|startat]][ifs]][:<step>][#<repeat>][\*<frequency>][##startover][~<format>][@<stopexpr>][$][!]
 
-// initialize global parameters, get original selections, regex segments and configuration (used in insertNewSequence and insertSeqHistory)
+/**
+ * Initialise the shared {@link TParameter} context for a command invocation.
+ *
+ * Reads the workspace configuration, compiles the regex segments, captures
+ * the currently selected text, and **deletes** the selection content so that
+ * the cursor positions are left at the insertion points. The deleted text is
+ * stored in the returned context and restored if the user cancels.
+ *
+ * @param editor - The active text editor.
+ * @returns The fully populated parameter object to be passed into sequence functions.
+ */
 async function initApp(editor: vscode.TextEditor): Promise<TParameter> {
 	// read config file, since version 1.0 insertnums config entries are no longer merged
 	const config = Object.assign(
@@ -166,7 +192,17 @@ async function initApp(editor: vscode.TextEditor): Promise<TParameter> {
 	};
 }
 
-// Command 1: InsertSeqCommand - main command for inserting new sequences (default KEY: Ctrl+Alt+.)
+/**
+ * Main command handler — shows the sequence input box and inserts the result.
+ * Default keybinding: `Ctrl+Alt+.` / `Cmd+Alt+.`.
+ *
+ * A live decoration preview is updated on every keystroke via `validateInput`.
+ * On confirmation the final sequence is written to the document and saved to
+ * history; on cancellation the originally selected text is restored.
+ *
+ * @param context - The extension context (used for history persistence).
+ * @param value - Pre-filled input value (e.g. when editing a history entry).
+ */
 async function InsertSeqCommand(
 	context: vscode.ExtensionContext,
 	value: string,
@@ -215,7 +251,17 @@ async function InsertSeqCommand(
 	});
 }
 
-// Command 2: InsertSeqHistory - main command for browsing through history / preview entries (default KEY: Ctrl+Alt+,)
+/**
+ * History command handler — shows a QuickPick of previous sequences.
+ * Default keybinding: `Ctrl+Alt+,` / `Cmd+Alt+,`.
+ *
+ * Selecting an entry immediately executes it. Choosing "New sequence" delegates
+ * to {@link InsertSeqCommand}. Each entry has edit and delete buttons.
+ * If the history is empty, falls back directly to {@link InsertSeqCommand}.
+ *
+ * @param context - The extension context (used for history persistence).
+ * @param value - Passed through to {@link InsertSeqCommand} when "New sequence" is chosen.
+ */
 async function InsertSeqHistory(
 	context: vscode.ExtensionContext,
 	value: string,
@@ -241,7 +287,21 @@ async function InsertSeqHistory(
 	}
 }
 
-// working horse: create new Sequence based on Input string, (global) Parameter and Status of input (preview or final)
+/**
+ * Core insertion engine — generates the sequence values and either shows them
+ * as decoration previews or writes them permanently to the document.
+ *
+ * **Preview mode:** renders each value as an `after`-decoration at the cursor
+ * position; excess values are appended to the last decoration with a `↵` separator.
+ *
+ * **Final mode:** replaces each cursor position with its value; excess values
+ * are inserted as new lines (or concatenated with the configured delimiter).
+ * When `input` is `undefined` (cancelled), the originally selected text is restored.
+ *
+ * @param input - Parsed user input string, or `undefined` when cancelled.
+ * @param parameter - Shared command context.
+ * @param status - `"preview"` to show decorations, `"final"` to commit to the document.
+ */
 function insertNewSequence(
 	input: string | undefined, // der eingegebene Text
 	parameter: TParameter,
@@ -400,12 +460,10 @@ function insertNewSequence(
 
 				// insert all overflow lines as a single operation to preserve correct order
 				if (overflowLines.length > 0) {
-					const lastLine =
-						insertCursorPos[maxIndex - 1].start.line;
+					const lastLine = insertCursorPos[maxIndex - 1].start.line;
 					const insertPos = new vscode.Position(lastLine + 1, 0);
 					if (
-						insertPos.line ===
-						parameter.editor.document.lineCount
+						insertPos.line === parameter.editor.document.lineCount
 					) {
 						builder.insert(
 							insertPos,
@@ -434,7 +492,16 @@ function insertNewSequence(
 	}
 }
 
-// returns the proper sequence function based on input type
+/**
+ * Select and instantiate the correct sequence factory for the given input.
+ *
+ * Returns a stop-immediately function when `input` is `undefined` (cancelled)
+ * or when no valid input type can be detected.
+ *
+ * @param input - Raw user input string, or `undefined` when cancelled.
+ * @param p - Shared command context.
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
 function getSequenceFunction(
 	input: string | undefined,
 	p: TParameter,
@@ -481,7 +548,19 @@ function getSequenceFunction(
 	}
 }
 
-// determines the input type based on the beginning of the input string
+/**
+ * Determine the {@link TInput} type from the beginning of the input string.
+ *
+ * Detection order (first match wins):
+ * hex → octal → binary → decimal → expression → alpha → date → own → predefined → function → empty/default
+ *
+ * An empty input with pre-existing selected text resolves to `"textSelected"`;
+ * an empty input without selected text defaults to `"decimal"`.
+ *
+ * @param input - Raw user input string.
+ * @param p - Shared command context (provides compiled regex segments and config).
+ * @returns The detected input type, or `null` when nothing matches.
+ */
 function getInputType(input: string, p: TParameter): TInput | null {
 	let type: TInput = null;
 

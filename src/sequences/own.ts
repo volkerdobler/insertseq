@@ -14,6 +14,18 @@ import {
 	getExpression,
 } from '../utils';
 
+/**
+ * Build the sequence function for user-defined inline item sequences.
+ *
+ * The item list is provided directly in the input inside `[…]`, with items
+ * separated by commas or semicolons (e.g. `[red,green,blue]`). The sequence
+ * cycles through the list using the configured step, frequency, repetition,
+ * and startover parameters.
+ *
+ * @param input - Raw user input string beginning with `[` or `ownseq:`.
+ * @param parameter - Shared command context.
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
 export function createOwnSeq(
 	input: string,
 	parameter: TParameter,

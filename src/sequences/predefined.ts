@@ -12,6 +12,18 @@ import {
 	getExpression,
 } from '../utils';
 
+/**
+ * Build the sequence function for predefined item sequences.
+ *
+ * Item lists are read from the `mysequences` configuration array. The input
+ * can reference a list by number or by searching for a matching entry; the
+ * search behaviour (case-insensitive, full-match, starts-with) is controlled
+ * by the option flags `i`, `f`, and `s` in the `?…` options segment.
+ *
+ * @param input - Raw user input string beginning with `;` or `predefined:`.
+ * @param parameter - Shared command context (must contain a valid `mysequences` config entry).
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
 export function createPredefinedSeq(
 	input: string,
 	parameter: TParameter,

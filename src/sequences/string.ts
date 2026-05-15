@@ -14,6 +14,18 @@ import {
 	getInputPart,
 } from '../utils';
 
+/**
+ * Build the sequence function for alphabetic string sequences.
+ *
+ * Strings are treated as base-N numbers over the configured alphabet and
+ * incremented accordingly (e.g. `a → b → … → z → aa → ab → …`).
+ * Capitalisation of the output follows the `alphaCapital` configuration or
+ * the per-input option flag.
+ *
+ * @param input - Raw user input string.
+ * @param parameter - Shared command context (must contain a valid `alphabet` config entry).
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
 export function createStringSeq(
 	input: string,
 	parameter: TParameter,

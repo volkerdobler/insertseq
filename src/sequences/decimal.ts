@@ -14,6 +14,17 @@ import {
 	getExpression,
 } from '../utils';
 
+/**
+ * Build the sequence function for numeric (decimal, hex, octal, or binary) sequences.
+ *
+ * The returned function accepts a zero-based index `i` and returns the
+ * formatted value for that position together with a stop flag.
+ *
+ * @param input - Raw user input string.
+ * @param parameter - Shared command context.
+ * @param base - Numeric base: `10` (decimal), `16` (hex), `8` (octal), or `2` (binary).
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
 export function createDecimalSeq(
 	input: string,
 	parameter: TParameter,

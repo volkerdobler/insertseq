@@ -1,21 +1,19 @@
 /**
- * Generate a numeric sequence.
+ * Generate a numeric sequence as an array of numbers.
  *
- * Parameters:
- * - start: starting numeric value
- * - step: amount to increase at each logical step
- * - count: total number of emitted values
- * - freq?: if provided (>0), each logical value is repeated `freq` times
- * - repe?: if provided (>0), after every `repe` emitted values the sequence restarts from `start`
- * - startover?: if provided (>0), the sequence restarts unconditionally after `startover` emitted values
+ * The value emitted at logical index `i` is `start + i * step`.
  *
- * Behavior notes / precedence:
- * - Emission happens one-by-one. We consider an internal logical index `i` that increments when we advance to the next logical value (i.e. after repeating freq times).
- * - The numeric value emitted at logical index `i` is start + i*step.
- * - If `freq` is set, each logical value is emitted `freq` times before i increments.
- * - If `repe` is set, then after `repe` emitted values (counting repeats) the sequence index i is reset to 0 (start).
- * - If `startover` is set, then after `startover` emitted values the sequence restarts as if new (i=0) regardless of freq/repe.
- * - If both `repe` and `startover` are set, `startover` takes precedence for unconditional restart; `repe` restarts only when its boundary is reached.
+ * Precedence when both `repe` and `startover` are set: `startover` triggers
+ * an unconditional restart; `repe` only restarts when its own boundary is
+ * reached and `startover` has not fired first.
+ *
+ * @param start - Starting numeric value.
+ * @param step - Amount added per logical step.
+ * @param count - Total number of values to emit.
+ * @param freq - Times each logical value is repeated before the index advances (default 1).
+ * @param repe - Emitted-value count after which the sequence restarts from `start` (default off).
+ * @param startover - Unconditional restart interval counted in emitted values (default off).
+ * @returns Array of `count` numbers following the described pattern.
  */
 export function generateSequence(
 	start: number,

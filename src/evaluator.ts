@@ -1,6 +1,22 @@
 import { RuleTemplate } from './types';
 
-// Get regular expressions for segmenting the input string
+/**
+ * Build and return the full set of compiled regex-segment strings used to
+ * parse the user's input string.
+ *
+ * The function works in two passes:
+ * 1. A `ruleTemplate` dictionary is built where entries may reference each
+ *    other via `{{key}}` placeholders.
+ * 2. All placeholders are resolved recursively and the final strings are
+ *    copied — with whitespace stripped — into the returned `matchRule`
+ *    dictionary (only keys that exist in `matchRule` are exported).
+ *
+ * Whitespace inside the template strings is purely for readability; it is
+ * removed before the strings are used as regex source.
+ *
+ * @returns A {@link RuleTemplate} map whose values are ready-to-use regex
+ *   source strings (without flags).
+ */
 export function getRegExpressions(): RuleTemplate {
 	const matchRule: RuleTemplate = {
 		start_decimal: '', // start Wert bei Zahlen
@@ -128,7 +144,7 @@ export function getRegExpressions(): RuleTemplate {
 	ruleTemplate.octNum = `(?:0[o](?<oct>0|[1-7][0-7]*))`;
 	ruleTemplate.binNum = `(?:0[b](?<bin>[01]+))`;
 	ruleTemplate.numeric = `(?:(?<int>{{integer}}) | (?<float>{{float}}))`;
-	ruleTemplate.exprtoken = `(?: 
+	ruleTemplate.exprtoken = `(?:
 								\\s*\\b
 								(?:
 									(?: [+-]?
@@ -155,7 +171,7 @@ export function getRegExpressions(): RuleTemplate {
 										)*
 									)
 								)`;
-	ruleTemplate.random = `(?: 
+	ruleTemplate.random = `(?:
 								(?:
 									(?<rndAvailable> [rR])
 									\\s*
@@ -243,9 +259,9 @@ export function getRegExpressions(): RuleTemplate {
 										)
 										(?= {{delimiter}} )
 									)`;
-	ruleTemplate.start_own = `^(?: 
+	ruleTemplate.start_own = `^(?:
 								\\[
-								(?<ownseq> 
+								(?<ownseq>
 									(?:
 										(?:
 											(?<!\\\\)
@@ -266,7 +282,7 @@ export function getRegExpressions(): RuleTemplate {
 								(?: {{sequencedelimiter}} )?
 								(?= {{delimiter}} )
 							)`;
-	ruleTemplate.start_predefined = `^(?: 
+	ruleTemplate.start_predefined = `^(?:
 								( {{charStartPredefinedSequence}} )
 								\\s*
 								(?<start_predefined>
@@ -318,7 +334,7 @@ export function getRegExpressions(): RuleTemplate {
 								(?: {{sequencedelimiter}} )?
 								(?= {{delimiter}} )
 							)`;
-	ruleTemplate.start_function = `^(?: 
+	ruleTemplate.start_function = `^(?:
 										{{charStartFunction}}
 										(?<funcNr> \\d+ )
 										(?: \\s* ;
@@ -356,7 +372,7 @@ export function getRegExpressions(): RuleTemplate {
 									)
 									(?= {{delimiter}} )
 								)`;
-	ruleTemplate.format_alpha = `(?: 
+	ruleTemplate.format_alpha = `(?:
 									{{charStartFormat}}
 									(?<format_alpha>
 										(?<padding> {{leadchars}} )?
@@ -367,7 +383,7 @@ export function getRegExpressions(): RuleTemplate {
 									)
 									(?= {{delimiter}} )
 								)`;
-	ruleTemplate.format_date = `(?: 
+	ruleTemplate.format_date = `(?:
 									{{charStartFormat}}
 									(?:
 										(?: {{language}} )
@@ -381,7 +397,7 @@ export function getRegExpressions(): RuleTemplate {
 									)?
 									(?= {{delimiter}} )
 								)`;
-	ruleTemplate.expression = `(?: {{charStartExpression}} \\s* 
+	ruleTemplate.expression = `(?: {{charStartExpression}} \\s*
 								(?<expr>
 									{{doublestring}}
 									| {{singlestring}}
@@ -390,7 +406,7 @@ export function getRegExpressions(): RuleTemplate {
 								)
 								(?= {{delimiter}} )
 							)`;
-	ruleTemplate.stopexpression = `(?: {{charStartStopExpression}} \\s* 
+	ruleTemplate.stopexpression = `(?: {{charStartStopExpression}} \\s*
 									(?<stopexpr>
 										{{doublestring}}
 										| {{singlestring}}

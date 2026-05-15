@@ -14,6 +14,18 @@ import {
 	getExpression,
 } from '../utils';
 
+/**
+ * Build the sequence function for user-defined function sequences.
+ *
+ * Functions are loaded from the `myfunctions` configuration array and
+ * addressed by 1-based index (e.g. `=2` selects the second function).
+ * Each function receives `(i, startAt, step, freq, repeat, startover)` and
+ * must return the string to insert.
+ *
+ * @param input - Raw user input string beginning with `=` or `function:`.
+ * @param parameter - Shared command context (must contain a valid `myfunctions` config entry).
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
 export function createFunctionSeq(
 	input: string,
 	parameter: TParameter,

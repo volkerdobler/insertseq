@@ -1,10 +1,37 @@
 import { format } from 'd3-format';
 import { Temporal } from 'temporal-polyfill';
 
+/**
+ * Format a number using a d3-format specifier string.
+ *
+ * @param value - The number to format.
+ * @param formatString - A d3-format specifier (e.g. `".2f"`, `"#x"`, `"08d"`).
+ * @returns The formatted string.
+ * @see https://d3js.org/d3-format
+ */
 export function formatNumber(value: number, formatString: string): string {
 	return format(formatString)(value);
 }
 
+/**
+ * Pad and align a string value within a fixed-width field.
+ *
+ * Template syntax: `[[fill]align]width[w][lr]`
+ *
+ * | Part    | Values          | Meaning                                      |
+ * |---------|-----------------|----------------------------------------------|
+ * | `fill`  | `0 x \s . _`   | Character used to pad the field              |
+ * | `align` | `< > =`        | Left / right / center alignment              |
+ * | `width` | integer         | Minimum field width                          |
+ * | `w`     | flag            | Use only the last character of `value`       |
+ * | `lr`    | `l` or `r`     | Tie-break for centering odd-width remainders |
+ *
+ * If `value` is already at least as long as `width`, it is returned unchanged.
+ *
+ * @param value - The string to format.
+ * @param template - Format template string (empty string → no-op).
+ * @returns The padded/aligned string, or `value` unchanged if the template is invalid.
+ */
 export function formatString(value: string, template: string): string {
 	// Template syntax: [[fill]align]width[w][lr]
 	// Examples: "#<10" => fill '#' left-align width 10
@@ -72,6 +99,20 @@ export function formatString(value: string, template: string): string {
 	return out;
 }
 
+/**
+ * Format a date string using a simple token-based template.
+ *
+ * Supported tokens (case-sensitive):
+ * `yyyy`, `yy`, `MMM`, `MM`, `M`, `dd`, `d`, `HH`, `H`, `mm`, `m`, `ss`, `s`
+ *
+ * Tokens are replaced in a single pass (longest first) to avoid double
+ * substitution (e.g. `MMM` is replaced before `M`).
+ *
+ * @param value - An ISO date string (e.g. `"2025-11-03"`).
+ * @param template - Format template (e.g. `"dd.MM.yyyy"`).
+ * @returns The formatted date string, or `value` unchanged if it is not a valid date.
+ * @deprecated Not used by the date sequence — see {@link formatTemporalDateTime}.
+ */
 export function formatDateStr(value: string, template: string): string {
 	const date = new Date(value);
 	if (isNaN(date.getTime())) return value; // fallback if not a valid date
@@ -110,6 +151,23 @@ export function formatDateStr(value: string, template: string): string {
 	return out;
 }
 
+/**
+ * Format a `Temporal.PlainDateTime` using a token-based template string.
+ *
+ * Supported tokens (case-sensitive, longest matched first):
+ * `yyyy`, `yy`, `MMMM`, `MMM`, `MM`, `M`, `dd`, `d`, `HH`, `H`, `mm`, `m`, `ss`, `s`
+ *
+ * If the template contains none of the known tokens (i.e. the output equals
+ * the template unchanged), the date is formatted with
+ * `toPlainDate().toLocaleString(locale)` as a fallback — this allows passing
+ * a bare locale string such as `"de-DE"` as the template.
+ *
+ * @param temporalDate - The date/time value to format.
+ * @param template - Format template or locale string (default `""`).
+ * @param locale - BCP 47 locale tag used for localised month names and the
+ *   locale-string fallback (e.g. `"de-DE"`).
+ * @returns The formatted date string.
+ */
 export function formatTemporalDateTime(
 	temporalDate: Temporal.PlainDateTime,
 	template: string = '',
