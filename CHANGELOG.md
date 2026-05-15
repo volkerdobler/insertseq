@@ -2,6 +2,14 @@
 
 All notable changes to this extension (newest first):
 
+# Version 1.0.8
+
+- Fixed Option problem in Date functionality
+- Fixed minor bug when original sequence is used
+- Fixed minor bug with debug mode switch
+
+- Update packages to newest version
+
 # Version 1.0.7
 
 - Added a configuration option (`insertseq.previewStatus`) to enable or disable the live sequence preview (default: true)
