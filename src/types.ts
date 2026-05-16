@@ -21,6 +21,8 @@ export type TInput =
 	| 'predefined' // sequences from the mysequences configuration list
 	| 'function' // user-defined functions from the myfunctions configuration list
 	| 'textSelected' // no sequence — re-insert originally selected text
+	| 'template' // quoted template string with {} placeholder replaced by the sequence value
+	| 'backtick' // backtick template: `prefix text {sequence-def} suffix text`
 	| null; // unrecognised input
 
 /** Whether the current operation produces a live decoration preview or commits text to the document. */

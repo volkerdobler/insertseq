@@ -322,7 +322,7 @@ function insertNewSequence(
 		if (res.stopFunction) {
 			break;
 		}
-		strList.push(res.stringFunction);
+		strList.push(res.stringFunction.replace(/\\t/g, '\t'));
 	}
 
 	// get delimiter and newLine settings from configuration (if insertations exceed number of selections)
@@ -351,6 +351,15 @@ function insertNewSequence(
 		reverse ? true : false,
 	);
 
+	// convert a string for use in decoration contentText:
+	// tabs → repeated non-breaking spaces (editor tab width), other whitespace → single non-breaking space
+	const tabSize =
+		typeof parameter.editor.options.tabSize === 'number'
+			? parameter.editor.options.tabSize
+			: 4;
+	const toDecorationText = (s: string) =>
+		s.replace(/\t/g, ' '.repeat(tabSize)).replace(/\s/g, ' ');
+
 	// handle preview or final insertion
 	switch (status) {
 		case 'preview':
@@ -374,8 +383,7 @@ function insertNewSequence(
 						),
 						renderOptions: {
 							after: {
-								// replace spaces with non-breaking spaces for correct rendering as decoration
-								contentText: str.replace(/\s/g, '\u00A0'),
+								contentText: toDecorationText(str),
 							},
 						},
 					};
@@ -400,7 +408,7 @@ function insertNewSequence(
 					),
 					renderOptions: {
 						after: {
-							contentText: addStr,
+							contentText: toDecorationText(addStr),
 						},
 					},
 				};
@@ -536,6 +544,10 @@ function getSequenceFunction(
 			return createFunctionSeq(input, p); // predefined functions (predefined functions in configuration)
 		case 'textSelected':
 			return createTextSelectedSeq(input, p); // no input - just use the originally selected text
+		case 'backtick':
+			return createBacktickTemplateSeq(input, p);
+		case 'template':
+			return createTemplateSeq(input, p);
 		default:
 			const retStr = { stringFunction: '', stopFunction: true };
 			return (_) => retStr; // no valid input type detected, stop function
@@ -546,7 +558,7 @@ function getSequenceFunction(
  * Determine the {@link TInput} type from the beginning of the input string.
  *
  * Detection order (first match wins):
- * hex → octal → binary → decimal → expression → alpha → date → own → predefined → function → empty/default
+ * backtick → template → hex → octal → binary → decimal → expression → alpha → date → own → predefined → function → empty/default
  *
  * An empty input with pre-existing selected text resolves to `"textSelected"`;
  * an empty input without selected text defaults to `"decimal"`.
@@ -575,6 +587,14 @@ function getInputType(input: string, p: TParameter): TInput | null {
 
 	// What kind of input is it (check regex from begin)
 	switch (true) {
+		// backtick template: `prefix {sequence-def} suffix`
+		case /^`/.test(input):
+			type = 'backtick';
+			break;
+		// template: starts with a single or double quote
+		case /^["']/.test(input):
+			type = 'template';
+			break;
 		// hex numbers
 		case /^(?:([x0\\s\\._])\1*)?[+-]?0x[0-9a-f]+/i.test(input):
 			type = 'hex';
@@ -631,6 +651,224 @@ function getInputType(input: string, p: TParameter): TInput | null {
 	}
 
 	return type;
+}
+
+/**
+ * Build the sequence function for template inputs.
+ *
+ * The input begins with `"` or `'`, contains a template string with `{}`
+ * placeholders, and ends with the closing quote. Everything after the closing
+ * quote is treated as the inner sequence definition.
+ *
+ * - `{}` is replaced by the value produced by the inner sequence.
+ * - `\{}` is an escaped literal `{}` and is not substituted.
+ *
+ * @example `"Item {}":1` → `Item 1`, `Item 2`, …
+ * @example `'x={}, y={}':1:2` → two placeholders both filled by the same value
+ *
+ * @param input - Raw user input string (must start with `"` or `'`).
+ * @param p - Shared command context.
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
+function createTemplateSeq(
+	input: string,
+	p: TParameter,
+): (i: number) => { stringFunction: string; stopFunction: boolean } {
+	const defaultReturn = { stringFunction: '', stopFunction: true };
+
+	if (!input || input.length < 2) {
+		return (_) => defaultReturn;
+	}
+
+	const quoteChar = input[0];
+
+	// find the closing (unescaped) quote
+	const isEscapedAt = (pos: number): boolean => {
+		let k = pos - 1;
+		let count = 0;
+		while (k >= 0 && input[k] === '\\') {
+			count++;
+			k--;
+		}
+		return count % 2 === 1;
+	};
+
+	let templateEnd = -1;
+	for (let i = 1; i < input.length; i++) {
+		if (input[i] === quoteChar && !isEscapedAt(i)) {
+			templateEnd = i;
+			break;
+		}
+	}
+
+	if (templateEnd === -1) {
+		return (_) => defaultReturn;
+	}
+
+	// unescape escaped quote chars inside the template
+	const escRe = quoteChar === '"' ? /\\"/g : /\\'/g;
+	const template = input.slice(1, templateEnd).replace(escRe, quoteChar);
+
+	// everything after the closing quote is the inner sequence definition
+	const seqDef = input.slice(templateEnd + 1).trim();
+
+	// fall back to a plain incrementing decimal sequence when no definition given
+	const innerSeqFunc = getSequenceFunction(
+		seqDef.length > 0 ? seqDef : '1',
+		p,
+	);
+
+	return (i) => {
+		const inner = innerSeqFunc(i);
+		if (inner.stopFunction) {
+			return inner;
+		}
+		const out = template
+			.replace(/(?<!\\)\{\}/g, inner.stringFunction)
+			.replace(/\\\{\}/g, '{}');
+		return { stringFunction: out, stopFunction: inner.stopFunction };
+	};
+}
+
+/**
+ * Build the sequence function for backtick template inputs.
+ *
+ * The input begins with `` ` ``, contains a template string, and optionally ends
+ * with a closing `` ` ``. The sequence definition lives **inside** a `{…}` block
+ * within the template; everything outside `{…}` is emitted verbatim.
+ *
+ * - Unescaped `{…}` → replaced by the value produced by the inner sequence.
+ * - `\{` / `\}` → literal `{` / `}`.
+ * - `` \` `` → literal backtick inside the template.
+ * - Only the first `{…}` block is used (subsequent ones are left as-is).
+ *
+ * @example `` `Item {1:5}` `` → `Item 1`, `Item 2`, …, `Item 5`
+ * @example `` `Row {a:e}: `` → `Row a: `, `Row b: `, …, `Row e: `
+ *
+ * @param input - Raw user input string (must start with `` ` ``).
+ * @param p - Shared command context.
+ * @returns A per-index function `(i) => { stringFunction, stopFunction }`.
+ */
+function createBacktickTemplateSeq(
+	input: string,
+	p: TParameter,
+): (i: number) => { stringFunction: string; stopFunction: boolean } {
+	const defaultReturn = { stringFunction: '', stopFunction: true };
+
+	if (!input || input.length < 2) {
+		return (_) => defaultReturn;
+	}
+
+	// Count consecutive backslashes immediately before pos in str (escape detection)
+	const countLeadingBackslashes = (str: string, pos: number): number => {
+		let k = pos - 1;
+		let count = 0;
+		while (k >= 0 && str[k] === '\\') {
+			count++;
+			k--;
+		}
+		return count;
+	};
+
+	// Find the closing (unescaped) backtick
+	let templateEnd = input.length;
+	for (let i = 1; i < input.length; i++) {
+		if (input[i] === '`' && countLeadingBackslashes(input, i) % 2 === 0) {
+			templateEnd = i;
+			break;
+		}
+	}
+
+	// Template content sits between the two backticks
+	const rawTemplate = input.slice(1, templateEnd);
+
+	// Unescape backtick, { and } in static text segments
+	const unescape = (s: string) =>
+		s
+			.replace(/\\`/g, '`')
+			.replace(/\\\{/g, '{')
+			.replace(/\\\}/g, '}')
+			.replace(/\\\\/g, '\\');
+
+	// Parse rawTemplate into alternating static/sequence segments
+	type Segment =
+		| { kind: 'static'; text: string }
+		| {
+				kind: 'seq';
+				fn: (i: number) => {
+					stringFunction: string;
+					stopFunction: boolean;
+				};
+		  };
+	const segments: Segment[] = [];
+
+	let pos = 0;
+	let staticStart = 0;
+	let hasSeq = false;
+
+	while (pos < rawTemplate.length) {
+		if (
+			rawTemplate[pos] === '{' &&
+			countLeadingBackslashes(rawTemplate, pos) % 2 === 0
+		) {
+			// Flush static text accumulated so far
+			if (pos > staticStart) {
+				segments.push({
+					kind: 'static',
+					text: unescape(rawTemplate.slice(staticStart, pos)),
+				});
+			}
+			// Find the matching closing }
+			let braceEnd = rawTemplate.length;
+			for (let j = pos + 1; j < rawTemplate.length; j++) {
+				if (
+					rawTemplate[j] === '}' &&
+					countLeadingBackslashes(rawTemplate, j) % 2 === 0
+				) {
+					braceEnd = j;
+					break;
+				}
+			}
+			const seqDef = rawTemplate.slice(pos + 1, braceEnd).trim();
+			segments.push({
+				kind: 'seq',
+				fn: getSequenceFunction(seqDef.length > 0 ? seqDef : '1', p),
+			});
+			hasSeq = true;
+			pos = braceEnd + 1;
+			staticStart = pos;
+		} else {
+			pos++;
+		}
+	}
+
+	// Flush any trailing static text
+	if (staticStart < rawTemplate.length) {
+		segments.push({
+			kind: 'static',
+			text: unescape(rawTemplate.slice(staticStart)),
+		});
+	}
+
+	if (!hasSeq) {
+		return (_) => defaultReturn;
+	}
+
+	return (i) => {
+		let result = '';
+		for (const seg of segments) {
+			if (seg.kind === 'static') {
+				result += seg.text;
+			} else {
+				const inner = seg.fn(i);
+				if (inner.stopFunction) {
+					return { stringFunction: '', stopFunction: true };
+				}
+				result += inner.stringFunction;
+			}
+		}
+		return { stringFunction: result, stopFunction: false };
+	};
 }
 
 function createQuickPick(
