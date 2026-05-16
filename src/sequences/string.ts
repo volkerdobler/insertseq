@@ -12,7 +12,7 @@ import {
 	checkStopExpression,
 	getExpression,
 	getInputPart,
-} from '../utils';
+} from '../components/utils';
 
 /**
  * Build the sequence function for alphabetic string sequences.

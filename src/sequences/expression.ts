@@ -11,7 +11,7 @@ import {
 	getStopExpression,
 	checkStopExpression,
 	getExpression,
-} from '../utils';
+} from '../components/utils';
 
 /**
  * Build the sequence function for JavaScript expression sequences.

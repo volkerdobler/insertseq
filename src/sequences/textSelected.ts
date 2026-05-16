@@ -6,7 +6,7 @@ import {
 	getInputPart,
 	replaceSpecialChars,
 	runExpression,
-} from '../utils';
+} from '../components/utils';
 
 /**
  * Build the sequence function that re-inserts the originally selected text.

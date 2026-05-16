@@ -13,7 +13,7 @@ import {
 	checkStopExpression,
 	getInputPart,
 	getExpression,
-} from '../utils';
+} from '../components/utils';
 
 /**
  * Build the sequence function for date sequences.

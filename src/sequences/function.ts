@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { TParameter, TSpecialReplacementValues, TOwnFunction } from '../types';
-import { safeEvaluate } from '../safeEval';
+import { safeEvaluate } from '../components/safeEval';
 import {
 	printToConsole,
 	replaceSpecialChars,
@@ -12,7 +12,7 @@ import {
 	getStopExpression,
 	checkStopExpression,
 	getExpression,
-} from '../utils';
+} from '../components/utils';
 
 /**
  * Build the sequence function for user-defined function sequences.

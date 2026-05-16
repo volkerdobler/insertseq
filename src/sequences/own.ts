@@ -12,7 +12,7 @@ import {
 	getInputPart,
 	checkStopExpression,
 	getExpression,
-} from '../utils';
+} from '../components/utils';
 
 /**
  * Build the sequence function for user-defined inline item sequences.

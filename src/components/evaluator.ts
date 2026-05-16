@@ -1,4 +1,4 @@
-import { RuleTemplate } from './types';
+import { RuleTemplate } from '../types';
 
 /**
  * Build and return the full set of compiled regex-segment strings used to

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { TParameter, TSpecialReplacementValues } from './types';
+import { TParameter, TSpecialReplacementValues } from '../types';
 import { safeEvaluate } from './safeEval';
 
 // global debug flag
@@ -308,10 +308,7 @@ export function replaceSpecialChars(
 	// i ::= counter, starting with 0 and increasing with each insertion
 
 	return st
-		.replace(
-			/\b_\b/gi,
-			`'${para.currentValueStr}'`,
-		)
+		.replace(/\b_\b/gi, `'${para.currentValueStr}'`)
 		.replace(
 			/\bo\b/gi,
 			Number(para.origTextStr)
