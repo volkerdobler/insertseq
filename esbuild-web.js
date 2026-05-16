@@ -70,7 +70,7 @@ async function main() {
 		format: 'cjs',
 		minify: production,
 		sourcemap: !production,
-		sourcesContent: false,
+		sourcesContent: true,
 		platform: 'browser',
 		// outdir: 'dist/',
 		outfile: 'dist/extension-web.js',

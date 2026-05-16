@@ -9,7 +9,9 @@
 			"type": "extensionHost",
 			"request": "launch",
 			"args": ["--extensionDevelopmentPath=${workspaceFolder}"],
-			"outFiles": ["${workspaceFolder}/dist/**/*.js"]
+			"outFiles": ["${workspaceFolder}/dist/**/*.js"],
+			"sourceMaps": true,
+			"preLaunchTask": "compile:desk"
 		},
 		{
 			"name": "Web Debug Extension",
@@ -21,7 +23,8 @@
 				"--extensionDevelopmentKind=web"
 			],
 			"outFiles": ["${workspaceFolder}/dist/**/*.js"],
-			"preLaunchTask": "${defaultBuildTask}"
+			"sourceMaps": true,
+			"preLaunchTask": "compile:web"
 		}
 	]
 }

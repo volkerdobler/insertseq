@@ -39,10 +39,18 @@
 			}
 		},
 		{
-			"label": "compile",
+			"label": "compile:desk",
 			"type": "npm",
-			"script": "compile-web",
-			"problemMatcher": ["$tsc"]
+			"script": "compile:desk",
+			"problemMatcher": ["$tsc"],
+			"group": "build"
+		},
+		{
+			"label": "compile:web",
+			"type": "npm",
+			"script": "compile:web",
+			"problemMatcher": ["$tsc"],
+			"group": "build"
 		}
 	]
 }

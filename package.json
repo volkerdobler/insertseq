@@ -32,7 +32,7 @@
 		"Other"
 	],
 	"main": "./dist/extension.js",
-	"browser": "./dist/extension-web.js",
+	"browser": "./dist/extension.js",
 	"files": [
 		"dist",
 		"README.md",
@@ -264,18 +264,17 @@
 	"scripts": {
 		"check-types": "tsc --noEmit",
 		"clean": "rimraf ./dist/* -g",
-		"compile": "tsc -p ./",
-		"compile:desk": "npm run check-types && node esbuild.js",
-		"compile:web": "npm run check-types && node esbuild-web.js",
-		"compile:all": "npm run clean && npm run compile:desk && npm run compile:web",
+		"compile:desk": "tsc -p ./",
+		"compile:web": "tsc -p ./",
+		"compile:all": "npm run clean && npm run compile:desk",
 		"build:desk": "npm run check-types && npm run lint && node esbuild.js --production",
 		"build:web": "npm run check-types && npm run lint && node esbuild-web.js --production",
-		"build:all": "npm run clean && npm run build:desk && npm run build:web",
+		"build:all": "npm run clean && npm run build:desk",
 		"lint": "eslint src --ext .ts",
 		"watch:desk": "tsc -watch -p ./",
 		"watch:web": "tsc -watch -project tsconfig.json & node esbuild-web.js --watch",
 		"watch:all": "npm run clean && npm-run-all --parallel watch:desk watch:web",
-		"run-in-browser": "vscode-test-web --browserType=chromium ./dist/extension-web.js",
+		"run-in-browser": "vscode-test-web --browserType=chromium ./dist/extension.js",
 		"vscode:prepublish": "npm run build:all"
 	},
 	"dependencies": {
