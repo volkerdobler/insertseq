@@ -6,6 +6,10 @@ All inputs are previewed live (as a decoration) for the current selections, so y
 
 > ATTENTION: Version 1.0 is a major update from previous versions. Please read the documentation carefully!
 
+## Higlight in version 1.1.0
+
+Added [Quoted Template](#quoted-template-details) and [Backtick Template](#backtick-template-details) sequences.
+
 ## Usage
 
 See [CHANGELOG.md](./CHANGELOG.md) for all version history and changes from version to version.
