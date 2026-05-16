@@ -1,4 +1,4 @@
-# VS Code Extension: Insert Sequences (InsertSeq formarly Insertnums)
+# VS Code Extension: Insert Sequences (InsertSeq formerly Insertnums)
 
 Insert Sequences is a small VS Code extension that helps you generate and insert various kinds of sequences into one or more cursors. It supports numeric sequences, alphabetic sequences, dates, user-defined or predefined lists, and inline JavaScript expressions. The syntax is compact and powerful, allowing repetition, stepping, frequency control, custom formats, stop expressions, and more.
 
@@ -8,13 +8,7 @@ All inputs are previewed live (as a decoration) for the current selections, so y
 
 ## Usage
 
-## Important changes in version 1.0
-
-1. Most importantly, you now see the current sequence as a live preview/decoration before pressing Enter.
-2. The order of the insertion options is no longer fixed. You can provide the options in any order.
-3. In addition to the short delimiter characters used previously, you can now use readable option keywords (for example: `steps:`, `freq:`, `repeat:`, `startover:`, `expr:`, `stopif:`, `format:`).
-4. Besides predefined lists in your configuration file, you can provide a list inline for a single insertion.
-5. There is no special insertion mode for months anymore (previously starting with `%`). You can define your own sequences and lists (including months), but using date sequences is recommended for calendar data.
+See [CHANGELOG.md](./CHANGELOG.md) for all version history and changes from version to version.
 
 ## Note about insertion order
 
@@ -27,7 +21,7 @@ All inputs are previewed live (as a decoration) for the current selections, so y
 
 You can start the extension from the Command Palette by searching for `insertseq`, or use the default key binding `Ctrl+Alt+.` (CTRL-ALT or COMMAND-OPTION + DOT - this can be changed in settings).
 
-If you have used this extension before, you can reuse previous inputs with the command `insertseq.history` (default key binding `Ctrl+Alt+,` CTRL+ALT or COMMAND-OPTION + KOMMA). This shows your previous insertions; you can run them again or edit them. If no history entries exist, the normal input box is shown. See the [History](#history) section for details.
+If you have used this extension before, you can reuse previous inputs with the command `insertseq.history` (default key binding `Ctrl+Alt+,` CTRL+ALT or COMMAND-OPTION + COMMA). This shows your previous insertions; you can run them again or edit them. If no history entries exist, the normal input box is shown. See the [History](#history) section for details.
 
 # Examples (simple → advanced)
 
@@ -260,7 +254,63 @@ Input: `=2` with 5 selections → output:
 1
 ```
 
-As the function can include `start`, `step`, `repeat`, `frequency` and `startover` (in this order!), the start value will be add with a `;`. The other values will come from the options you can provide.
+As the function can include `start`, `step`, `repeat`, `frequency` and `startover` (in this order!), the start value is passed via `;`. The other values will come from the options you can provide.
+
+### Quoted Template
+
+Start with `"` or `'` to embed a sequence inside fixed surrounding text. Write `{}` where the value should appear; the sequence definition follows the closing quote. All standard sequence types and options work as the inner sequence.
+
+Input: `"Item {}":1` with 5 selections → output:
+
+```
+Item 1
+Item 2
+Item 3
+Item 4
+Item 5
+```
+
+Input: `'Result: {}':|(i*i)` with 4 selections → output:
+
+```
+Result: 0
+Result: 1
+Result: 4
+Result: 9
+```
+
+### Backtick Template
+
+Start with `` ` `` to place the sequence definition directly inside `{…}` blocks within the template. Multiple independent `{…}` blocks are supported in one input — each runs its own sequence.
+
+Input: `` `Row {1} Col {a}` `` with 5 selections → output:
+
+```
+Row 1 Col a
+Row 2 Col b
+Row 3 Col c
+Row 4 Col d
+Row 5 Col e
+```
+
+Input: `` `[{0x0:1}] {a:e}` `` with 4 selections → output:
+
+```
+[0x0] a
+[0x1] b
+[0x2] c
+[0x3] d
+```
+
+### Tab character (`\t`)
+
+Typing `\t` anywhere in the input inserts a real tab character in the output. This works in all sequence types, template text, inline lists, and expression results. In the live preview, the tab is rendered as a block of non-breaking spaces matching the editor's configured tab width.
+
+Input: `"Col A\tCol B\tCol C"` (single cursor) → output (with tab-separated columns):
+
+```
+Col A	Col B	Col C
+```
 
 ## Content of full syntax description
 
@@ -270,6 +320,8 @@ As the function can include `start`, `step`, `repeat`, `frequency` and `startove
 - [Own](#own-sequences-details)
 - [Predefined](#predefined-sequences-details)
 - [Function](#function-sequences-details)
+- [Quoted Template](#quoted-template-details)
+- [Backtick Template](#backtick-template-details)
 
 - [History command](#history)
 
@@ -351,6 +403,19 @@ The syntax is built from segments. Each input type has a specific starting marke
 - sort / reverse
     - `$` forces insertion order to be document order (top→bottom).
     - `!` reverses insertion order. Combined: `!$` (or `$!`) yields bottom→top document order.
+
+**Template input modes** (alternative to the start-value approach above):
+
+| Mode              | Trigger                 | Inner sequence                                                |
+| ----------------- | ----------------------- | ------------------------------------------------------------- |
+| Quoted Template   | `"…"` or `'…'` at start | any sequence type after the closing quote; `{}` = placeholder |
+| Backtick Template | `` ` `` at start        | each `{…}` block is an independent sequence definition        |
+
+**Escape sequences in output strings:**
+
+| Escape | Result                                                           |
+| ------ | ---------------------------------------------------------------- |
+| `\t`   | tab character (preview renders tab width as non-breaking spaces) |
 
 More examples:
 
@@ -446,9 +511,9 @@ Predefined sequences are configured under `insertseq.mysequences` and referenced
 
 - Syntax: `;name`, `;"My Seq"`, `;?1` (array index), or `;element`.
 - The resolver matches array names or elements and starts accordingly. If no match is found, the identifier is used as a single-item sequence.
-    - You can add the following chars before of after the optional index:
+    - You can add the following chars before or after the optional index:
         - `i`: The input is case-insensitive, so `;jan` will also find a predefined sequence including `Jan`
-        - `f`: The input has to macht the complete word in the sequence. Example `Jan` will not match an item `January`
+        - `f`: The input has to match the complete word in the sequence. For example, `Jan` will not match an item `January`.
         - `s`: Normally, the location of the string is not important. With the `s` option, the input string has to match the beginning of the sequence item.
 
 Examples:
@@ -456,7 +521,7 @@ Examples:
 - `;Mar`
 - `;?1`
 - `;?1|3`
-- `;jan?i
+- `;jan?i`
 
 Interaction with other options is the same as for other sequence types.
 
@@ -481,7 +546,7 @@ Prefixes accepted: `=` (short), `func:`, or `function:` (readable). Functions ma
     - Function indexes are 1‑based (first configured function is `=1`). Options after the reference are passed into the function parameters as appropriate.
 
 - Return value and formatting
-    - The function has to return a string. Returned values are inserted verbatim.
+    - The function must return a string or number. Returned values are inserted verbatim.
 
 - Evaluation and errors
     - Predefined functions are evaluated in a sandbox or a resilient fallback evaluator depending on the host. If evaluation fails for a particular emission, the extension logs the error (when debug is enabled) and emits an empty/undefined insertion for that emission, but continues processing other emissions.
@@ -490,6 +555,58 @@ Prefixes accepted: `=` (short), `func:`, or `function:` (readable). Functions ma
     - Keep functions deterministic and side‑effect free.
     - Use parentheses around complex expressions or include parameters via the standard options (`:|step:`, `*|freq:`, `#|repeat:`, `##|startover:`).
     - Use the History command (`insertseq.history`) to quickly reuse or adjust previously working function calls.
+
+---
+
+### Quoted Template details
+
+`"<template>" <sequence-definition>`
+`'<template>' <sequence-definition>`
+
+The input begins with a `"` or `'` character. Everything up to the matching (unescaped) closing quote is the **template string**; everything after it is the **inner sequence definition**.
+
+- `{}` — placeholder: replaced by the value produced by the inner sequence for each emission. Multiple `{}` occurrences per template all receive the same value.
+- `\{}` — literal `{}` (not replaced).
+- `\"` or `\'` — literal quote character of the same type inside the template.
+- The inner sequence definition after the closing quote accepts any valid sequence type (numeric, alpha, date, expression, own, predefined, function) including all modifiers (step, format, repeat, etc.).
+- When no inner definition is provided, a plain incrementing decimal sequence starting at 1 is used.
+
+**Examples:**
+
+| Input                    | Output (3 cursors)                                      |
+| ------------------------ | ------------------------------------------------------- |
+| `"Item {}":1`            | `Item 1`, `Item 2`, `Item 3`                            |
+| `'x={}, y={}':a:2`       | `x=a, y=a`, `x=c, y=c`, `x=e, y=e`                      |
+| `"Score: {}~03d":0:10`   | `Score: 000`, `Score: 010`, `Score: 020`                |
+| `"Step \{fixed\}: {}":1` | `Step {fixed}: 1`, `Step {fixed}: 2`, `Step {fixed}: 3` |
+| `"Val: {}": \|(i*i)`     | `Val: 0`, `Val: 1`, `Val: 4`                            |
+
+---
+
+### Backtick Template details
+
+`` `<template>` ``
+
+The input begins with a backtick. Everything up to the matching (unescaped) closing backtick is the **template string** (the closing backtick is optional — if absent the rest of the input is the template).
+
+Each unescaped `{…}` block within the template is an independent **sequence definition**. The blocks are evaluated in parallel: for each emission index `i`, all blocks are advanced simultaneously. The output stops when any block's sequence stops.
+
+- Multiple `{…}` blocks — each has its own sequence type and options.
+- `\{` / `\}` — literal `{` / `}` (not treated as a sequence block).
+- `` \` `` — literal backtick inside the template.
+- `\\` — literal backslash.
+- An empty `{}` block defaults to a plain incrementing decimal sequence starting at 1.
+
+**Examples:**
+
+| Input                              | Output (3 cursors)                                |
+| ---------------------------------- | ------------------------------------------------- |
+| `` `Item {1}` ``                   | `Item 1`, `Item 2`, `Item 3`                      |
+| `` `{1} - {a}` ``                  | `1 - a`, `2 - b`, `3 - c`                         |
+| `` `Col {0x0:1} Row {1}` ``        | `Col 0x0 Row 1`, `Col 0x1 Row 2`, `Col 0x2 Row 3` |
+| `` `\{{1}\}` ``                    | `{1}`, `{2}`, `{3}`                               |
+| `` `{%2025-01-01:1m~"MMM"} {1}` `` | `Jan 1`, `Feb 2`, `Mar 3`                         |
+| `` `{a}\t{1:5}` ``                 | `a`+Tab+`1`, `b`+Tab+`6`, `c`+Tab+`11`            |
 
 ---
 
@@ -551,7 +668,7 @@ The extension exposes settings under the `insertseq` namespace. A quick referenc
 | `insertseq.previewColor`      |  string | `"#888888"`                    | Color used for the preview decoration.                                                                                                                                                                                                                                                                                                                                                            |
 | `insertseq.maxInsertions`     |  number | `10000`                        | Hard limit on the number of insertions to avoid large operations.                                                                                                                                                                                                                                                                                                                                 |
 | `insertseq.maxHistoryItems`   |  number | `100`                          | Maximum number of history items stored.                                                                                                                                                                                                                                                                                                                                                           |
-| `insertseq.debug`             | boolean | `false`                        | Enable debug output                                                                                                                                                                                                                                                                                                                                                                               |
+| `insertseq.debug`             | boolean | `false`                        | Enable debug output.                                                                                                                                                                                                                                                                                                                                                                              |
 
 Edit these settings in the VS Code settings UI or in `settings.json` under the `insertseq` namespace.
 

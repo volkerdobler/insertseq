@@ -2,6 +2,12 @@
 
 All notable changes to this extension (newest first):
 
+# Version 1.1
+
+- Added **Quoted Template** mode: start input with `"` or `'` to embed a sequence inside a fixed text. `{}` is the placeholder; the sequence definition follows the closing quote. Use `\{}` for a literal `{}`.
+- Added **Backtick Template** mode: start input with `` ` `` to embed sequences directly inside `{…}` blocks within the template text. Multiple `{…}` blocks per template are supported — each block has its own independent sequence definition. Use `\{` / `\}` for literal braces.
+- Added **`\t` escape**: typing `\t` anywhere in the input (sequence values, template text, own lists, …) inserts a real tab character. The preview visualises tabs using the editor's configured tab width.
+
 # Version 1.0.8
 
 - Fixed Option problem in Date functionality

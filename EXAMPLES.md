@@ -141,3 +141,19 @@ Given configuration:
 Input: `=2` with 5 selections → output:
 
 ![Example 14](./examples/InsertSeq_14.gif)
+
+### Quoted Template
+
+Use quoted templates if you want to insert text beside the sequence.
+
+Input: `"Template string with numbers {}" 3:7@i>5` with 13 selections → output:
+
+![Example 15](./examples/InsertSeq_15.gif)
+
+### Backtick Template
+
+Alternative, and if you want to insert multiple sequences in one input and text, you can use backtick templates.
+
+Input: `` `Hello backticks {3:5} and more {h:2}` `` with 15 selections → output:
+
+![Example 16](./examples/InsertSeq_16.gif)
