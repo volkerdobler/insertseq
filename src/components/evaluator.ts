@@ -415,8 +415,8 @@ export function getRegExpressions(): RuleTemplate {
 									)
 									(?= {{delimiter}} )
 								)`;
-	ruleTemplate.outputSort = `\\$!? $`;
-	ruleTemplate.outputReverse = `!\\$? $`;
+	ruleTemplate.outputSort = `\\$!?\\s*$`;
+	ruleTemplate.outputReverse = `!\\$?\\s*$`;
 
 	for (let [key, value] of Object.entries(ruleTemplate)) {
 		while (value.indexOf('{{') > -1) {
