@@ -436,8 +436,10 @@ More examples:
 - format
     - Padding, alignment, width, wrap flag `w`, and left/right hint `l`/`r`.
     - Examples: `a~>5`, `a~_>3`, `z~w`, `a~10l`.
+- stopexpression
+    - Always put the stop expression in parentheses.
 
-Other options (frequency, repeat, startover, expression, stopexpr, sort, reverse) behave the same as for numeric sequences.
+Other options (frequency, repeat, startover, expression, sort, reverse) behave the same as for numeric sequences.
 
 Examples:
 
@@ -445,6 +447,7 @@ Examples:
 - `a:2#3*2` → a,a,c,c,e,e,...
 - `x:-1~>4` → right-aligned width 4
 - `z~w` → z, a, b, c,...
+- `d@(_==="g")` → d, e, f (stops at 'g')
 
 ---
 
@@ -460,6 +463,8 @@ Most options work like numeric sequences — the parts below differ.
 - format
     - Supports optional `lang:` locale and a quoted format or a short token (for example, `iso`).
     - Examples: `%2025-03-02~"dd.MM.yyyy"`, `%2025-03-02~lang:de~"dd.MM.yyyy"`.
+- stopexpression
+    - Always put the stop expression in parentheses.
 
 Notes:
 
@@ -476,14 +481,14 @@ Examples:
 
 ### Expression sequences details
 
-- Start with `|` followed by an expression. The expression is evaluated for each emission.
+- Start with `|` followed by an expression. The expression is evaluated for each emission. It's recommended to put this expression in quotes
 - Does not accept step, repeat, frequency, or startover — implement such behavior inside the expression.
 - Format (`~`) and stopexpr (`@`) are allowed.
 - Placeholders: `_`, `o`, `c`, `p`, `a`, `s`, `n`, `i`.
 
 Examples:
 
-- `|(i+1)*10`
+- `|"(i+1)*10"`
 - `| "Row-" + (i+1)~>8`
 - `| (i%2===0 ? "even" : "odd")@i>=5`
 

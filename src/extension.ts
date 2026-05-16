@@ -126,6 +126,8 @@ function sortSelectionsByPosition(
 // expressions: |<expr>[~<format>][@<stopexpr>][$][!]
 // own (war "months"): ;<start>[:<step>][#<repeat>][\*<frequency>][##startover][~<format>][@<stopexpr>][$][!]
 // predefined: <predefinedList as array>[?[whicharray[|startat]][ifs]][:<step>][#<repeat>][\*<frequency>][##startover][~<format>][@<stopexpr>][$][!]
+// tempplate: ["']Text {} Text["'] SEQUENCE
+// backtick template: `Text {SEQUENCE} Text {SEQUENCE}`
 
 /**
  * Initialise the shared {@link TParameter} context for a command invocation.
@@ -145,6 +147,7 @@ async function initApp(editor: vscode.TextEditor): Promise<TParameter> {
 		vscode.workspace.getConfiguration(appName),
 	);
 
+	// check, if debug mode is true. If true, all printToConsole will write text to outputchannel or console
 	setDebugMode(config.get('debug') || false);
 
 	// read regular Expression for segmenting the input string
@@ -213,16 +216,10 @@ async function InsertSeqCommand(
 
 	printToConsole('Initialized parameters for InsertSeqCommand');
 
-	// get current alphabet from configuration and replace placeholder in regex
-	const currentAlphabet: string = parameter.config.get('alphabet') || '\u{0}';
-	parameter.segments['start_alpha'] = parameter.segments[
-		'start_alpha'
-	].replace('\\w', `${currentAlphabet}`);
-
 	// set input box options for sequence input, including placeHolder, predefined value if available and live preview as decorations
 	const inputOptions: vscode.InputBoxOptions = {
 		placeHolder:
-			'[<start>][:<step>][*<frequency>][#<repeat>][##startover][~<format>][::<expr>][@<stopexpr>][$][!]',
+			'[<start>][:<step>][*<frequency>][#<repeat>][##startover][~<format>][::<expr>][@<stopexpr>]["Template {}"][`Backtick {} more {}`][$][!]',
 		value: value,
 		validateInput: function (input) {
 			if (parameter.config.get('previewStatus') !== false) {
@@ -240,6 +237,7 @@ async function InsertSeqCommand(
 		// insert final sequence (check if canceled will be done in insertNewSequence and in saveToHistory)
 		insertNewSequence(input, parameter, 'final');
 		if (input != null) {
+			// save input to local history storage
 			saveToHistory(context, input);
 		}
 	});
@@ -314,7 +312,7 @@ function insertNewSequence(
 	const strList: string[] = [];
 	for (
 		let i = 0;
-		i < (Number(parameter.config.get('maxInsertions')) || 1000);
+		i < (Number(parameter.config.get('maxInsertions')) || 10000);
 		i++
 	) {
 		// build strList-Array until stop expression is true or maxInsertions reached
@@ -322,6 +320,7 @@ function insertNewSequence(
 		if (res.stopFunction) {
 			break;
 		}
+		// Replace \\t in Input with real TAB
 		strList.push(res.stringFunction.replace(/\\t/g, '\t'));
 	}
 
@@ -680,6 +679,7 @@ function createTemplateSeq(
 		return (_) => defaultReturn;
 	}
 
+	// which is the first char (" or ') - to find string ending
 	const quoteChar = input[0];
 
 	// find the closing (unescaped) quote
