@@ -17,27 +17,21 @@ last update May 2026
 import * as vscode from 'vscode';
 
 // internal modules
-import {
-	TInput,
-	TStatus,
-	TParameter,
-	TSpecialReplacementValues,
-	TOwnFunction,
-} from './types';
+import { TInput, TStatus, TParameter } from './types';
 import {
 	getHistory,
 	saveToHistory,
 	clearHistory,
 	deleteFromHistory,
 	migrateOldHistory,
-} from './history';
+} from './components/history';
 import {
 	setDebugMode,
 	setOutputChannel,
 	removeOutputChannel,
 	printToConsole,
-} from './utils';
-import { getRegExpressions } from './evaluator';
+} from './components/utils';
+import { getRegExpressions } from './components/evaluator';
 import { createDecimalSeq } from './sequences/decimal';
 import { createStringSeq } from './sequences/string';
 import { createDateSeq } from './sequences/date';
