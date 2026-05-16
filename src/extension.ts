@@ -56,6 +56,136 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	// set output channel for debug messages
 	setOutputChannel('InsertSeq');
+
+	// --- What's New: only show when a version-specific WHATSNEW-<version>.md exists ---
+	(async () => {
+		try {
+			const currentVersion = context.extension.packageJSON
+				.version as string;
+			const keyShown = 'shownWhatsNewForVersion';
+			const keyAlways = 'alwaysShowWhatsNew';
+			const always = context.globalState.get<boolean>(keyAlways) === true;
+			const shownFor = context.globalState.get<string>(keyShown);
+
+			// Candidate file names for this version (include padded MAJOR.MINOR.PATCH)
+			const parts = currentVersion.split('.');
+			while (parts.length < 3) parts.push('0');
+			const padded = parts.slice(0, 3).join('.');
+			const candidates = [
+				`WHATSNEW-${currentVersion}.md`,
+				`WHATSNEW-${currentVersion.replace(/\./g, '_')}.md`,
+				`WHATSNEW-${padded}.md`,
+			];
+			let foundPath: string | undefined;
+			for (const p of candidates) {
+				const uri = vscode.Uri.joinPath(context.extensionUri, p);
+				try {
+					await vscode.workspace.fs.stat(uri);
+					foundPath = p;
+					break;
+				} catch {
+					// not found — try next
+				}
+			}
+
+			// If no version-specific file exists, do nothing
+			if (!foundPath) {
+				return;
+			}
+
+			if (always || shownFor !== currentVersion) {
+				const buttons = ["What's New"] as string[];
+				if (always) {
+					buttons.push('Disable auto-show');
+				} else {
+					buttons.push('Always show on startup');
+				}
+				buttons.push('Dismiss');
+				const choice = await vscode.window.showInformationMessage(
+					`InsertSeq aktualisiert: v${currentVersion}`,
+					...buttons,
+				);
+				if (choice === "What's New") {
+					const uri = vscode.Uri.joinPath(
+						context.extensionUri,
+						foundPath,
+					);
+					try {
+						// open rendered Markdown preview (preferred)
+						await vscode.commands.executeCommand(
+							'markdown.showPreview',
+							uri,
+						);
+					} catch (err) {
+						try {
+							const doc =
+								await vscode.workspace.openTextDocument(uri);
+							await vscode.window.showTextDocument(doc, {
+								preview: true,
+							});
+						} catch {
+							vscode.window.showErrorMessage(
+								`${foundPath} nicht gefunden.`,
+							);
+						}
+					}
+					if (!always) {
+						const follow =
+							await vscode.window.showInformationMessage(
+								'Show this message on every startup?',
+								'Yes',
+								'No',
+							);
+						if (follow === 'Yes') {
+							await context.globalState.update(keyAlways, true);
+						} else {
+							await context.globalState.update(
+								keyShown,
+								currentVersion,
+							);
+						}
+					}
+				} else if (choice === 'Always show on startup') {
+					await context.globalState.update(keyAlways, true);
+					const uri = vscode.Uri.joinPath(
+						context.extensionUri,
+						foundPath,
+					);
+					try {
+						await vscode.commands.executeCommand(
+							'markdown.showPreview',
+							uri,
+						);
+					} catch (err) {
+						try {
+							const doc =
+								await vscode.workspace.openTextDocument(uri);
+							await vscode.window.showTextDocument(doc, {
+								preview: true,
+							});
+						} catch {
+							vscode.window.showErrorMessage(
+								`${foundPath} nicht gefunden.`,
+							);
+						}
+					}
+				} else if (choice === 'Disable auto-show') {
+					await context.globalState.update(keyAlways, false);
+					await context.globalState.update(keyShown, currentVersion);
+				} else {
+					// Dismiss or undefined
+					if (!always) {
+						await context.globalState.update(
+							keyShown,
+							currentVersion,
+						);
+					}
+				}
+			}
+		} catch (e) {
+			// silently ignore any errors in the what's-new flow
+		}
+	})();
 	// register insertseq command (normal insertion)
 	context.subscriptions.push(
 		vscode.commands.registerCommand(

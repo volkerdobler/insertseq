@@ -6,17 +6,18 @@ All notable changes to this extension (newest first):
 
 - Added **Quoted Template** mode: start input with `"` or `'` to embed a sequence inside a fixed text. `{}` is the placeholder; the sequence definition follows the closing quote. Use `\{}` for a literal `{}`.
 - Added **Backtick Template** mode: start input with `` ` `` to embed sequences directly inside `{…}` blocks within the template text. Multiple `{…}` blocks per template are supported — each block has its own independent sequence definition. Use `\{` / `\}` for literal braces.
-- Added **`\t` escape**: typing `\t` anywhere in the input (sequence values, template text, own lists, …) inserts a real tab character. The preview visualises tabs using the editor's configured tab width.
+- Added **`\t` escape**: typing `\t` anywhere in the input (sequence values, template text, own lists, etc.) inserts a real tab character. The preview visualizes tabs using the editor's configured tab width.
+- Added a small "What's New" notification for major and minor updates; it can be dismissed for the current version.
 
-- Fixed missing output formatting within expressions
+- Fixed missing output formatting within expressions.
 
 # Version 1.0.8
 
-- Fixed Option problem in Date functionality
-- Fixed minor bug when original sequence is used
-- Fixed minor bug with debug mode switch
+- Fixed an issue with date option handling.
+- Fixed a minor bug when the original sequence is used.
+- Fixed a minor bug with the debug-mode switch.
 
-- Update packages to newest version
+- Updated packages to the latest versions.
 
 # Version 1.0.7
 
@@ -37,10 +38,10 @@ All notable changes to this extension (newest first):
 
 # Version 1.0.5
 
-- Added own (predefined) functions (via config files) with the start char "=" or "func[tion]:" - it's similar to expressions, but you can predefine them upfront and use them easily.
-- Added readable starter names in addition to start chars (e.g. "predef[ined]seq[uence]:", "own[seq[uence]]:", "date:", "expr[ession]:", "alpha[bet]:" ) - don't forget the colon at the end
+- Added support for user-defined (predefined) functions (via config files) using the start char "=" or "func[tion]:" — similar to expressions but can be predefined and reused.
+- Added readable starter names in addition to start chars (for example: "predef[ined]seq[uence]:", "own[seq[uence]]:", "date:", "expr[ession]:", "alpha[bet]:"). Remember the trailing colon when using the long names.
 
-- Fixed a bug in the evaluation function (if you want to use the expression option, I recommend putting it at the very end of your input, as some symbols might conflict with other start chars or options, e.g. "\*" used both for frequency and multiplication in expressions)
+- Fixed a bug in the evaluation function. If you use the expression option, consider placing it at the end of your input — some symbols can conflict with other start chars or options (for example, `*` is used for both frequency and multiplication in expressions).
 
 # Version 1.0.4
 
