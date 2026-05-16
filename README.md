@@ -4,7 +4,7 @@ Insert Sequences is a small VS Code extension that helps you generate and insert
 
 All inputs are previewed live (as a decoration) for the current selections, so you can verify the generated sequence before pressing Enter.
 
-> ATTENTION: This is version 1.0 and a major update to previous versions. Read this documentation carefully!
+> ATTENTION: Version 1.0 is a major update from previous versions. Please read the documentation carefully!
 
 ## Usage
 
