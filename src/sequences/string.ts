@@ -12,6 +12,7 @@ import {
 	checkStopExpression,
 	getExpression,
 	getInputPart,
+	getFormatExpression,
 } from '../components/utils';
 
 /**
@@ -133,10 +134,7 @@ export function createStringSeq(
 	const stopexpr = getStopExpression(input, parameter);
 	const expr = getExpression(input, parameter);
 	const format =
-		getInputPart(
-			input,
-			new RegExp(parameter.segments['charStartFormat'], 'i'),
-		).match(parameter.segments['format_alpha'])?.groups?.format_alpha ||
+		getFormatExpression(input, parameter, 'format_alpha') ||
 		String(parameter.config.get('stringFormat')) ||
 		'';
 

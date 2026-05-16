@@ -1,4 +1,5 @@
 import { TParameter, TSpecialReplacementValues } from '../types';
+import * as formatting from '../formatting';
 import {
 	printToConsole,
 	replaceSpecialChars,
@@ -11,6 +12,8 @@ import {
 	getStopExpression,
 	checkStopExpression,
 	getExpression,
+	isNumeric,
+	getFormatExpression,
 } from '../components/utils';
 
 /**
@@ -109,8 +112,24 @@ export function createExpressionSeq(
 		replacableValues.previousValueStr =
 			replacableValues.valueAfterExpressionStr;
 
+		const format = isNumeric(replacableValues.currentValueStr)
+			? getFormatExpression(input, parameter, 'format_decimal') ||
+				String(parameter.config.get('numberFormat')) ||
+				''
+			: getFormatExpression(input, parameter, 'format_alpha') ||
+				String(parameter.config.get('stringFormat')) ||
+				'';
+
 		return {
-			stringFunction: replacableValues.currentValueStr,
+			stringFunction: isNumeric(replacableValues.currentValueStr)
+				? formatting.formatNumber(
+						Number(replacableValues.currentValueStr),
+						format,
+					)
+				: formatting.formatString(
+						replacableValues.currentValueStr,
+						format,
+					),
 			stopFunction: stopExprResult,
 		};
 	};

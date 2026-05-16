@@ -202,6 +202,33 @@ export function getStopExpression(
 }
 
 /**
+ * Extract the format specifier (`~<format>`) from the input string, or return
+ * `""` when none is present.
+ *
+ * Paired brackets and quoted strings are masked before searching so that a `~`
+ * inside an expression body is not mistaken for the format delimiter.
+ *
+ * @param input - Raw user input string.
+ * @param parameter - Shared command context.
+ * @param formatKey - Regex segment key used for matching (default: `"format_alpha"`).
+ *   Pass `"format_num"` for numeric sequences.
+ * @returns The format specifier string (without the leading `~`), or `""` when absent.
+ */
+export function getFormatExpression(
+	input: string,
+	parameter: TParameter,
+	formatKey: string = 'format_alpha',
+): string {
+	const formatPart = getInputPart(
+		input,
+		new RegExp(parameter.segments['charStartFormat'], 'i'),
+	);
+	return (
+		formatPart.match(parameter.segments[formatKey])?.groups?.[formatKey] || ''
+	);
+}
+
+/**
  * Extract the inline expression (`::expr`) from the input string, or return
  * `""` when none is present.
  *
@@ -839,4 +866,30 @@ export function replaceLeadingWrappedParenthesesWithQuotes(
 		replacementQuote +
 		input.slice(bend + 1)
 	);
+}
+
+/**
+ * Determine whether a given value (expected as a string) represents a
+ * finite numeric value.
+ *
+ * The function trims surrounding whitespace and returns `true` when
+ * `Number(str)` yields a finite `number`. Supported literal forms include
+ * decimal, exponential notation, and JS-recognized radices (e.g. `0x`,
+ * `0b`, `0o`). Non-string inputs and empty strings return `false`.
+ *
+ * @param {unknown} str - Input value to test (string expected).
+ * @returns {boolean} `true` when `str` is a string representing a finite number.
+ *
+ * @example
+ * isNumeric('123') // true
+ * isNumeric('  -1.5e2 ') // true
+ * isNumeric('0xFF') // true
+ * isNumeric('') // false
+ * isNumeric('123abc') // false
+ */
+export function isNumeric(str: unknown): boolean {
+	if (typeof str !== 'string') return false;
+	str = str.trim();
+	if (str === '') return false;
+	return Number.isFinite(Number(str));
 }

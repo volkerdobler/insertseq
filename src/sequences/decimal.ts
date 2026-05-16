@@ -12,6 +12,7 @@ import {
 	getStopExpression,
 	checkStopExpression,
 	getExpression,
+	getFormatExpression,
 } from '../components/utils';
 
 /**
@@ -74,19 +75,16 @@ export function createDecimalSeq(
 		base === 16 ? '#x' : base === 8 ? '#o' : base === 2 ? '#b' : '';
 
 	// format string: leading string (if given) or radixPrefix if given or format from input or configuration or empty
+	const inputFormat =
+		getFormatExpression(input, parameter, 'format_decimal') ||
+		String(parameter.config.get('numberFormat')) ||
+		'';
+
 	const format = leadString
 		? leadString[0] + '>' + (leadString.length + start.toString().length)
 		: radixPrefix
 			? basePrefix
-			: String(
-					getInputPart(
-						input,
-						new RegExp(parameter.segments['charStartFormat'], 'i'),
-					).match(parameter.segments['format_decimal'])?.groups
-						?.format_decimal ??
-						String(parameter.config.get('numberFormat')) ??
-						'',
-				);
+			: String(inputFormat);
 
 	// prepare special replacement values for expressions and stop expressions
 	const replacableValues: TSpecialReplacementValues = {
