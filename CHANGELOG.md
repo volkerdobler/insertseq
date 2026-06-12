@@ -2,7 +2,16 @@
 
 All notable changes to this extension (newest first):
 
-# Version 1.1
+# Version 1.1.1
+
+- Added configuration option (`insertseq.sortedOutput`) to enable default insertion in sorted order (default: false) — can be changed with the `$` option.
+- Added configuration option (`insertseq.reversedOutput`) to enable default insertion in reversed order (default: false) — can be changed with the `!` option.
+
+- Deprecated configuration option (`insertseq.sortOrder`): still works, but might be deleted in future versions. As "reverse" always implies "sorted" output, this option was not ideal. The two separate new options should be used.
+
+- Fixed issue https://github.com/volkerdobler/insertseq/issues/31 — the `sortOrder` configuration was not being used.
+
+# Version 1.1.0
 
 - Added **Quoted Template** mode: start input with `"` or `'` to embed a sequence inside a fixed text. `{}` is the placeholder; the sequence definition follows the closing quote. Use `\{}` for a literal `{}`.
 - Added **Backtick Template** mode: start input with `` ` `` to embed sequences directly inside `{…}` blocks within the template text. Multiple `{…}` blocks per template are supported — each block has its own independent sequence definition. Use `\{` / `\}` for literal braces.

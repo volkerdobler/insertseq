@@ -1,4 +1,4 @@
-# What's New — Version 1.1.0 (2026-05-16)
+# What's New — Version 1.1.0/1.1.1 (2026-06-12)
 
 ## Highlights
 
@@ -8,13 +8,18 @@
 
 - Added `\t` escape: typing `\t` anywhere in the input (sequence values, template text, inline lists, etc.) inserts a real TAB character. The live preview visualizes tabs using the editor's configured tab width.
 
+- Added two new configuration options (`sortedOutput` and `reversedOutput`) to sort or reverse output independently
+
 ## Bugfixes
 
 - Fixed missing output formatting inside expressions.
+- Fixed bug in configuration option `insertOrder` - this option is depreciated because of the two new options above
 
-More details in CHANGELOG.md or README.md
+- Deprecated configuration option `insertseq.insertOrder` — replaced by the two new options above.
 
-## Examples
+See CHANGELOG.md or README.md for details.
+
+## Template examples:
 
 ### Quoted Template
 

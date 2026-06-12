@@ -431,9 +431,11 @@ function insertNewSequence(
 ): void {
 	// check, if output should be sorted or reversed (default: output in selection-order)
 	const sorted =
-		(input && input.match(parameter.segments['outputSort'])) ?? null;
+		!!(input && input.match(parameter.segments['outputSort'])) !==
+		(parameter.config.get('insertOrder') !== 'cursor' || parameter.config.get('sortedOutput') === true);
 	const reverse =
-		(input && input.match(parameter.segments['outputReverse'])) ?? null;
+		!!(input && input.match(parameter.segments['outputReverse'])) !==
+		(parameter.config.get('insertOrder') === 'reverse' || parameter.config.get('reversedOutput') === true);
 
 	// get current sequence function based on input type
 	const currSeqFunction = getSequenceFunction(input, parameter);

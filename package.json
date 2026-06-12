@@ -112,17 +112,28 @@
 				"insertseq.insertOrder": {
 					"type": "string",
 					"default": "cursor",
+					"deprecationMessage": "Option is deprecated: use new Options 'sortedOutput' and 'reversedOutput'",
 					"description": "Default order of insertion",
 					"enum": [
 						"cursor",
 						"sorted",
 						"reverse"
 					],
-					"enumdescription": [
+					"enumDescriptions": [
 						"cursor (default): insertion is based on multi cursor click order",
 						"sorted: insertion is from top most click down",
 						"reverse: insertion is from bottom most click up"
 					]
+				},
+				"insertseq.sortedOutput": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, insertion is from top most click down; if false (default), insertion is based on multi cursor click order"
+				},
+				"insertseq.reversedOutput": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, insertion is is reversed; if false (default), insertion is done in 'normal' order"
 				},
 				"insertseq.century": {
 					"type": "string",
@@ -136,7 +147,7 @@
 						"l",
 						"r"
 					],
-					"enumdescription": [
+					"enumDescriptions": [
 						"l (default): e.g. a 1 char string centered in a 4 char field is left oriented (placed at position 2)",
 						"r: e.g. a 1 char string centered in a 4 char field is right oriented (placed at position 3)"
 					]
@@ -151,7 +162,7 @@
 						"m",
 						"y"
 					],
-					"enumdescription": [
+					"enumDescriptions": [
 						"d (default): days",
 						"w: weeks",
 						"m: months",
