@@ -374,7 +374,15 @@ _No completed tasks were found at the time of restructuring._
     - Verzögert die aufwendige Preview-Berechnung bei schnellen Tastenanschlägen, bis der Anwender kurz pausiert.
     - Beim Bestätigen mit Enter wird der anstehende Debounce-Timer sofort abgeräumt und die finale Sequenz synchron eingefügt.
   - Neue Konfigurationseinstellung `insertseq.previewDebounce` in `package.json` (Typ `number`, Standardwert: `60` ms, Minimum: `0` ms zum Deaktivieren).
-  - In `README.md` und Konfigurationstabelle dokumentiert.
+### 6.3 Atomare Edits mit `vscode.WorkspaceEdit`
 
-
-
+- **Problem:**
+  - Zuvor wurden Dokumentänderungen über `editor.edit((builder) => { ... })` ausgeführt.
+  - `editor.edit` kann in Randfällen scheitern oder fehlschlagen, wenn währenddessen asynchrone Dokument-Events, parallele Änderungen oder Cursor-Events eintreffen.
+  - Zudem garantiert `editor.edit` bei komplexen Multi-Cursor- und Überhang-Operationen nicht immer eine saubere, einzelne Undo/Redo-Transaktion auf Workspace-Ebene.
+- **Implementierung:**
+  - Alle Schreibzugriffe auf das Dokument in `src/extension.ts` wurden auf `vscode.WorkspaceEdit` migriert:
+    - In `initApp`: Das initiale Löschen selektierter Bereiche bei Multi-Cursor-Auswahl nutzt nun `const edit = new vscode.WorkspaceEdit(); edit.replace(...); await vscode.workspace.applyEdit(edit);`.
+    - In `insertNewSequence` (`status === 'final'`): Die Ersetzungen aller aktiven Cursors sowie das Einfügen von Überhang-Zeilen am letzten Cursor werden in einem einzigen `vscode.WorkspaceEdit` zusammengefasst und mit `await vscode.workspace.applyEdit(edit)` atomar appliziert.
+    - Die Funktionssignatur von `insertNewSequence` wurde auf `Promise<boolean>` typisiert, und alle Aufrufer (`InsertSeqCommand`, `InsertSeqWizard`, `InsertSeqHistory`, `InsertSeqPresets`) warten nun per `await` zuverlässig auf den Abschluss der finalen Transaktion.
+  - In `src/formatting.test.ts` wurde das VS Code Mock-Objekt um `WorkspaceEdit` und `workspace.applyEdit` erweitert und eine eigene automatisierte Test-Suite für atomare `WorkspaceEdit`-Operationen integriert.

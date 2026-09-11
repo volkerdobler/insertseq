@@ -358,11 +358,11 @@ async function initApp(editor: vscode.TextEditor): Promise<TParameter> {
 	);
 
 	// delete current selected Text (will be inserted later when input is cancelled). Wait for edit to finish because of the following cursor position reading.
-	await editor.edit((builder) => {
-		editor.selections.forEach((selection) => {
-			builder.replace(selection, '');
-		});
+	const edit = new vscode.WorkspaceEdit();
+	editor.selections.forEach((selection) => {
+		edit.replace(editor.document.uri, selection, '');
 	});
+	await vscode.workspace.applyEdit(edit);
 
 	// get current (multi-)cursor positions (without original selected Text)
 	const origCursorPositions = editor.selections.map(
@@ -453,7 +453,7 @@ async function InsertSeqCommand(
 	};
 
 	// show input box based on above options
-	vscode.window.showInputBox(inputOptions).then(function (
+	vscode.window.showInputBox(inputOptions).then(async function (
 		input: string | undefined,
 	) {
 		if (debounceTimer !== null) {
@@ -461,7 +461,7 @@ async function InsertSeqCommand(
 			debounceTimer = null;
 		}
 		// insert final sequence (check if canceled will be done in insertNewSequence and in saveToHistory)
-		insertNewSequence(input, parameter, 'final');
+		await insertNewSequence(input, parameter, 'final');
 		if (input !== null) {
 			// save input to local history storage
 			saveToHistory(context, input);
@@ -614,7 +614,7 @@ async function InsertSeqWizard(
 		},
 		commit: async (seq: string) => {
 			committed = true;
-			insertNewSequence(seq, parameter, 'final');
+			await insertNewSequence(seq, parameter, 'final');
 			await saveToHistory(context, seq);
 		},
 		editInInputBox: async (seq: string) => {
@@ -623,13 +623,13 @@ async function InsertSeqWizard(
 		},
 		savePreset: async (seq: string) => {
 			committed = true;
-			insertNewSequence(seq, parameter, 'final');
+			await insertNewSequence(seq, parameter, 'final');
 			await saveToHistory(context, seq);
 			await InsertSeqSavePreset(context, seq);
 		},
-		cancel: () => {
+		cancel: async () => {
 			if (!committed) {
-				insertNewSequence(undefined, parameter, 'final');
+				await insertNewSequence(undefined, parameter, 'final');
 			}
 		},
 	});
@@ -652,11 +652,11 @@ async function InsertSeqWizard(
  * @param parameter - Shared command context.
  * @param status - `"preview"` to show decorations, `"final"` to commit to the document.
  */
-function insertNewSequence(
+async function insertNewSequence(
 	input: string | undefined, // der eingegebene Text
 	parameter: TParameter,
 	status: TStatus,
-): void {
+): Promise<boolean> {
 	// check, if output should be sorted or reversed (default: output in selection-order)
 	const sorted =
 		!!(input && input.match(parameter.segments['outputSort'])) !==
@@ -769,76 +769,83 @@ function insertNewSequence(
 			inlineCompletionProvider?.update(inlineItems);
 			break;
 		}
-		case 'final':
+		case 'final': {
 			// final insertion — clear previous decorations and native ghost text
 			parameter.editor.setDecorations(previewDecorationType, []);
 			inlineCompletionProvider?.clear();
 
-			parameter.editor.edit((builder) => {
-				let addStr = '';
-				const overflowLines: string[] = [];
+			const docUri = parameter.editor.document.uri;
+			const edit = new vscode.WorkspaceEdit();
 
-				// if no strings created, use original selected text as backup
-				if (strList.length === 0) {
-					parameter.origTextSel.map((s) => strList.push(s));
-				}
+			let addStr = '';
+			const overflowLines: string[] = [];
 
-				const maxIndex =
-					delimiter === null
-						? insertCursorPos.length
-						: insertCursorPos.length - 1;
+			// if no strings created, use original selected text as backup
+			if (strList.length === 0) {
+				parameter.origTextSel.map((s) => strList.push(s));
+			}
 
-				// for each created string, insert at original cursor position. If more strings than original cursors, insert the rest at the end (with delimiter or newline symbol)
-				strList.forEach((str, index) => {
-					if (index < maxIndex) {
-						const currSel = new vscode.Selection(
-							insertCursorPos[index].start.line,
-							insertCursorPos[index].start.character,
-							insertCursorPos[index].end.line,
-							insertCursorPos[index].end.character,
-						);
-						builder.replace(currSel, str);
-					} else {
-						if (delimiter === null) {
-							overflowLines.push(str);
-						} else {
-							addStr += str + delimiter;
-						}
-					}
-				});
+			const maxIndex =
+				delimiter === null
+					? insertCursorPos.length
+					: insertCursorPos.length - 1;
 
-				// insert all overflow lines as a single operation to preserve correct order
-				if (overflowLines.length > 0) {
-					const lastLine = insertCursorPos[maxIndex - 1].start.line;
-					const insertPos = new vscode.Position(lastLine + 1, 0);
-					if (
-						insertPos.line === parameter.editor.document.lineCount
-					) {
-						builder.insert(
-							insertPos,
-							eolString + overflowLines.join(eolString),
-						);
-					} else {
-						builder.insert(
-							insertPos,
-							overflowLines.join(eolString) + eolString,
-						);
-					}
-				}
-
-				if (addStr.length > 0) {
-					const lastPos = insertCursorPos[insertCursorPos.length - 1];
-					const currSel = new vscode.Range(
-						lastPos.start.line,
-						lastPos.start.character,
-						lastPos.end.line,
-						lastPos.end.character,
+			// for each created string, insert at original cursor position. If more strings than original cursors, insert the rest at the end (with delimiter or newline symbol)
+			strList.forEach((str, index) => {
+				if (index < maxIndex) {
+					const currSel = new vscode.Selection(
+						insertCursorPos[index].start.line,
+						insertCursorPos[index].start.character,
+						insertCursorPos[index].end.line,
+						insertCursorPos[index].end.character,
 					);
-					builder.replace(currSel, addStr.slice(0, -1));
+					edit.replace(docUri, currSel, str);
+				} else {
+					if (delimiter === null) {
+						overflowLines.push(str);
+					} else {
+						addStr += str + delimiter;
+					}
 				}
 			});
-			break;
+
+			// insert all overflow lines as a single operation to preserve correct order
+			if (overflowLines.length > 0) {
+				const lastLine = insertCursorPos[maxIndex - 1].start.line;
+				const insertPos = new vscode.Position(lastLine + 1, 0);
+				if (
+					insertPos.line === parameter.editor.document.lineCount
+				) {
+					edit.insert(
+						docUri,
+						insertPos,
+						eolString + overflowLines.join(eolString),
+					);
+				} else {
+					edit.insert(
+						docUri,
+						insertPos,
+						overflowLines.join(eolString) + eolString,
+					);
+				}
+			}
+
+			if (addStr.length > 0) {
+				const lastPos = insertCursorPos[insertCursorPos.length - 1];
+				const currSel = new vscode.Range(
+					lastPos.start.line,
+					lastPos.start.character,
+					lastPos.end.line,
+					lastPos.end.character,
+				);
+				edit.replace(docUri, currSel, addStr.slice(0, -1));
+			}
+
+			return await vscode.workspace.applyEdit(edit);
+		}
 	}
+
+	return true;
 }
 
 /**
@@ -1426,7 +1433,7 @@ function createQuickPick(
 		accepted = true;
 		qp.busy = true;
 		try {
-			insertNewSequence(chosen.cmd, parameter, 'final');
+			await insertNewSequence(chosen.cmd, parameter, 'final');
 			// save to history (will no-op if already present)
 			await saveToHistory(context, chosen.cmd);
 		} finally {
@@ -1434,13 +1441,13 @@ function createQuickPick(
 			qp.hide();
 		}
 	});
-	qp.onDidHide(() => {
+	qp.onDidHide(async () => {
 		// clear preview decorations
 		if (previewDecorationType) {
 			parameter.editor.setDecorations(previewDecorationType, []);
 		}
 		if (!accepted) {
-			insertNewSequence(undefined, parameter, 'final');
+			await insertNewSequence(undefined, parameter, 'final');
 		}
 		qp.dispose();
 	});
@@ -1676,7 +1683,7 @@ function createPresetsQuickPick(
 		accepted = true;
 		qp.busy = true;
 		try {
-			insertNewSequence(chosen.preset.sequence, parameter, 'final');
+			await insertNewSequence(chosen.preset.sequence, parameter, 'final');
 			await saveToHistory(context, chosen.preset.sequence);
 		} finally {
 			qp.busy = false;
@@ -1684,12 +1691,12 @@ function createPresetsQuickPick(
 		}
 	});
 
-	qp.onDidHide(() => {
+	qp.onDidHide(async () => {
 		if (previewDecorationType) {
 			parameter.editor.setDecorations(previewDecorationType, []);
 		}
 		if (!accepted) {
-			insertNewSequence(undefined, parameter, 'final');
+			await insertNewSequence(undefined, parameter, 'final');
 		}
 		qp.dispose();
 	});

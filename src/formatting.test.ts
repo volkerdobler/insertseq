@@ -40,6 +40,24 @@ Module.prototype.require = function (id: string) {
 				(this as any).insertText = text;
 				(this as any).range = range;
 			},
+			WorkspaceEdit: class {
+				private edits: Array<{ type: string; uri: any; rangeOrPos: any; text: string }> = [];
+				replace(uri: any, range: any, text: string) {
+					this.edits.push({ type: 'replace', uri, rangeOrPos: range, text });
+				}
+				insert(uri: any, position: any, text: string) {
+					this.edits.push({ type: 'insert', uri, rangeOrPos: position, text });
+				}
+				delete(uri: any, range: any) {
+					this.edits.push({ type: 'delete', uri, rangeOrPos: range, text: '' });
+				}
+				has(uri: any) {
+					return this.edits.some((e) => e.uri === uri);
+				}
+				entries() {
+					return [[undefined, this.edits]];
+				}
+			},
 			workspace: {
 				getConfiguration: () => ({
 					get: (key: string) => mockConfigStore[key],
@@ -47,6 +65,7 @@ Module.prototype.require = function (id: string) {
 						mockConfigStore[key] = value;
 					},
 				}),
+				applyEdit: async (_edit: any) => true,
 			},
 			window: {
 				createOutputChannel: () => ({
@@ -924,10 +943,23 @@ const mockExtensionContext: any = {
 	assertEqual(t('err_invalid_expression', testValidatorParamEn, 'testVar'), 'Invalid expression: testVar', 'placeholder interpolation');
 	assertEqual(t('err_invalid_expression', testValidatorParam, 'testVar'), 'Ungültiger Ausdruck: testVar', 'german placeholder interpolation');
 
+	// 13. Atomic Edits with vscode.WorkspaceEdit (6.3)
+	const vscodeMod = require('vscode');
+	const wsEdit = new vscodeMod.WorkspaceEdit();
+	const mockUri = { path: '/test/file.txt' };
+	wsEdit.replace(mockUri, { start: 0, end: 5 }, 'replaced text');
+	wsEdit.insert(mockUri, { line: 1, character: 0 }, 'inserted line');
+	assertEqual(wsEdit.has(mockUri), true, 'wsEdit contains mockUri');
+	const editEntries = wsEdit.entries();
+	assertEqual(editEntries[0][1].length, 2, 'wsEdit contains 2 operations');
+	const applyResult = await vscodeMod.workspace.applyEdit(wsEdit);
+	assertEqual(applyResult, true, 'workspace.applyEdit returns true');
+
 	console.log('Validator tests passed');
 	console.log('Ghost-text preview tests passed');
 	console.log('Typed scope variable and stop condition tests passed');
 	console.log('i18n multilingual tests passed');
+	console.log('WorkspaceEdit atomic tests passed');
 })().catch((err) => {
 	console.error('Preset/Wizard/Validator tests failed:', err);
 	process.exit(1);

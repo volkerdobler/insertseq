@@ -9,26 +9,16 @@ Dieser Bericht dokumentiert alle identifizierten Probleme, logischen Schwachstel
 1. [Kritische Bugs (Schweregrad: Hoch)]
 2. [Berechnungs-, Logik- und Parsing-Fehler (Schweregrad: Mittel)]
 3. [Vorschläge für funktionale Erweiterungen]
-4. [Vorschläge für User Experience (UX)](#5-vorschläge-für-user-experience-ux)
+4. [Vorschläge für User Experience (UX)]
 5. [Vorschläge für Architektur & Testautomatisierung](#6-vorschläge-für-architektur--testautomatisierung)
 6. [Empfohlene Roadmap](#7-empfohlene-roadmap)
 
 
 ---
 
-## 5. Vorschläge für User Experience (UX)
-
-_Alle Punkte aus Abschnitt 5 (5.1, 5.2, 5.3, 5.4) wurden erfolgreich umgesetzt (siehe HISTORY.md)._
-
----
-
 ## 6. Vorschläge für Architektur & Testautomatisierung
 
-_Abschnitte 6.1 (Echte Scope-Variablen in safeEvaluate) und 6.2 (Debouncing bei validateInput) wurden erfolgreich umgesetzt (siehe HISTORY.md)._
-
-### 6.3 Atomare Edits mit `vscode.WorkspaceEdit`
-
-- `editor.edit` kann in Randfällen scheitern, wenn währenddessen Dokument-Events eintreffen. Ein `WorkspaceEdit` fasst alle Änderungen (auch über Cursor-Grenzen hinweg) garantiert in einer einzigen atomaren Undo/Redo-Transaktion zusammen.
+_Abschnitte 6.1 (Echte Scope-Variablen in safeEvaluate), 6.2 (Debouncing bei validateInput) und 6.3 (Atomare Edits mit vscode.WorkspaceEdit) wurden erfolgreich umgesetzt (siehe HISTORY.md)._
 
 ### 6.4 Echtes Unit-Test-Framework (Vitest / Mocha)
 
@@ -110,6 +100,6 @@ _Abschnitte 6.1 (Echte Scope-Variablen in safeEvaluate) und 6.2 (Debouncing bei 
 4. **Architektur & Testautomatisierung:**
     - [x] 6.1 Echte Scope-Variablen statt Regex-Stringersetzung in `safeEvaluate`.
     - [x] 6.2 Debouncing bei `validateInput` (`insertseq.previewDebounce`).
-    - [ ] 6.3 Atomare Edits mit `vscode.WorkspaceEdit`.
+    - [x] 6.3 Atomare Edits mit `vscode.WorkspaceEdit`.
     - [ ] 6.4 Vitest-basiertes Test-Setup einrichten.
     - [ ] 6.5 Parser-Migration: Umstellung von RegEx-Kaskaden auf Lexer/Tokenizer + AST-Parser.
