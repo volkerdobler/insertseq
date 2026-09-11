@@ -331,6 +331,20 @@ _No completed tasks were found at the time of restructuring._
     - `"decoration"`: Klassischer Stil mit `insertseq.previewColor`.
   - Umfangreiche automatisierte Tests in `src/formatting.test.ts`.
 
+### 5.5 Internationalisierung (i18n) für Validierung & Syntax-Hilfe
+
+- **Problem:** Die Validierungs- und Syntaxhilfetexte in `src/components/validator.ts` waren bisher fest auf Deutsch kodiert. Bei internationaler Nutzung der Extension sollten standardmäßig englische Texte erscheinen, Deutsch für deutschsprachige VS Code Installationen beibehalten werden und weitere Sprachen leicht ergänzbar sein.
+- **Implementierung:**
+  - Neues Übersetzungsmodul `src/i18n.ts` mit typsicherem Dictionary (`translations.en` und `translations.de`).
+  - Intelligente Erkennung der Nutzersprache:
+    1. Manuelle Konfigurationseinstellung `insertseq.language` (z. B. `'en'`, `'de'`).
+    2. Fallback auf die VS Code Benutzeroberflächen-Sprache (`vscode.env.language`, z. B. `'de'`, `'de-DE'`).
+    3. Weltweiter Standard: `'en'` (Englisch).
+  - Typsichere Übersetzungsfunktion `t(key, parameter, ...args)` mit automatischer Platzhalter-Ersetzung (`{0}`, `{1}`, ...).
+  - Alle Meldungen in `src/components/validator.ts` (Fehler, Syntax-Hilfen, Warnungen) auf `t(...)` umgestellt.
+  - Dokumentation und Einstellung `insertseq.language` in `package.json` und `README.md` aktualisiert.
+  - Automatisierte Unit-Tests in `src/formatting.test.ts` für beide Sprachen (`en` und `de`) sowie direkte Modultests für `i18n`.
+
 ---
 
 ## 6. Architektur & Testautomatisierung

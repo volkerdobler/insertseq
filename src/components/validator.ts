@@ -3,6 +3,7 @@ import { TParameter } from '../types';
 import { safeEvaluate } from './safeEval';
 import { getExpression, getStopExpression, maskPairedAndQuoted } from './utils';
 import { Temporal } from 'temporal-polyfill';
+import { t } from '../i18n';
 
 export type ValidationResult = vscode.InputBoxValidationMessage | string | null;
 
@@ -10,9 +11,9 @@ export type ValidationResult = vscode.InputBoxValidationMessage | string | null;
  * Cleans up raw JavaScript error strings for user display.
  * (e.g. "ReferenceError: foo is not defined" -> "'foo' is not defined")
  */
-export function cleanErrorMessage(err: string): string {
+export function cleanErrorMessage(err: string, parameter?: TParameter): string {
 	if (!err) {
-		return 'Syntax or evaluation error';
+		return t('err_syntax_or_eval', parameter);
 	}
 	let msg = err.replace(/^(?:[a-zA-Z]+Error:\s*)+/i, '').trim();
 	// Quote bare variable name in "... is not defined"
@@ -82,7 +83,7 @@ export function validateSequenceInput(
 		const secondTick = trimmed.indexOf('`', 1);
 		if (secondTick === -1) {
 			return {
-				message: 'Unclosed backtick template (missing closing `)',
+				message: t('err_unclosed_backtick', parameter),
 				severity: vscode.InputBoxValidationSeverity.Warning,
 			};
 		}
@@ -95,7 +96,7 @@ export function validateSequenceInput(
 				depth--;
 				if (depth < 0) {
 					return {
-						message: 'Unmatched "}" in backtick template',
+						message: t('err_unmatched_brace', parameter),
 						severity: vscode.InputBoxValidationSeverity.Error,
 					};
 				}
@@ -103,7 +104,7 @@ export function validateSequenceInput(
 		}
 		if (depth > 0) {
 			return {
-				message: 'Unclosed "{" in template placeholder',
+				message: t('err_unclosed_brace', parameter),
 				severity: vscode.InputBoxValidationSeverity.Warning,
 			};
 		}
@@ -117,14 +118,14 @@ export function validateSequenceInput(
 		const closingQuote = trimmed.indexOf(quote, 1);
 		if (closingQuote === -1) {
 			return {
-				message: 'Unclosed quote in template',
+				message: t('err_unclosed_quote', parameter),
 				severity: vscode.InputBoxValidationSeverity.Warning,
 			};
 		}
 		const templateBody = trimmed.slice(1, closingQuote);
 		if (!templateBody.includes('{}')) {
 			return {
-				message: 'Template string should contain "{}" placeholder for sequence insertion',
+				message: t('info_template_placeholder', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
@@ -140,7 +141,7 @@ export function validateSequenceInput(
 
 		if (!rawExpr) {
 			return {
-				message: 'Enter a JavaScript expression (e.g. |"item_" + (i+1))',
+				message: t('info_enter_standalone_expr', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
@@ -148,7 +149,7 @@ export function validateSequenceInput(
 		const test = testExpressionSyntax(rawExpr, parameter);
 		if (!test.ok) {
 			return {
-				message: `Ungültiger Ausdruck: ${test.error}`,
+				message: t('err_invalid_expression', parameter, test.error || ''),
 				severity: vscode.InputBoxValidationSeverity.Error,
 			};
 		}
@@ -162,7 +163,7 @@ export function validateSequenceInput(
 		// Incomplete trailing '::'
 		if (/::\s*$/i.test(trimmed) || /\bexpr(?:ession)?:\s*$/i.test(trimmed)) {
 			return {
-				message: 'Enter a JavaScript expression after "::" (e.g. ::"row_" + _)',
+				message: t('info_enter_inline_expr', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
@@ -185,7 +186,7 @@ export function validateSequenceInput(
 			const test = testExpressionSyntax(inlineExpr, parameter);
 			if (!test.ok) {
 				return {
-					message: `Ungültiger Ausdruck (::): ${test.error}`,
+					message: t('err_invalid_inline_expr', parameter, test.error || ''),
 					severity: vscode.InputBoxValidationSeverity.Error,
 				};
 			}
@@ -198,7 +199,7 @@ export function validateSequenceInput(
 	if (/@/i.test(trimmed) || /\bstop(?:if)?:/i.test(trimmed)) {
 		if (/@\s*$/i.test(trimmed) || /\bstop(?:if)?:\s*$/i.test(trimmed)) {
 			return {
-				message: 'Enter a stop condition after "@" (e.g. @i>=10)',
+				message: t('info_enter_stop_expr', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
@@ -220,7 +221,7 @@ export function validateSequenceInput(
 			const test = testExpressionSyntax(stopExpr, parameter);
 			if (!test.ok) {
 				return {
-					message: `Ungültige Stop-Bedingung (@): ${test.error}`,
+					message: t('err_invalid_stop_expr', parameter, test.error || ''),
 					severity: vscode.InputBoxValidationSeverity.Error,
 				};
 			}
@@ -235,13 +236,13 @@ export function validateSequenceInput(
 		const hexDigits = hexMatch[2];
 		if (!hexDigits) {
 			return {
-				message: 'Enter hexadecimal digits (0-9, a-f)',
+				message: t('info_enter_hex_digits', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
 		if (/[^0-9a-fA-F_]/.test(hexDigits)) {
 			return {
-				message: `Invalid hexadecimal number: "${hexMatch[0]}" contains non-hex characters`,
+				message: t('err_invalid_hex', parameter, hexMatch[0]),
 				severity: vscode.InputBoxValidationSeverity.Error,
 			};
 		}
@@ -252,13 +253,13 @@ export function validateSequenceInput(
 		const binDigits = binMatch[2];
 		if (!binDigits) {
 			return {
-				message: 'Enter binary digits (0 or 1)',
+				message: t('info_enter_bin_digits', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
 		if (/[^01_]/.test(binDigits)) {
 			return {
-				message: `Invalid binary number: "${binMatch[0]}" contains non-binary characters`,
+				message: t('err_invalid_bin', parameter, binMatch[0]),
 				severity: vscode.InputBoxValidationSeverity.Error,
 			};
 		}
@@ -269,13 +270,13 @@ export function validateSequenceInput(
 		const octDigits = octMatch[2];
 		if (!octDigits) {
 			return {
-				message: 'Enter octal digits (0-7)',
+				message: t('info_enter_oct_digits', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
 		if (/[^0-7_]/.test(octDigits)) {
 			return {
-				message: `Invalid octal number: "${octMatch[0]}" contains non-octal characters`,
+				message: t('err_invalid_oct', parameter, octMatch[0]),
 				severity: vscode.InputBoxValidationSeverity.Error,
 			};
 		}
@@ -290,7 +291,7 @@ export function validateSequenceInput(
 		for (const oct of octets) {
 			if (oct > 255) {
 				return {
-					message: `Invalid IPv4 address: octet exceeds 255 (found ${oct})`,
+					message: t('err_invalid_ip_octet', parameter, oct),
 					severity: vscode.InputBoxValidationSeverity.Error,
 				};
 			}
@@ -299,7 +300,7 @@ export function validateSequenceInput(
 			const prefix = Number(ipMatch[2]);
 			if (prefix > 32) {
 				return {
-					message: `Invalid IPv4 CIDR prefix /${prefix} (must be 0-32)`,
+					message: t('err_invalid_ip_cidr', parameter, prefix),
 					severity: vscode.InputBoxValidationSeverity.Error,
 				};
 			}
@@ -320,7 +321,7 @@ export function validateSequenceInput(
 					const [hh, mm, ss] = dateStr.split(':').map(Number);
 					if (hh > 23 || mm > 59 || (ss !== undefined && ss > 59)) {
 						return {
-							message: `Invalid time "${dateStr}": hours must be 0-23 and minutes/seconds 0-59`,
+							message: t('err_invalid_time', parameter, dateStr),
 							severity: vscode.InputBoxValidationSeverity.Error,
 						};
 					}
@@ -329,7 +330,12 @@ export function validateSequenceInput(
 						Temporal.PlainDate.from(dateStr);
 					} catch (e: any) {
 						return {
-							message: `Invalid date "${dateStr}": ${cleanErrorMessage(e?.message || '')}`,
+							message: t(
+								'err_invalid_date',
+								parameter,
+								dateStr,
+								cleanErrorMessage(e?.message || ''),
+							),
 							severity: vscode.InputBoxValidationSeverity.Error,
 						};
 					}
@@ -347,7 +353,7 @@ export function validateSequenceInput(
 			const ver = uuidMatch[1].toLowerCase().trim();
 			if (ver !== 'v4' && ver !== 'v7' && ver !== '4' && ver !== '7') {
 				return {
-					message: `Unknown UUID version "${ver}": only v4 and v7 are supported`,
+					message: t('err_unknown_uuid', parameter, ver),
 					severity: vscode.InputBoxValidationSeverity.Error,
 				};
 			}
@@ -362,7 +368,11 @@ export function validateSequenceInput(
 			const len = Number(tokenMatch[1].trim());
 			if (isNaN(len) || len <= 0) {
 				return {
-					message: `Invalid length "${tokenMatch[1]}": expected a positive number`,
+					message: t(
+						'err_invalid_token_len',
+						parameter,
+						tokenMatch[1],
+					),
 					severity: vscode.InputBoxValidationSeverity.Error,
 				};
 			}
@@ -376,7 +386,7 @@ export function validateSequenceInput(
 	// Trailing '##' or 'startover:'
 	if (/##\s*$/i.test(trimmedMasked) || /\bstart(?:over|again)?:\s*$/i.test(trimmedMasked)) {
 		return {
-			message: '##<startover> – Neustart: Sequenz alle N Werte neu starten (z. B. ##10)',
+			message: t('hint_startover', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -384,7 +394,7 @@ export function validateSequenceInput(
 	// Trailing single '#' or 'rep:'
 	if (/(?<!#)#\s*$/i.test(trimmedMasked) || /\brep(?:eat|etition)?:\s*$/i.test(trimmedMasked)) {
 		return {
-			message: '#<repeat> – Repetition / Zyklus: Sequenz nach N Werten wiederholen (z. B. #5)',
+			message: t('hint_repeat', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -392,7 +402,7 @@ export function validateSequenceInput(
 	// Trailing '*' or 'freq:'
 	if (/\*\s*$/i.test(trimmedMasked) || /\bfreq(?:uency)?:\s*$/i.test(trimmedMasked)) {
 		return {
-			message: '*<frequency> – Frequenz: jeden Wert N-mal wiederholen (z. B. *2)',
+			message: t('hint_frequency', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -400,7 +410,7 @@ export function validateSequenceInput(
 	// Trailing '~' or 'format:'
 	if (/~\s*$/i.test(trimmedMasked) || /\bformat:\s*$/i.test(trimmedMasked)) {
 		return {
-			message: '~<format> – Formatierung (z. B. ~03d für Padding, ~>10 für Ausrichtung, ~hex, ~bin, ~roman)',
+			message: t('hint_format', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -408,7 +418,7 @@ export function validateSequenceInput(
 	// Trailing '?' or 'opt:'
 	if (/\?\s*$/i.test(trimmedMasked) || /\bopt(?:ions?)?:\s*$/i.test(trimmedMasked)) {
 		return {
-			message: '?<option> – Casing / Option (?u = GROSS, ?l = klein, ?p = PascalCase)',
+			message: t('hint_casing', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -416,7 +426,7 @@ export function validateSequenceInput(
 	// Trailing '_' (delimiter)
 	if (/(?<!_)_\s*$/i.test(trimmedMasked) || /\bdelimiter:\s*$/i.test(trimmedMasked)) {
 		return {
-			message: '_<delim> – Benutzerdefiniertes Trennzeichen (z. B. _, oder _-)',
+			message: t('hint_delim', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -424,7 +434,7 @@ export function validateSequenceInput(
 	// Trailing 'r' directly preceded by a number (random range)
 	if (/[+-]?(?:0[xob])?\d+(?:\.\d+)?r\s*$/i.test(trimmedMasked)) {
 		return {
-			message: 'r<max> – Zufallsbereich: Obergrenze angeben (z. B. 1r10 = Zufallszahlen zwischen 1 und 10)',
+			message: t('hint_random_range', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -433,37 +443,37 @@ export function validateSequenceInput(
 	if (/(?<!:):(?!\s*:)\s*$/i.test(trimmedMasked)) {
 		if (trimmedMasked === ':') {
 			return {
-				message: ':<step> (Schrittweite) oder Spezialsequenz (:uuid, :rnd:<Länge>, :pwd:<Länge>, :ip)',
+				message: t('hint_step_or_devops', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
 		if (/^:(?:rnd|random):?\s*$/i.test(trimmedMasked)) {
 			return {
-				message: ':rnd:<Länge> – Alphanumerischer Zufallstoken (z. B. :rnd:16)',
+				message: t('hint_rnd_len', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
 		if (/^:(?:pwd|password):?\s*$/i.test(trimmedMasked)) {
 			return {
-				message: ':pwd:<Länge> – Sicheres Zufallspasswort (z. B. :pwd:16)',
+				message: t('hint_pwd_len', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
 		if (/^:(?:hex|hash):?\s*$/i.test(trimmedMasked)) {
 			return {
-				message: ':hex:<Länge> – Hexadezimaler Hash/Token (z. B. :hex:32)',
+				message: t('hint_hex_len', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
 		if (/^:(?:token):?\s*$/i.test(trimmedMasked)) {
 			return {
-				message: ':token:<Länge> – URL-sicherer Token (z. B. :token:24)',
+				message: t('hint_token_len', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
 		if (/^:uuid:?\s*$/i.test(trimmedMasked)) {
 			return {
-				message: ':uuid[:<version>] – UUID-Generator (Standard v4, oder :uuid:v7)',
+				message: t('hint_uuid', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
@@ -472,18 +482,18 @@ export function validateSequenceInput(
 			/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?:\/\d+)?:?\s*$/i.test(trimmedMasked)
 		) {
 			return {
-				message: ':<step> – IPv4-Schrittweite (z. B. :1, :-1)',
+				message: t('hint_ip_step', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
 		if (/^%|^date:/i.test(trimmedMasked)) {
 			return {
-				message: ':<step> – Datumsschrittweite (z. B. :1d, :2w, :1m, :1y, :1h, :15min)',
+				message: t('hint_date_step', parameter),
 				severity: vscode.InputBoxValidationSeverity.Info,
 			};
 		}
 		return {
-			message: ':<step> – Schrittweite / Step size (z. B. :2, :-1)',
+			message: t('hint_step', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -491,7 +501,7 @@ export function validateSequenceInput(
 	// Incomplete keyword 'step:'
 	if (/\bstep(?:s)?:\s*$/i.test(trimmedMasked)) {
 		return {
-			message: 'step:<step> – Schrittweite / Step size (z. B. step:2, step:-1)',
+			message: t('hint_step_keyword', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -499,37 +509,41 @@ export function validateSequenceInput(
 	// Single trigger characters at beginning of input
 	if (trimmedMasked === ';') {
 		return {
-			message: ';<name> – Vordefinierte Liste aus Einstellungen (z. B. ;Jan, ;?1)',
+			message: t('hint_list', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
 	if (trimmedMasked === '=') {
 		return {
-			message: '=<name> – Reusable Function aus Einstellungen (z. B. =1, =2;5)',
+			message: t('hint_function', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
 	if (trimmedMasked === '%') {
 		return {
-			message: '%<date/time> – Datum oder Uhrzeit (z. B. %now, %today, %2026-01-01, %14:00)',
+			message: t('hint_date', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
 	if (trimmedMasked === ':uuid') {
 		return {
-			message: ':uuid[:<version>] – UUID-Generator (Standard v4, oder :uuid:v7)',
+			message: t('hint_uuid', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
 	if (trimmedMasked === ':ip') {
 		return {
-			message: ':ip[:<step>] – IPv4-Sequenz mit Default-IP aus Einstellungen (z. B. :ip:1)',
+			message: t('hint_ip_default', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
 	if (/^:(?:rnd|random|pwd|password|hex|hash|token)$/i.test(trimmedMasked)) {
 		return {
-			message: `${trimmedMasked}:<Länge> – Länge angeben (z. B. ${trimmedMasked}:16)`,
+			message: t(
+				'hint_devops_specify_len',
+				parameter,
+				trimmedMasked,
+			),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -537,13 +551,13 @@ export function validateSequenceInput(
 	// Suffix flags ($ or !)
 	if (trimmedMasked.endsWith('$')) {
 		return {
-			message: '$ – Dokument-Reihenfolge aktiviert (von oben nach unten einfügen)',
+			message: t('hint_doc_order', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
 	if (trimmedMasked.endsWith('!')) {
 		return {
-			message: '! – Reihenfolge umkehren aktiviert (invers einfügen)',
+			message: t('hint_reverse_order', parameter),
 			severity: vscode.InputBoxValidationSeverity.Info,
 		};
 	}
@@ -570,7 +584,7 @@ export function validateSequenceInput(
 		const val = freqMatch[1].trim();
 		if (!/^\d+$/.test(val) || Number(val) <= 0) {
 			return {
-				message: `Ungültige Frequenz "${val}": Erwartet eine positive Ganzzahl > 0 (z. B. *2)`,
+				message: t('err_invalid_frequency', parameter, val),
 				severity: vscode.InputBoxValidationSeverity.Error,
 			};
 		}
@@ -584,7 +598,7 @@ export function validateSequenceInput(
 		const val = (repMatch[1] || repMatch[2] || '').trim();
 		if (val && (!/^\d+$/.test(val) || Number(val) <= 0)) {
 			return {
-				message: `Ungültige Repetition "${val}": Erwartet eine positive Ganzzahl > 0 (z. B. #5)`,
+				message: t('err_invalid_repetition', parameter, val),
 				severity: vscode.InputBoxValidationSeverity.Error,
 			};
 		}
@@ -596,7 +610,7 @@ export function validateSequenceInput(
 		const val = soMatch[1].trim();
 		if (!/^\d+$/.test(val) || Number(val) <= 0) {
 			return {
-				message: `Ungültiger Neustart (startover) "${val}": Erwartet eine positive Ganzzahl > 0 (z. B. ##10)`,
+				message: t('err_invalid_startover', parameter, val),
 				severity: vscode.InputBoxValidationSeverity.Error,
 			};
 		}
@@ -610,7 +624,7 @@ export function validateSequenceInput(
 		const endVal = rndRangeMatch[2].trim();
 		if (isNaN(Number(endVal))) {
 			return {
-				message: `Ungültiger Zufallsbereich: "${endVal}" ist keine gültige Obergrenze (z. B. 1r10)`,
+				message: t('err_invalid_random_range', parameter, endVal),
 				severity: vscode.InputBoxValidationSeverity.Error,
 			};
 		}
@@ -623,7 +637,7 @@ export function validateSequenceInput(
 			const optVal = optMatch[1].trim();
 			if (/[^ulpULP]/.test(optVal)) {
 				return {
-					message: `Ungültige Buchstaben-Option "?${optVal}": Erlaubt sind ?u (Groß), ?l (Klein), ?p (PascalCase)`,
+					message: t('err_invalid_alpha_option', parameter, optVal),
 					severity: vscode.InputBoxValidationSeverity.Error,
 				};
 			}
@@ -654,28 +668,28 @@ export function validateSequenceInput(
 						);
 					if (!dateUnitOk) {
 						return {
-							message: `Ungültige Datumsschrittweite "${val}": Erwartet z. B. :1d, :2w, :1m, :1y, :1h, :15min`,
+							message: t('err_invalid_date_step', parameter, val),
 							severity: vscode.InputBoxValidationSeverity.Error,
 						};
 					}
 				} else if (isIp) {
 					if (!/^[+-]?\d+$/.test(val)) {
 						return {
-							message: `Ungültige IPv4-Schrittweite "${val}": Erwartet eine Ganzzahl (z. B. :1, :-1)`,
+							message: t('err_invalid_ip_step', parameter, val),
 							severity: vscode.InputBoxValidationSeverity.Error,
 						};
 					}
 				} else if (isAlpha) {
 					if (!/^[+-]?\d+$/.test(val)) {
 						return {
-							message: `Ungültige Schrittweite "${val}": Erwartet eine Ganzzahl für Buchstaben (z. B. :1, :2, :-1)`,
+							message: t('err_invalid_alpha_step', parameter, val),
 							severity: vscode.InputBoxValidationSeverity.Error,
 						};
 					}
 				} else if (isNumeric) {
 					if (isNaN(Number(val))) {
 						return {
-							message: `Ungültige Schrittweite "${val}": Erwartet eine Zahl (z. B. :2, :-1, :0.5)`,
+							message: t('err_invalid_numeric_step', parameter, val),
 							severity: vscode.InputBoxValidationSeverity.Error,
 						};
 					}

@@ -112,7 +112,7 @@
 				"insertseq.language": {
 					"type": "string",
 					"default": "",
-					"description": "Default language format for dates"
+					"description": "Default language for dates and validation hints/messages ('en', 'de', or empty for automatic VS Code UI detection)"
 				},
 				"insertseq.insertOrder": {
 					"type": "string",

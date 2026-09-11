@@ -81,6 +81,7 @@ import { RuleTemplate, TParameter } from './types';
 const { createIpSeq } = require('./sequences/ip');
 const { createDecimalSeq } = require('./sequences/decimal');
 import { runExpression, checkStopExpression } from './components/utils';
+import { t, getLanguage } from './i18n';
 import {
 	formatPreviewText,
 	buildOverflowPreview,
@@ -646,13 +647,37 @@ const mockExtensionContext: any = {
 		'clean error reference message',
 	);
 
-	// Parameter mock for validator
+	// Parameter mock for validator (German)
 	const testValidatorParam: any = {
 		segments: rules,
 		origCursorPos: [{}, {}],
 		origTextSel: ['', ''],
 		config: {
-			get: (key: string) => (key === 'start' ? '1' : key === 'step' ? '1' : undefined),
+			get: (key: string) =>
+				key === 'language'
+					? 'de'
+					: key === 'start'
+						? '1'
+						: key === 'step'
+							? '1'
+							: undefined,
+		},
+	};
+
+	// Parameter mock for validator (English)
+	const testValidatorParamEn: any = {
+		segments: rules,
+		origCursorPos: [{}, {}],
+		origTextSel: ['', ''],
+		config: {
+			get: (key: string) =>
+				key === 'language'
+					? 'en'
+					: key === 'start'
+						? '1'
+						: key === 'step'
+							? '1'
+							: undefined,
 		},
 	};
 
@@ -713,20 +738,20 @@ const mockExtensionContext: any = {
 	assertEqual(octErr.severity, 3, 'invalid octal is Error');
 
 	const ipOctetErr = validateSequenceInput('192.168.1.300:1', testValidatorParam);
-	assertEqual(ipOctetErr.message.includes('exceeds 255'), true, 'ip octet overflow detected');
+	assertEqual(ipOctetErr.message.includes('überschreitet 255'), true, 'ip octet overflow detected (de)');
 
 	const ipCidrErr = validateSequenceInput('10.0.0.1/35:1', testValidatorParam);
-	assertEqual(ipCidrErr.message.includes('must be 0-32'), true, 'ip cidr overflow detected');
+	assertEqual(ipCidrErr.message.includes('0-32'), true, 'ip cidr overflow detected (de)');
 
 	// 6. Dates and DevOps
 	const dateErr = validateSequenceInput('%2025-02-31', testValidatorParam);
 	assertEqual(dateErr.severity, 3, 'invalid calendar date is Error');
 
 	const uuidErr = validateSequenceInput(':uuid:v99', testValidatorParam);
-	assertEqual(uuidErr.message.includes('Unknown UUID version'), true, 'unknown uuid version detected');
+	assertEqual(uuidErr.message.includes('Unbekannte UUID-Version'), true, 'unknown uuid version detected (de)');
 
 	const tokenErr = validateSequenceInput(':rnd:xyz', testValidatorParam);
-	assertEqual(tokenErr.message.includes('Invalid length'), true, 'invalid token length detected');
+	assertEqual(tokenErr.message.includes('Ungültige Länge'), true, 'invalid token length detected (de)');
 
 	// 7. Trailing Operator Syntax Hints (Info)
 	const trailingStep = validateSequenceInput('1:', testValidatorParam);
@@ -875,9 +900,34 @@ const mockExtensionContext: any = {
 	});
 	assertEqual(stopCheckFalse, false, 'checkStopExpression: 2 > 5 is false');
 
+	// 12. Internationalization (i18n) tests
+	const enStep = validateSequenceInput('1:', testValidatorParamEn);
+	assertEqual(enStep.severity, 1, 'en step is info');
+	assertEqual(enStep.message.includes('Step size'), true, 'en step hint mentions Step size');
+
+	const enFreq = validateSequenceInput('1:2*', testValidatorParamEn);
+	assertEqual(enFreq.message.includes('Frequency'), true, 'en freq hint mentions Frequency');
+
+	const enStartover = validateSequenceInput('1:2##', testValidatorParamEn);
+	assertEqual(enStartover.message.includes('Restart'), true, 'en startover hint mentions Restart');
+
+	const enBadFreq = validateSequenceInput('1*0', testValidatorParamEn);
+	assertEqual(enBadFreq.severity, 3, 'en bad freq is Error');
+	assertEqual(enBadFreq.message.includes('Invalid frequency'), true, 'en bad freq message');
+
+	// Direct i18n module tests
+	assertEqual(getLanguage(testValidatorParam), 'de', 'detects german language');
+	assertEqual(getLanguage(testValidatorParamEn), 'en', 'detects english language');
+	assertEqual(getLanguage({ config: { get: () => undefined } } as any), 'en', 'defaults to english');
+	assertEqual(t('err_syntax_or_eval', testValidatorParamEn), 'Syntax or evaluation error', 'en translation');
+	assertEqual(t('err_syntax_or_eval', testValidatorParam), 'Syntax- oder Auswertungsfehler', 'de translation');
+	assertEqual(t('err_invalid_expression', testValidatorParamEn, 'testVar'), 'Invalid expression: testVar', 'placeholder interpolation');
+	assertEqual(t('err_invalid_expression', testValidatorParam, 'testVar'), 'Ungültiger Ausdruck: testVar', 'german placeholder interpolation');
+
 	console.log('Validator tests passed');
 	console.log('Ghost-text preview tests passed');
 	console.log('Typed scope variable and stop condition tests passed');
+	console.log('i18n multilingual tests passed');
 })().catch((err) => {
 	console.error('Preset/Wizard/Validator tests failed:', err);
 	process.exit(1);
