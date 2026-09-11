@@ -283,4 +283,52 @@ _No completed tasks were found at the time of restructuring._
     - ⚡ JavaScript-Ausdrücke (Formelvorlagen und benutzerdefinierte Ausdrücke)
   - Abschluss-Optionen: Direkt einfügen (`Insert`), Feintuning in der regulären InputBox (`Fine-tune`), oder als Favorit speichern (`Save as Preset`).
 
+### 5.3 Live-Fehlerfeedback & Syntax-Hilfe in der InputBox
+
+- **Nutzen:** Direkte Rückmeldung, Syntax-Hilfe und Parameter-Validierung während des Tippens in der `InputBox`, anstatt stillschweigend leere Preview-Ergebnisse oder Laufzeitfehler zu erzeugen.
+- **Implementierung:**
+  - Validierungsmodul in `src/components/validator.ts` mit `validateSequenceInput`.
+  - Unterscheidung von Schweregraden (`InputBoxValidationSeverity`):
+    - `Info` (Live-Syntaxhilfe beim Tippen von Operatoren):
+      - `:` -> `:<step>` Schrittweite (z. B. `:2`, `:-1` oder `:1d` bei Datum)
+      - `*` -> `*<frequency>` Frequenz (z. B. `*2` = jeden Wert 2× wiederholen)
+      - `#` -> `#<repeat>` Repetition / Zyklus (z. B. `#5` = nach 5 Werten wiederholen)
+      - `##` -> `##<startover>` Neustart (z. B. `##10` = Sequenz alle 10 Werte neu starten)
+      - `~` -> `~<format>` Formatierung (z. B. `~03d` Padding, `~>10` Ausrichtung, `~hex`, `~bin`, `~roman`)
+      - `?` -> `?<option>` Casing / Option (`?u` = GROSS, `?l` = klein, `?p` = PascalCase)
+      - `_` -> `_<delim>` Benutzerdefiniertes Trennzeichen (z. B. `_,`, `_-`)
+      - `r` -> `r<max>` Zufallsbereich (z. B. `1r10` = Zufallszahlen von 1 bis 10)
+      - `::` -> `::<expr>` JavaScript-Ausdruck nach `::` (z. B. `::_ * 2`)
+      - `@` -> `@<stopexpr>` Stop-Bedingung (z. B. `@i>=10`, `@_>100`)
+      - `;`, `=`, `%` -> Vordefinierte Listen, Funktionen, Datum/Uhrzeit
+      - `$`, `!` -> Dokument-Reihenfolge und umgekehrte Reihenfolge
+      - `:uuid`, `:rnd:`, `:pwd:`, `:hex:`, `:token:`, `:ip:` -> DevOps-Generatoren mit Parameterhinweisen
+    - `Error` (Verhindert fehlerhafte Ausführung):
+      - Echte Syntaxfehler in JavaScript-Ausdrücken (`::`), undefinierte Variablen/Funktionen.
+      - Ungültige Frequenz (`*0`, `*abc`) oder Repetition (`#0`, `##0`).
+      - Ungültige Schrittweite (z. B. `1:abc`, `a:1.5`).
+      - Ungültige Buchstaben-Optionen (`a?xyz`).
+      - Ungültige IP-Oktette (> 255) / CIDR (> 32).
+      - Ungültige Hex/Binär/Oktal-Ziffern, ungültige Datumsangaben, unbekannte UUID-Versionen oder ungültige Tokenlängen.
+    - `Warning`: Nicht geschlossene Quotes (`"..."`) oder Template-Literale (`` `...` ``).
+    - `null`: Vollständig gültige Eingaben (Preview läuft ungestört).
+  - Volle Integration in `InsertSeqCommand` über `InputBoxOptions.validateInput`, parallel zur Live-Editor-Preview.
+  - Umfangreiche automatisierte Tests für alle Fehlertypen, Operatorenhinweise und Schweregrade in `src/formatting.test.ts`.
+
+### 5.4 Native Ghost-Text Preview
+
+- **Nutzen:** Nahtlose, moderne Editor-Integration ohne Flackern bei Tastatureingaben und ohne Layout-Verschiebungen bei komplexen Zeilenumbrüchen oder großen Sequenzen.
+- **Implementierung:**
+  - Neues Modul `src/components/ghostText.ts`:
+    - `getPreviewDecorationType`: Unterstützt `ghostText`-Modus (Standard) mit nativer Theme-Farbe `editorGhostText.foreground` und Kursivschrift (`fontStyle: 'italic'`) sowie den klassischen Modus `decoration` mit benutzerdefinierter Farbe `insertseq.previewColor`.
+    - `InsertSeqInlineCompletionProvider`: Registriert einen nativen VS Code `InlineCompletionItemProvider` (`{ pattern: '**' }`) mit dynamischer Aktualisierung über `onDidChangeInlineCompletions`.
+    - `formatPreviewText`: Konvertiert Tabs sauber in Non-breaking-Spaces passend zur `tabSize` des Editors und wandelt Zeilenumbrüche in ein visuelles Return-Symbol (`↵ `) um, wodurch VS Codes Zeileneinschränkungen für Decorations gewahrt bleiben.
+    - `buildOverflowPreview`: Begrenzt Überhang-Werte bei Sequenzen, die mehr Werte als Cursors erzeugen (z. B. 1 Cursor und `1:1000`), auf eine kompakte Vorschau (z. B. `1↵2↵3↵4↵5 … (+995 more)`), was extremes horizontales Strecken und Layout-Springen verhindert.
+  - Behebung des Flackerns (`Flackern`):
+    - Das redundante Zwischenlöschen mit `parameter.editor.setDecorations(previewDecorationType, [])` vor jedem Vorschau-Update wurde entfernt. VS Code aktualisiert die Dekorationen nun atomar in einem einzigen Render-Pass.
+  - Neue Konfigurationsoption `insertseq.previewMode`:
+    - `"ghostText"` (Standard): Native Theme-Ghost-Text-Vorschau mit `editorGhostText.foreground`.
+    - `"decoration"`: Klassischer Stil mit `insertseq.previewColor`.
+  - Umfangreiche automatisierte Tests in `src/formatting.test.ts`.
+
 

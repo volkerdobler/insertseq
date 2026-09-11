@@ -227,10 +227,23 @@
 					"default": false,
 					"description": "Whether to use radix prefixes (0b, 0o, 0x) when inserting numbers in binary, octal, or hexadecimal format"
 				},
+				"insertseq.previewMode": {
+					"type": "string",
+					"default": "ghostText",
+					"enum": [
+						"ghostText",
+						"decoration"
+					],
+					"enumDescriptions": [
+						"ghostText (default): Native ghost-text appearance using VS Code theme colors (editorGhostText.foreground), compact overflow preview, and non-flickering updates",
+						"decoration: Classic decoration style using custom insertseq.previewColor"
+					],
+					"description": "Preview display mode: native ghostText or classic decoration"
+				},
 				"insertseq.previewColor": {
 					"type": "string",
 					"default": "#888888",
-					"description": "Color of preview decoration"
+					"description": "Color of preview decoration (used when insertseq.previewMode is 'decoration')"
 				},
 				"insertseq.previewStatus": {
 					"type": "boolean",

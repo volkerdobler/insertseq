@@ -34,6 +34,14 @@ import {
 	TPreset,
 } from './components/presets';
 import { startSequenceWizard } from './components/wizard';
+import { validateSequenceInput } from './components/validator';
+import {
+	getPreviewDecorationType,
+	disposePreviewDecorationType,
+	formatPreviewText,
+	buildOverflowPreview,
+	InsertSeqInlineCompletionProvider,
+} from './components/ghostText';
 import {
 	setDebugMode,
 	setOutputChannel,
@@ -260,10 +268,20 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		),
 	);
+	// register native inline completion / ghost text provider
+	inlineCompletionProvider = new InsertSeqInlineCompletionProvider();
+	context.subscriptions.push(
+		vscode.languages.registerInlineCompletionItemProvider(
+			{ pattern: '**' },
+			inlineCompletionProvider,
+		),
+	);
 }
 
-/** Extension teardown hook — disposes the debug output channel. */
+/** Extension teardown hook — disposes the debug output channel and preview resources. */
 export function deactivate() {
+	inlineCompletionProvider?.dispose();
+	disposePreviewDecorationType();
 	removeOutputChannel();
 }
 
@@ -271,6 +289,7 @@ const appName: string = 'insertseq';
 
 // Default configuration values (will be overwritten by user settings)
 let previewDecorationType: vscode.TextEditorDecorationType | null = null;
+let inlineCompletionProvider: InsertSeqInlineCompletionProvider | null = null;
 
 /**
  * Return `selections` optionally sorted top-to-bottom and/or reversed.
@@ -408,7 +427,7 @@ async function InsertSeqCommand(
 				printToConsole('Previewing input: ' + input);
 				insertNewSequence(input, parameter, 'preview');
 			}
-			return '';
+			return validateSequenceInput(input, parameter);
 		},
 	};
 
@@ -649,17 +668,8 @@ function insertNewSequence(
 	const eolString =
 		parameter.editor.document.eol === vscode.EndOfLine.LF ? '\n' : '\r\n';
 
-	// define preview decoration type if not yet done
-	if (!previewDecorationType) {
-		previewDecorationType = vscode.window.createTextEditorDecorationType({
-			after: {
-				color: parameter.config.get('previewColor') ?? '#888888',
-				margin: '0 0 0 0',
-			},
-		});
-	}
-	// clear previous decorations
-	parameter.editor.setDecorations(previewDecorationType, []);
+	// get or update preview decoration type based on previewMode / previewColor
+	previewDecorationType = getPreviewDecorationType(parameter.config);
 
 	// get sorted/reversed cursor positions for insertions
 	const insertCursorPos = sortSelectionsByPosition(
@@ -674,75 +684,70 @@ function insertNewSequence(
 		typeof parameter.editor.options.tabSize === 'number'
 			? parameter.editor.options.tabSize
 			: 4;
-	const toDecorationText = (s: string) =>
-		s.replace(/\t/g, ' '.repeat(tabSize)).replace(/\s/g, ' ');
 
 	// handle preview or final insertion
 	switch (status) {
-		case 'preview':
-			// preview with Decorations
-			// clear previous decorations
+		case 'preview': {
+			// preview with Decorations and native inline completions
 			const decorations: vscode.DecorationOptions[] = [];
+			const inlineItems: vscode.InlineCompletionItem[] = [];
 
-			// safe last inserted string for possible appending at the end
-			let addStr = '';
-
-			// for each created string, create a decoration. If the number of created strings is higher than the number of original cursors, "new lines" will be inserted.
+			// for each created string, create a decoration at cursor position
 			strList.forEach((str, index) => {
-				// create decoration at original cursor position as far as original cursor positions exist
 				if (index < insertCursorPos.length) {
-					let decoration = {
-						range: new vscode.Range(
-							insertCursorPos[index].start.line,
-							insertCursorPos[index].start.character,
-							insertCursorPos[index].end.line,
-							insertCursorPos[index].end.character,
-						),
+					const pos = insertCursorPos[index];
+					const range = new vscode.Range(
+						pos.start.line,
+						pos.start.character,
+						pos.end.line,
+						pos.end.character,
+					);
+					const formatted = formatPreviewText(str, tabSize);
+					decorations.push({
+						range,
 						renderOptions: {
 							after: {
-								contentText: toDecorationText(str),
+								contentText: formatted,
 							},
 						},
-					};
-					decorations.push(decoration);
-					// safe last inserted string for possible appending at the end
-					addStr = str;
+					});
+					inlineItems.push(new vscode.InlineCompletionItem(str, range));
 				}
 			});
-			// if more created strings than original cursors, append the rest at the end (with delimiter or newline symbol)
+
+			// if more created strings than original cursors, append overflow to the last cursor
 			if (strList.length > insertCursorPos.length) {
 				const lastPos = insertCursorPos[insertCursorPos.length - 1];
+				const lastRange = new vscode.Range(
+					lastPos.start.line,
+					lastPos.start.character,
+					lastPos.end.line,
+					lastPos.end.character,
+				);
+				const lastItem = strList[insertCursorPos.length - 1];
+				const overflowItems = strList.slice(insertCursorPos.length);
+				const allLast = [lastItem, ...overflowItems];
+				const overflowPreview = buildOverflowPreview(allLast, delimiter, 5);
 				decorations.pop();
-				for (let i = insertCursorPos.length; i < strList.length; i++) {
-					addStr += (delimiter ? delimiter : '\u21b5') + strList[i]; // \u21b5 = downwards arrow with corner leftwards
-				}
-				let decoration = {
-					range: new vscode.Range(
-						lastPos.start.line,
-						lastPos.start.character,
-						lastPos.end.line,
-						lastPos.end.character,
-					),
+				decorations.push({
+					range: lastRange,
 					renderOptions: {
 						after: {
-							contentText: toDecorationText(addStr),
+							contentText: formatPreviewText(overflowPreview, tabSize),
 						},
 					},
-				};
-				decorations.push(decoration);
+				});
 			}
+
+			// Atomic update — replaces existing decorations without clearing first (eliminates flicker)
 			parameter.editor.setDecorations(previewDecorationType, decorations);
+			inlineCompletionProvider?.update(inlineItems);
 			break;
+		}
 		case 'final':
-			// final insertion
-			// clear previous decorations
+			// final insertion — clear previous decorations and native ghost text
 			parameter.editor.setDecorations(previewDecorationType, []);
-			try {
-				previewDecorationType.dispose();
-			} catch {
-				printToConsole('Error disposing previewDecorationType');
-			}
-			previewDecorationType = null;
+			inlineCompletionProvider?.clear();
 
 			parameter.editor.edit((builder) => {
 				let addStr = '';

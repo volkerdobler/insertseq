@@ -18,13 +18,7 @@ Dieser Bericht dokumentiert alle identifizierten Probleme, logischen Schwachstel
 
 ## 5. Vorschläge für User Experience (UX)
 
-### 5.3 Live-Fehlerfeedback in der InputBox
-
-- Der `validateInput`-Hook gibt derzeit immer `''` zurück. Bei Syntaxfehlern in Ausdrücken (`::`) oder ungültigen Parametern sollte dort eine direkte Hilfestellung angezeigt werden (z. B. _"Ungültiger Ausdruck: 'abc' is not defined"_).
-
-### 5.4 Native Ghost-Text Preview
-
-- Ergänzend zu den After-Decorations könnte VS Codes nativer Inline-Completion- / Ghost-Text-Modus verwendet werden, um Flackern und Layout-Verschiebungen bei komplexen Zeilenumbrüchen zu vermeiden.
+_Alle Punkte aus Abschnitt 5 (5.1, 5.2, 5.3, 5.4) wurden erfolgreich umgesetzt (siehe HISTORY.md)._
 
 ---
 

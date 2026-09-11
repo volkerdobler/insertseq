@@ -8,6 +8,38 @@ Module.prototype.require = function (id: string) {
 	if (id === 'vscode') {
 		return {
 			ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
+			InputBoxValidationSeverity: {
+				Info: 1,
+				Warning: 2,
+				Error: 3,
+			},
+			ThemeColor: function (id: string) {
+				(this as any).id = id;
+			},
+			EventEmitter: class {
+				private listeners: Function[] = [];
+				get event() {
+					return (listener: Function) => {
+						this.listeners.push(listener);
+						return { dispose: () => {} };
+					};
+				}
+				fire(data?: any) {
+					for (const l of this.listeners) {
+						l(data);
+					}
+				}
+				dispose() {
+					this.listeners = [];
+				}
+			},
+			InlineCompletionList: function (items: any[]) {
+				(this as any).items = items;
+			},
+			InlineCompletionItem: function (text: string, range?: any) {
+				(this as any).insertText = text;
+				(this as any).range = range;
+			},
 			workspace: {
 				getConfiguration: () => ({
 					get: (key: string) => mockConfigStore[key],
@@ -20,6 +52,11 @@ Module.prototype.require = function (id: string) {
 				createOutputChannel: () => ({
 					appendLine: () => {},
 					dispose: () => {},
+				}),
+				createTextEditorDecorationType: (options: any) => ({
+					key: 'mock-dec',
+					dispose: () => {},
+					options,
 				}),
 			},
 		};
@@ -42,6 +79,12 @@ import { getRegExpressions } from './components/evaluator';
 import { RuleTemplate, TParameter } from './types';
 
 const { createIpSeq } = require('./sequences/ip');
+import {
+	formatPreviewText,
+	buildOverflowPreview,
+	getPreviewDecorationType,
+	InsertSeqInlineCompletionProvider,
+} from './components/ghostText';
 
 function assertEqual(a: any, b: any, msg?: string) {
 	if (a !== b) {
@@ -587,8 +630,214 @@ const mockExtensionContext: any = {
 	);
 
 	console.log('Wizard builder tests passed');
+
+	// Validator tests
+	const {
+		validateSequenceInput,
+		cleanErrorMessage,
+	} = require('./components/validator');
+
+	// Test cleanErrorMessage
+	assertEqual(
+		cleanErrorMessage('ReferenceError: myVar is not defined'),
+		"'myVar' is not defined",
+		'clean error reference message',
+	);
+
+	// Parameter mock for validator
+	const testValidatorParam: any = {
+		segments: rules,
+		origCursorPos: [{}, {}],
+		origTextSel: ['', ''],
+		config: {
+			get: (key: string) => (key === 'start' ? '1' : key === 'step' ? '1' : undefined),
+		},
+	};
+
+	// 1. Valid inputs return null
+	assertEqual(validateSequenceInput('', testValidatorParam), null, 'empty input is valid');
+	assertEqual(validateSequenceInput('1:1~03d', testValidatorParam), null, 'standard number is valid');
+	assertEqual(validateSequenceInput('|i + 1', testValidatorParam), null, 'valid expression is valid');
+	assertEqual(validateSequenceInput('1:1::i * 2', testValidatorParam), null, 'valid inline expr is valid');
+	assertEqual(validateSequenceInput('192.168.1.1:1', testValidatorParam), null, 'valid ip is valid');
+
+	// 2. Standalone expressions
+	const exprErr1 = validateSequenceInput('|1 + (', testValidatorParam);
+	assertEqual(typeof exprErr1 === 'object' && exprErr1 !== null, true, 'syntax error detected');
+	assertEqual(exprErr1.severity, 3, 'syntax error is Error severity');
+
+	const exprErr2 = validateSequenceInput('|unknownVar + 1', testValidatorParam);
+	assertEqual(
+		exprErr2.message.includes("'unknownVar' is not defined"),
+		true,
+		'undefined variable error detected',
+	);
+
+	// 3. Inline and stop expressions
+	const inlineErr = validateSequenceInput('1:1::badFunc()', testValidatorParam);
+	assertEqual(
+		inlineErr.message.includes("'badFunc' is not defined"),
+		true,
+		'inline expr error detected',
+	);
+
+	const stopErr = validateSequenceInput('1:1@i > > 2', testValidatorParam);
+	assertEqual(typeof stopErr === 'object' && stopErr !== null, true, 'stop expr error detected');
+
+	const trailingColon = validateSequenceInput('1:1::', testValidatorParam);
+	assertEqual(trailingColon.severity, 1, 'trailing :: returns Info');
+
+	const trailingAt = validateSequenceInput('1:1@', testValidatorParam);
+	assertEqual(trailingAt.severity, 1, 'trailing @ returns Info');
+
+	// 4. Templates
+	const unclosedQuote = validateSequenceInput('"unclosed template', testValidatorParam);
+	assertEqual(unclosedQuote.severity, 2, 'unclosed quote is Warning');
+
+	const unclosedBacktick = validateSequenceInput('`unclosed backtick', testValidatorParam);
+	assertEqual(unclosedBacktick.severity, 2, 'unclosed backtick is Warning');
+
+	const unmatchedBrace = validateSequenceInput('`hello }`', testValidatorParam);
+	assertEqual(unmatchedBrace.severity, 3, 'unmatched brace is Error');
+
+	// 5. Radices and IP
+	const hexErr = validateSequenceInput('0x12G', testValidatorParam);
+	assertEqual(hexErr.severity, 3, 'invalid hex is Error');
+
+	const binErr = validateSequenceInput('0b102', testValidatorParam);
+	assertEqual(binErr.severity, 3, 'invalid binary is Error');
+
+	const octErr = validateSequenceInput('0o18', testValidatorParam);
+	assertEqual(octErr.severity, 3, 'invalid octal is Error');
+
+	const ipOctetErr = validateSequenceInput('192.168.1.300:1', testValidatorParam);
+	assertEqual(ipOctetErr.message.includes('exceeds 255'), true, 'ip octet overflow detected');
+
+	const ipCidrErr = validateSequenceInput('10.0.0.1/35:1', testValidatorParam);
+	assertEqual(ipCidrErr.message.includes('must be 0-32'), true, 'ip cidr overflow detected');
+
+	// 6. Dates and DevOps
+	const dateErr = validateSequenceInput('%2025-02-31', testValidatorParam);
+	assertEqual(dateErr.severity, 3, 'invalid calendar date is Error');
+
+	const uuidErr = validateSequenceInput(':uuid:v99', testValidatorParam);
+	assertEqual(uuidErr.message.includes('Unknown UUID version'), true, 'unknown uuid version detected');
+
+	const tokenErr = validateSequenceInput(':rnd:xyz', testValidatorParam);
+	assertEqual(tokenErr.message.includes('Invalid length'), true, 'invalid token length detected');
+
+	// 7. Trailing Operator Syntax Hints (Info)
+	const trailingStep = validateSequenceInput('1:', testValidatorParam);
+	assertEqual(trailingStep.severity, 1, 'trailing colon returns Info for step');
+	assertEqual(trailingStep.message.includes('Schrittweite'), true, 'step hint mentions Schrittweite');
+
+	const trailingFreq = validateSequenceInput('1:2*', testValidatorParam);
+	assertEqual(trailingFreq.severity, 1, 'trailing asterisk returns Info for frequency');
+	assertEqual(trailingFreq.message.includes('Frequenz'), true, 'frequency hint mentions Frequenz');
+
+	const trailingRep = validateSequenceInput('1:2*3#', testValidatorParam);
+	assertEqual(trailingRep.severity, 1, 'trailing hash returns Info for repetition');
+	assertEqual(trailingRep.message.includes('Repetition'), true, 'repetition hint mentions Repetition');
+
+	const trailingStartover = validateSequenceInput('1:2##', testValidatorParam);
+	assertEqual(trailingStartover.severity, 1, 'trailing double-hash returns Info for startover');
+	assertEqual(trailingStartover.message.includes('Neustart'), true, 'startover hint mentions Neustart');
+
+	const trailingFormat = validateSequenceInput('1:2~', testValidatorParam);
+	assertEqual(trailingFormat.severity, 1, 'trailing tilde returns Info for format');
+	assertEqual(trailingFormat.message.includes('Formatierung'), true, 'format hint mentions Formatierung');
+
+	const trailingAlphaOpt = validateSequenceInput('a?', testValidatorParam);
+	assertEqual(trailingAlphaOpt.severity, 1, 'trailing question mark returns Info for alpha casing');
+	assertEqual(trailingAlphaOpt.message.includes('Casing'), true, 'casing hint mentions Casing');
+
+	const trailingRndRange = validateSequenceInput('1r', testValidatorParam);
+	assertEqual(trailingRndRange.severity, 1, 'trailing r returns Info for random range');
+	assertEqual(trailingRndRange.message.includes('Zufallsbereich'), true, 'range hint mentions Zufallsbereich');
+
+	const trailingDateStep = validateSequenceInput('%now:', testValidatorParam);
+	assertEqual(trailingDateStep.severity, 1, 'trailing colon on date returns Info for date step');
+
+	const trailingIpStep = validateSequenceInput('192.168.1.1:', testValidatorParam);
+	assertEqual(trailingIpStep.severity, 1, 'trailing colon on IP returns Info for IPv4 step');
+
+	const flagDocOrder = validateSequenceInput('1:2$', testValidatorParam);
+	assertEqual(flagDocOrder.severity, 1, 'trailing $ returns Info for document order');
+
+	const flagReverse = validateSequenceInput('1:2!', testValidatorParam);
+	assertEqual(flagReverse.severity, 1, 'trailing ! returns Info for reverse order');
+
+	// 8. Parameter Semantics Error Checking (Error)
+	const badFreq = validateSequenceInput('1*0', testValidatorParam);
+	assertEqual(badFreq.severity, 3, 'frequency 0 is Error');
+	assertEqual(badFreq.message.includes('Ungültige Frequenz'), true, 'bad frequency message');
+
+	const badRep = validateSequenceInput('1#0', testValidatorParam);
+	assertEqual(badRep.severity, 3, 'repetition 0 is Error');
+	assertEqual(badRep.message.includes('Ungültige Repetition'), true, 'bad repetition message');
+
+	const badStartover = validateSequenceInput('1##0', testValidatorParam);
+	assertEqual(badStartover.severity, 3, 'startover 0 is Error');
+	assertEqual(badStartover.message.includes('Ungültiger Neustart'), true, 'bad startover message');
+
+	const badStepNum = validateSequenceInput('1:abc', testValidatorParam);
+	assertEqual(badStepNum.severity, 3, 'alphabetic step for decimal is Error');
+	assertEqual(badStepNum.message.includes('Ungültige Schrittweite'), true, 'bad step message');
+
+	const badStepAlpha = validateSequenceInput('a:1.5', testValidatorParam);
+	assertEqual(badStepAlpha.severity, 3, 'floating point step for alpha is Error');
+
+	const badAlphaOpt = validateSequenceInput('a?xyz', testValidatorParam);
+	assertEqual(badAlphaOpt.severity, 3, 'invalid alpha option is Error');
+
+	const badRndRange = validateSequenceInput('1rabc', testValidatorParam);
+	assertEqual(badRndRange.severity, 3, 'non-numeric random range upper bound is Error');
+
+	// 9. Fully valid multi-segment sequence
+	const fullValid = validateSequenceInput('1:2*3#5~03d', testValidatorParam);
+	assertEqual(fullValid, null, 'complete multi-segment sequence returns null (valid)');
+
+	// 10. Ghost-Text Preview tests
+	const tabFormatted = formatPreviewText('hello\tworld', 4);
+	assertEqual(tabFormatted.includes('\u00A0\u00A0\u00A0\u00A0'), true, 'tabs converted to non-breaking spaces');
+	const newlineFormatted = formatPreviewText('line1\nline2');
+	assertEqual(newlineFormatted.includes('\u21b5\u00A0'), true, 'newlines converted to return symbol');
+
+	const shortOverflow = buildOverflowPreview(['1', '2', '3'], ', ');
+	assertEqual(shortOverflow, '1, 2, 3', 'short overflow joins with delimiter');
+	const longOverflow = buildOverflowPreview(['1', '2', '3', '4', '5', '6', '7', '8'], ', ', 5);
+	assertEqual(longOverflow, '1, 2, 3, 4, 5 … (+3 more)', 'long overflow truncates cleanly');
+	const emptyOverflow = buildOverflowPreview([]);
+	assertEqual(emptyOverflow, '', 'empty overflow is empty');
+
+	const ghostConfig = { get: (k: string) => (k === 'previewMode' ? 'ghostText' : undefined) } as any;
+	const ghostDec = getPreviewDecorationType(ghostConfig);
+	assertEqual((ghostDec as any).options?.after?.color?.id, 'editorGhostText.foreground', 'ghostText uses theme color');
+	assertEqual((ghostDec as any).options?.after?.fontStyle, 'italic', 'ghostText uses italic');
+
+	const classicConfig = { get: (k: string) => (k === 'previewMode' ? 'decoration' : k === 'previewColor' ? '#ff0000' : undefined) } as any;
+	const classicDec = getPreviewDecorationType(classicConfig);
+	assertEqual((classicDec as any).options?.after?.color, '#ff0000', 'classic mode uses previewColor');
+
+	const provider = new InsertSeqInlineCompletionProvider();
+	let eventFired = false;
+	provider.onDidChangeInlineCompletions(() => { eventFired = true; });
+	provider.update([{ insertText: 'test' } as any]);
+	assertEqual(eventFired, true, 'update fires onDidChange event');
+	const items = provider.provideInlineCompletionItems({} as any, {} as any, {} as any, {} as any);
+	assertEqual((items as any)?.items?.length, 1, 'returns completion items');
+	eventFired = false;
+	provider.clear();
+	assertEqual(eventFired, true, 'clear fires onDidChange event');
+	const emptyItems = provider.provideInlineCompletionItems({} as any, {} as any, {} as any, {} as any);
+	assertEqual(emptyItems, undefined, 'cleared provider returns undefined');
+	provider.dispose();
+
+	console.log('Validator tests passed');
+	console.log('Ghost-text preview tests passed');
 })().catch((err) => {
-	console.error('Preset/Wizard tests failed:', err);
+	console.error('Preset/Wizard/Validator tests failed:', err);
 	process.exit(1);
 });
+
 
