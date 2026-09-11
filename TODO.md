@@ -18,16 +18,7 @@ Dieser Bericht dokumentiert alle identifizierten Probleme, logischen Schwachstel
 
 ## 6. Vorschläge für Architektur & Testautomatisierung
 
-_Abschnitte 6.1 (Echte Scope-Variablen in safeEvaluate), 6.2 (Debouncing bei validateInput) und 6.3 (Atomare Edits mit vscode.WorkspaceEdit) wurden erfolgreich umgesetzt (siehe HISTORY.md)._
-
-### 6.4 Echtes Unit-Test-Framework (Vitest / Mocha)
-
-- Aufbau einer Test-Suite im Verzeichnis `test/`, die alle Sequenzarten automatisiert prüft:
-    - Arithmetik (Positive/negative Steps, Floats, Hex, Binär, Oktal)
-    - String-Sequenzen (Überlauf z -> aa, Groß-/Kleinschreibung)
-    - Datum & Temporal-Formatierung
-    - JS-Ausdrücke und Stop-Conditions
-    - History-Verhalten und Multi-Cursor-Reihenfolge
+_Abschnitte 6.1 (Echte Scope-Variablen in safeEvaluate), 6.2 (Debouncing bei validateInput), 6.3 (Atomare Edits mit vscode.WorkspaceEdit) und 6.4 (Vitest-basiertes Test-Setup) wurden erfolgreich umgesetzt (siehe HISTORY.md)._
 
 ### 6.5 Langfristige Migration von RegEx zu einem echten Parser (Lexer / Tokenizer / AST)
 
@@ -101,5 +92,5 @@ _Abschnitte 6.1 (Echte Scope-Variablen in safeEvaluate), 6.2 (Debouncing bei val
     - [x] 6.1 Echte Scope-Variablen statt Regex-Stringersetzung in `safeEvaluate`.
     - [x] 6.2 Debouncing bei `validateInput` (`insertseq.previewDebounce`).
     - [x] 6.3 Atomare Edits mit `vscode.WorkspaceEdit`.
-    - [ ] 6.4 Vitest-basiertes Test-Setup einrichten.
+    - [x] 6.4 Vitest-basiertes Test-Setup einrichten.
     - [ ] 6.5 Parser-Migration: Umstellung von RegEx-Kaskaden auf Lexer/Tokenizer + AST-Parser.

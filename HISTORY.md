@@ -386,3 +386,24 @@ _No completed tasks were found at the time of restructuring._
     - In `insertNewSequence` (`status === 'final'`): Die Ersetzungen aller aktiven Cursors sowie das Einfügen von Überhang-Zeilen am letzten Cursor werden in einem einzigen `vscode.WorkspaceEdit` zusammengefasst und mit `await vscode.workspace.applyEdit(edit)` atomar appliziert.
     - Die Funktionssignatur von `insertNewSequence` wurde auf `Promise<boolean>` typisiert, und alle Aufrufer (`InsertSeqCommand`, `InsertSeqWizard`, `InsertSeqHistory`, `InsertSeqPresets`) warten nun per `await` zuverlässig auf den Abschluss der finalen Transaktion.
   - In `src/formatting.test.ts` wurde das VS Code Mock-Objekt um `WorkspaceEdit` und `workspace.applyEdit` erweitert und eine eigene automatisierte Test-Suite für atomare `WorkspaceEdit`-Operationen integriert.
+
+### 6.4 Echtes Unit-Test-Framework (Vitest)
+
+- **Problem:**
+  - Bisher basierten die Tests auf einem ad-hoc Skript (`src/formatting.test.ts`), das per `tsc -p ./` kompiliert und via `node dist/formatting.test.js` ausgeführt wurde.
+  - Kein echter Test-Runner, keine parallele Ausführung, keine standardisierten Assertions (`describe`, `it`, `expect`), keine Watch-Modi und Vermischung von Test-Dateien mit Produktionscode im `src/`-Verzeichnis.
+- **Implementierung:**
+  - Migration auf **Vitest** (v5.0.0) als modernen, schnellen und TypeScript-nativen Test-Runner:
+    - Konfiguration `vitest.config.mts` mit automatischem Mock-Setup.
+    - Zentraler VS Code Mock in `test/setup/vscodeMock.ts` (`ConfigurationTarget`, `InputBoxValidationSeverity`, `WorkspaceEdit`, `workspace.getConfiguration`, `applyEdit`, `InlineCompletionProvider`, etc.).
+    - Vollständige Aufteilung und Erweiterung der Tests in modular strukturierte Test-Suiten im Verzeichnis `test/`:
+      - `test/arithmetic.test.ts`: Arithmetik, Steps, Floats, Hex, Binär, Oktal, Padding (`formatString`), d3-Zahlenformatierung.
+      - `test/string.test.ts`: Alphabetic Sequences, Überlauf `z -> aa`, Casing-Optionen, Schrittweiten, Frequenzen und Wiederholungen.
+      - `test/date.test.ts`: Date & Temporal-Formatierung (`formatTemporalDateTime`, `~iso`, `~epoch`), Zeitintervalle (`:15min`, `:1h`, `:1d`), Evaluator-Parsing.
+      - `test/expressions.test.ts`: JS-Ausdrücke in `safeEvaluate` / `runExpression`, typisierte Scope-Variablen (`_`, `i`, `n`, `s`, `a`, `p`), Stop-Conditions (`checkStopExpression`).
+      - `test/history_and_cursor.test.ts`: Multi-Cursor-Handling, History-Speicherung (`saveToHistory`, Deduplizierung, Truncation), atomare WorkspaceEdits.
+      - `test/tokens_and_ip.test.ts`: UUIDv4 & UUIDv7, Zufalls-Token & Passwörter (`:rnd`, `:hex`, `:pwd`), Römische Ziffern (`toRoman`), IPv4-Sequenzen.
+      - `test/ux_components.test.ts`: Presets (`getPresets`, `savePreset`), Wizard Sequence-Assembly, Validierungs- und Syntax-Hilfen (`validateSequenceInput`), i18n (`en`, `de`), Ghost-Text-Vorschau.
+    - Bereinigung des `src/`-Ordners durch Entfernen von `src/formatting.test.ts` (Linter-Warnungen im Projekt auf 2 reduziert, saubere Trennung von Code und Tests).
+    - `package.json`-Scripts aktualisiert: `"test": "vitest run"`, `"test:watch": "vitest"`.
+    - Alle 89 Tests laufen in unter 1 Sekunde durch.
