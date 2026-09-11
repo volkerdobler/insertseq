@@ -417,17 +417,38 @@ async function InsertSeqCommand(
 
 	printToConsole('Initialized parameters for InsertSeqCommand');
 
+	// Debounce timer for preview calculations during fast typing
+	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 	// set input box options for sequence input, including placeHolder, predefined value if available and live preview as decorations
 	const inputOptions: vscode.InputBoxOptions = {
 		placeHolder:
 			'[<start>][:<step>][*<frequency>][#<repeat>][##startover][~<format>][::<expr>][@<stopexpr>]["Template {}"][`Backtick {} more {}`][$][!]',
 		value: value,
 		validateInput: function (input) {
-			if (parameter.config.get('previewStatus') !== false) {
-				printToConsole('Previewing input: ' + input);
-				insertNewSequence(input, parameter, 'preview');
+			const delay =
+				parameter.config.get<number>('previewDebounce') ?? 60;
+			if (debounceTimer !== null) {
+				clearTimeout(debounceTimer);
+				debounceTimer = null;
 			}
-			return validateSequenceInput(input, parameter);
+			if (delay <= 0) {
+				if (parameter.config.get('previewStatus') !== false) {
+					printToConsole('Previewing input: ' + input);
+					insertNewSequence(input, parameter, 'preview');
+				}
+				return validateSequenceInput(input, parameter);
+			}
+			return new Promise((resolve) => {
+				debounceTimer = setTimeout(() => {
+					debounceTimer = null;
+					if (parameter.config.get('previewStatus') !== false) {
+						printToConsole('Previewing input: ' + input);
+						insertNewSequence(input, parameter, 'preview');
+					}
+					resolve(validateSequenceInput(input, parameter));
+				}, delay);
+			});
 		},
 	};
 
@@ -435,6 +456,10 @@ async function InsertSeqCommand(
 	vscode.window.showInputBox(inputOptions).then(function (
 		input: string | undefined,
 	) {
+		if (debounceTimer !== null) {
+			clearTimeout(debounceTimer);
+			debounceTimer = null;
+		}
 		// insert final sequence (check if canceled will be done in insertNewSequence and in saveToHistory)
 		insertNewSequence(input, parameter, 'final');
 		if (input !== null) {

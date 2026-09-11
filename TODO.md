@@ -24,31 +24,7 @@ _Alle Punkte aus Abschnitt 5 (5.1, 5.2, 5.3, 5.4) wurden erfolgreich umgesetzt (
 
 ## 6. Vorschläge für Architektur & Testautomatisierung
 
-### 6.1 Echte Scope-Variablen statt Regex-Stringersetzung in `safeEvaluate`
-
-`safeEvaluate` unterstützt bereits die Übergabe eines `context`-Objekts:
-
-```typescript
-safeEvaluate(expr, 1000, {
-	_: currentValue, // Zahl oder String je nach Sequenztyp
-	i: currentIndex, // 0-basierter Index
-	n: selectionCount, // Anzahl Cursors
-	s: step, // Schrittweite
-	a: start, // Startwert
-	p: previousValue, // Vorheriger Wert
-	o: origSelectedText, // Selektierter Originaltext
-	c: valueAfterExpr, // Wert nach Transformation
-});
-```
-
-- **Vorteile:**
-    - Löst den `'1' + 1 = '110'` Konkatenationsbug vollständig.
-    - Verhindert Quote-Syntaxfehler (`don't`).
-    - Keine fehlerhaften Ersetzungen in JS-Keywords oder Stringliteralen (`'i = ' + i`).
-
-### 6.2 Debouncing bei `validateInput`
-
-- Bei jedem Tastenanschlag wird die Sequenz derzeit synchron für bis zu 10.000 Iterationen neu berechnet und evaluiert. Ein Debounce von 50–80 ms entlastet die CPU und sorgt für flüssiges Tippen.
+_Abschnitte 6.1 (Echte Scope-Variablen in safeEvaluate) und 6.2 (Debouncing bei validateInput) wurden erfolgreich umgesetzt (siehe HISTORY.md)._
 
 ### 6.3 Atomare Edits mit `vscode.WorkspaceEdit`
 
@@ -120,14 +96,20 @@ safeEvaluate(expr, 1000, {
     - [x] Totes Code-Material entfernen (`sequence.ts`, `regexBuilder.ts`, ungenutzte Hilfsfunktionen).
     - [x] Linter-Warnungen beheben (`npm run lint`).
 
-3. **Feature-Erweiterungen:**
+3. **Feature-Erweiterungen & UX:**
     - [x] 4.1 UUIDv4/v7-Generator implementieren (`:uuid`, `:v7`).
     - [x] 4.2 Timestamp-/Uhrzeit-Erweiterung für Datumssequenzen (`:15min`, `:1d15min`, `~epoch`, `~iso`).
     - [x] 4.3 Römische Ziffern als Format-Option (`~R`, `~r`, `~roman`).
     - [x] 4.4 Zufalls-Token, Passwörter & Hash-Strings (`:rnd`, `:hex`, `:pwd`, `:token`).
     - [x] 4.5 Netzwerk- & IP-Adressen (`192.168.1.1:1`).
-    - [ ] 5.1 Presets / Favoriten-Verwaltung hinzufügen.
-    - [ ] 6.4 Vitest-basiertes Test-Setup einrichten.
+    - [x] 5.1 Presets / Favoriten-Verwaltung hinzufügen (`insertseq.presets`, Schnellzugriff per Menü & Shortcut).
+    - [x] 5.2 Interaktiver Sequenz-Builder / Assistent (`insertseq.wizard`).
+    - [x] 5.3 Live-Fehlerfeedback & Syntax-Hilfe in der InputBox (`validateSequenceInput`).
+    - [x] 5.4 Native Ghost-Text Preview (ohne Flackern, Überhang-Kompaktierung).
 
-4. **Großes Architektur-Upgrade:**
+4. **Architektur & Testautomatisierung:**
+    - [x] 6.1 Echte Scope-Variablen statt Regex-Stringersetzung in `safeEvaluate`.
+    - [x] 6.2 Debouncing bei `validateInput` (`insertseq.previewDebounce`).
+    - [ ] 6.3 Atomare Edits mit `vscode.WorkspaceEdit`.
+    - [ ] 6.4 Vitest-basiertes Test-Setup einrichten.
     - [ ] 6.5 Parser-Migration: Umstellung von RegEx-Kaskaden auf Lexer/Tokenizer + AST-Parser.

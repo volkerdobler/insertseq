@@ -135,9 +135,10 @@ export function createStringSeq(
 	const expr = getExpression(input, parameter);
 	const format =
 		getFormatExpression(input, parameter, 'format_alpha') ||
-		String(parameter.config.get('stringFormat')) ||
+		String(parameter.config.get('stringFormat') || '') ||
 		'';
-	const centerString = String(parameter.config.get('centerString')) || '';
+	const centerString =
+		String(parameter.config.get('centerString') || '') || '';
 
 	// determine capitalization, default: preserve original capitalization (from rightmost characters)
 	let capital: string = 'preserve';
@@ -215,16 +216,16 @@ export function createStringSeq(
 		// if expression does not lead to a string, the current / new value will not be changed
 		try {
 			let tempValue = runExpression(expr, {
-				_: replacableValues.currentValueStr,
-				i: replacableValues.currentIndexStr,
-				n: replacableValues.numberOfSelectionsStr,
-				s: replacableValues.stepStr,
-				a: replacableValues.startStr,
+				_: value,
+				i: i,
+				n: parameter.origCursorPos.length,
+				s: step,
+				a: start,
 				p: replacableValues.previousValueStr,
 				o: replacableValues.origTextStr,
-				c: replacableValues.valueAfterExpressionStr,
+				c: '',
 			});
-			if (typeof tempValue === 'string' || tempValue instanceof String) {
+			if (tempValue !== null && typeof tempValue !== 'undefined') {
 				value = String(tempValue);
 			}
 		} catch {

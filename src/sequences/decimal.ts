@@ -72,7 +72,7 @@ export function createDecimalSeq(
 	// format string: leading string (if given) or radixPrefix if given or format from input or configuration or empty
 	const inputFormat =
 		getFormatExpression(input, parameter, 'format_decimal') ||
-		String(parameter.config.get('numberFormat')) ||
+		String(parameter.config.get('numberFormat') || '') ||
 		'';
 
 	const format = leadString
@@ -143,14 +143,14 @@ export function createDecimalSeq(
 		// if expression does not lead to a number, the current / new value will not be changed
 		try {
 			let exprResult = runExpression(expr, {
-				_: replacableValues.currentValueStr,
-				i: replacableValues.currentIndexStr,
-				n: replacableValues.numberOfSelectionsStr,
-				s: replacableValues.stepStr,
-				a: replacableValues.startStr,
-				p: replacableValues.previousValueStr,
+				_: value,
+				i: i,
+				n: parameter.origCursorPos.length,
+				s: step,
+				a: start,
+				p: replacableValues.previousValueStr !== '' ? Number(replacableValues.previousValueStr) : 0,
 				o: replacableValues.origTextStr,
-				c: replacableValues.valueAfterExpressionStr,
+				c: 0,
 			});
 			if (exprResult !== null && Number.isFinite(Number(exprResult))) {
 				value = Number(exprResult);

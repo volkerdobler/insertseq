@@ -70,16 +70,24 @@ export function createExpressionSeq(
 		replacableValues.valueAfterExpressionStr = '';
 		replacableValues.currentIndexStr = i.toString();
 
+		const toNumOrStr = (v: string): number | string => {
+			if (typeof v !== 'string' || v.trim() === '') {
+				return v;
+			}
+			const num = Number(v);
+			return Number.isFinite(num) ? num : v;
+		};
+
 		try {
 			const exprResult = runExpression(expr, {
-				_: replacableValues.currentValueStr,
-				i: replacableValues.currentIndexStr,
-				n: replacableValues.numberOfSelectionsStr,
-				s: replacableValues.stepStr,
-				a: replacableValues.startStr,
-				p: replacableValues.previousValueStr,
+				_: toNumOrStr(replacableValues.currentValueStr),
+				i: i,
+				n: parameter.origCursorPos.length,
+				s: Number(parameter.config.get('step')) || 1,
+				a: Number(parameter.config.get('start')) || 1,
+				p: toNumOrStr(replacableValues.previousValueStr),
 				o: replacableValues.origTextStr,
-				c: replacableValues.valueAfterExpressionStr,
+				c: '',
 			});
 			if (exprResult !== null && typeof exprResult !== 'undefined') {
 				replacableValues.currentValueStr = String(exprResult);
@@ -117,12 +125,12 @@ export function createExpressionSeq(
 
 		const format = isNumeric(replacableValues.currentValueStr)
 			? getFormatExpression(input, parameter, 'format_decimal') ||
-				String(parameter.config.get('numberFormat')) ||
+				String(parameter.config.get('numberFormat') || '') ||
 				''
 			: getFormatExpression(input, parameter, 'format_alpha') ||
-				String(parameter.config.get('stringFormat')) ||
+				String(parameter.config.get('stringFormat') || '') ||
 				'';
-		const centerString = String(parameter.config.get('centerString')) || '';
+		const centerString = String(parameter.config.get('centerString') || '') || '';
 
 		return {
 			stringFunction: isNumeric(replacableValues.currentValueStr)

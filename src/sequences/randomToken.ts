@@ -226,13 +226,17 @@ export function createRandomTokenSeq(
 
 		if (expr.length > 0) {
 			try {
+				const toNumOrStr = (v: string): number | string => {
+					const num = Number(v);
+					return !isNaN(num) && v.trim() !== '' ? num : v;
+				};
 				const exprResult = runExpression(expr, {
-					_: replacableValues.currentValueStr,
-					i: replacableValues.currentIndexStr,
-					n: replacableValues.numberOfSelectionsStr,
-					s: replacableValues.stepStr,
+					_: toNumOrStr(value),
+					i,
+					n: parameter.origCursorPos.length,
+					s: 1,
 					a: replacableValues.startStr,
-					p: replacableValues.previousValueStr,
+					p: toNumOrStr(replacableValues.previousValueStr),
 					o: replacableValues.origTextStr,
 					c: replacableValues.valueAfterExpressionStr,
 				});

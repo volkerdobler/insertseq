@@ -284,9 +284,26 @@ export function checkStopExpression(
 ): boolean {
 	let stopExpressionTriggered = currentIndex >= selections;
 	try {
-		const exprResult = runExpression(
-			replaceSpecialChars(stopexpr, replacableValues),
-		);
+		const toNumOrStr = (v: string): number | string => {
+			if (typeof v !== 'string' || v.trim() === '') {
+				return v;
+			}
+			const num = Number(v);
+			return Number.isFinite(num) ? num : v;
+		};
+
+		const context: Record<string, unknown> = {
+			_: toNumOrStr(replacableValues.currentValueStr),
+			i: currentIndex,
+			n: Number(replacableValues.numberOfSelectionsStr) || selections,
+			s: toNumOrStr(replacableValues.stepStr),
+			a: toNumOrStr(replacableValues.startStr),
+			p: toNumOrStr(replacableValues.previousValueStr),
+			o: replacableValues.origTextStr,
+			c: toNumOrStr(replacableValues.valueAfterExpressionStr),
+		};
+
+		const exprResult = runExpression(stopexpr, context);
 		if (exprResult !== null) {
 			stopExpressionTriggered = Boolean(exprResult);
 		} else {

@@ -319,13 +319,13 @@ export function createDateSeq(
 		try {
 			const exprResult = runExpression(expr, {
 				_: replacableValues.currentValueStr,
-				i: replacableValues.currentIndexStr,
-				n: replacableValues.numberOfSelectionsStr,
-				s: replacableValues.stepStr,
+				i: i,
+				n: parameter.origCursorPos.length,
+				s: step,
 				a: replacableValues.startStr,
 				p: replacableValues.previousValueStr,
 				o: replacableValues.origTextStr,
-				c: replacableValues.valueAfterExpressionStr,
+				c: '',
 			});
 			if (
 				typeof exprResult === 'string' ||

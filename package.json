@@ -250,6 +250,12 @@
 					"default": true,
 					"description": "Show preview of insertions"
 				},
+				"insertseq.previewDebounce": {
+					"type": "number",
+					"default": 60,
+					"minimum": 0,
+					"description": "Debounce delay in milliseconds before calculating sequence previews during rapid keystrokes (0 to disable debouncing)"
+				},
 				"insertseq.maxInsertions": {
 					"type": "number",
 					"default": 10000,

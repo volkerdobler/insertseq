@@ -331,4 +331,36 @@ _No completed tasks were found at the time of restructuring._
     - `"decoration"`: Klassischer Stil mit `insertseq.previewColor`.
   - Umfangreiche automatisierte Tests in `src/formatting.test.ts`.
 
+---
+
+## 6. Architektur & Testautomatisierung
+
+### 6.1 Echte Scope-Variablen statt Regex-Stringersetzung in `safeEvaluate`
+
+- **Problem:**
+  - Zuvor wurden Parameterwerte wie `replacableValues.currentIndexStr`, `currentValueStr`, `stepStr`, `startStr` als Strings übergeben bzw. mittels `replaceSpecialChars` als String-Literale in den JS-Code hineinerstituiert.
+  - Dadurch führte `_ + 1` bei einem Startwert von `1` zu `'1' + 1 = '11'`, anstatt arithmetisch `2` zu ergeben.
+  - Bei Vergleichen wie `@_ > 5` evaluierte JavaScript im String-Kontext z. B. `'10' > '5' = false` (lexikografischer String-Vergleich).
+  - Quotes in Texten konnten Syntax-Fehler auslösen.
+- **Implementierung:**
+  - Alle Sequenz-Engines (`decimal`, `string`, `expression`, `textSelected`, `own`, `predefined`, `date`, `ip`, `randomToken`) übergeben nun typisierte Variablen (`_`, `i`, `n`, `s`, `a`, `p`, `o`, `c`) an `runExpression(expr, context)`.
+  - `checkStopExpression` in `src/components/utils.ts` evaluiert Stop-Bedingungen nun direkt über typisierte Scope-Variablen via `runExpression(stopexpr, context)` anstelle von `replaceSpecialChars`.
+  - Zahlenwerte (`i`, `n`, `s`, numerische `_`, `a`, `p`, `c`) werden als echte `number`-Primitive übergeben, sodass Arithmetik und numerische Vergleiche (`_ + 1`, `_ > 5`, `i * 10`) fehlerfrei funktionieren.
+  - Robuste Absicherung aller Sequenz-Module gegen `undefined`-Rückgabewerte aus Konfigurationseinstellungen (`config.get(...) || ''`).
+  - Umfassende Unit-Tests in `src/formatting.test.ts`.
+
+### 6.2 Debouncing bei `validateInput`
+
+- **Problem:**
+  - `validateInput` in `src/extension.ts` rief bei jedem einzelnen Tastenanschlag synchron `insertNewSequence(input, parameter, 'preview')` auf.
+  - Bei schnellem Tippen und Sequenzen mit bis zu 10.000 Iterationen führte dies zu unnötiger CPU-Last und potentiellem Input-Lag.
+- **Implementierung:**
+  - In `InsertSeqCommand` (`src/extension.ts`) wurde ein konfigurierbares Debouncing eingebaut:
+    - Verwendet `setTimeout`/`clearTimeout` über das asynchrone Promise-Interface von VS Codes `InputBoxOptions.validateInput`.
+    - Verzögert die aufwendige Preview-Berechnung bei schnellen Tastenanschlägen, bis der Anwender kurz pausiert.
+    - Beim Bestätigen mit Enter wird der anstehende Debounce-Timer sofort abgeräumt und die finale Sequenz synchron eingefügt.
+  - Neue Konfigurationseinstellung `insertseq.previewDebounce` in `package.json` (Typ `number`, Standardwert: `60` ms, Minimum: `0` ms zum Deaktivieren).
+  - In `README.md` und Konfigurationstabelle dokumentiert.
+
+
 

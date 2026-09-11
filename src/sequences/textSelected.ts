@@ -3,7 +3,6 @@ import { TParameter, TSpecialReplacementValues } from '../types';
 import {
 	printToConsole,
 	getExpression,
-	replaceSpecialChars,
 	runExpression,
 	getFormatExpression,
 } from '../components/utils';
@@ -26,9 +25,10 @@ export function createTextSelectedSeq(
 	const expr = getExpression(input, parameter);
 	const format =
 		getFormatExpression(input, parameter, 'format_alpha') ||
-		String(parameter.config.get('stringFormat')) ||
+		String(parameter.config.get('stringFormat') || '') ||
 		'';
-	const centerString = String(parameter.config.get('centerString')) || '';
+	const centerString =
+		String(parameter.config.get('centerString') || '') || '';
 
 	const replacableValues: TSpecialReplacementValues = {
 		currentValueStr: '',
@@ -47,17 +47,29 @@ export function createTextSelectedSeq(
 		replacableValues.origTextStr = parameter.origTextSel[i];
 		replacableValues.currentIndexStr = i.toString();
 		replacableValues.currentValueStr = value;
-		replacableValues.valueAfterExpressionStr = '';
+		const toNumOrStr = (v: string): number | string => {
+			if (typeof v !== 'string' || v.trim() === '') {
+				return v;
+			}
+			const num = Number(v);
+			return Number.isFinite(num) ? num : v;
+		};
+
+		const context: Record<string, unknown> = {
+			_: toNumOrStr(value),
+			i: i,
+			n: parameter.origCursorPos.length,
+			s: Number(parameter.config.get('step')) || 1,
+			a: toNumOrStr(String(parameter.config.get('start') || '1')),
+			p: toNumOrStr(parameter.origTextSel[i - 1] || ''),
+			o: parameter.origTextSel[i] || '',
+			c: '',
+		};
 
 		// if expression exists, evaluate expression with current Value and replace newValue with result of expression.
 		try {
-			let exprResult = runExpression(
-				replaceSpecialChars(expr, replacableValues),
-			);
-			if (
-				typeof exprResult === 'string' ||
-				exprResult instanceof String
-			) {
+			let exprResult = runExpression(expr, context);
+			if (exprResult !== null && typeof exprResult !== 'undefined') {
 				value = String(exprResult);
 			}
 		} catch {

@@ -42,7 +42,8 @@ export function createOwnSeq(
 	const expr = getExpression(input, parameter);
 
 	const format = getFormatExpression(input, parameter, 'format_alpha') || '';
-	const centerString = String(parameter.config.get('centerString')) || '';
+	const centerString =
+		String(parameter.config.get('centerString') || '') || '';
 
 	parameter.myDelimiter = ownSequence?.groups?.seqdelimiter || null;
 
@@ -83,16 +84,24 @@ export function createOwnSeq(
 		replacableValues.valueAfterExpressionStr = '';
 
 		let value = replacableValues.currentValueStr;
+		const toNumOrStr = (v: string): number | string => {
+			if (typeof v !== 'string' || v.trim() === '') {
+				return v;
+			}
+			const num = Number(v);
+			return Number.isFinite(num) ? num : v;
+		};
+
 		try {
 			let exprResult = runExpression(expr, {
-				_: replacableValues.currentValueStr,
-				i: replacableValues.currentIndexStr,
-				n: replacableValues.numberOfSelectionsStr,
-				s: replacableValues.stepStr,
-				a: replacableValues.startStr,
-				p: replacableValues.previousValueStr,
+				_: toNumOrStr(value),
+				i: i,
+				n: parameter.origCursorPos.length,
+				s: step,
+				a: toNumOrStr(replacableValues.startStr),
+				p: toNumOrStr(replacableValues.previousValueStr),
 				o: replacableValues.origTextStr,
-				c: replacableValues.valueAfterExpressionStr,
+				c: '',
 			});
 			if (
 				typeof exprResult === 'string' ||

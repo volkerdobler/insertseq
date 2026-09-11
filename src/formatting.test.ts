@@ -79,6 +79,8 @@ import { getRegExpressions } from './components/evaluator';
 import { RuleTemplate, TParameter } from './types';
 
 const { createIpSeq } = require('./sequences/ip');
+const { createDecimalSeq } = require('./sequences/decimal');
+import { runExpression, checkStopExpression } from './components/utils';
 import {
 	formatPreviewText,
 	buildOverflowPreview,
@@ -833,8 +835,49 @@ const mockExtensionContext: any = {
 	assertEqual(emptyItems, undefined, 'cleared provider returns undefined');
 	provider.dispose();
 
+	// 11. Typed Scope Variables in Expression & safeEvaluate (6.1)
+	const exprAddNum = runExpression('_ + 1', { _: 1, i: 0, n: 2, s: 1, a: 1, p: 0, o: '', c: '' });
+	assertEqual(exprAddNum, 2, '_ + 1 with number _ yields 2 (not "11")');
+
+	const exprIndexMul = runExpression('i * 10 + s', { _: 5, i: 3, n: 5, s: 2, a: 1, p: 4, o: '', c: '' });
+	assertEqual(exprIndexMul, 32, 'i * 10 + s yields 32');
+
+	// Decimal sequence with inline expression ::(_ + 1)
+	const decSeq = createDecimalSeq('1:1::(_ + 1)', testValidatorParam, 10);
+	const decRes0 = decSeq(0);
+	assertEqual(decRes0.stringFunction, '2', 'first decimal item with ::(_ + 1) is "2"');
+	const decRes1 = decSeq(1);
+	assertEqual(decRes1.stringFunction, '3', 'second decimal item with ::(_ + 1) is "3"');
+
+	// Stop condition comparison: numeric vs string comparison
+	// In JS, '10' < '5' (lexicographic), but numeric 10 > 5
+	const stopCheckTrue = checkStopExpression(0, '_ > 5', 5, {
+		currentValueStr: '10',
+		valueAfterExpressionStr: '',
+		previousValueStr: '',
+		currentIndexStr: '0',
+		origTextStr: '',
+		startStr: '1',
+		stepStr: '1',
+		numberOfSelectionsStr: '5',
+	});
+	assertEqual(stopCheckTrue, true, 'checkStopExpression: 10 > 5 is true (numeric comparison)');
+
+	const stopCheckFalse = checkStopExpression(0, '_ > 5', 5, {
+		currentValueStr: '2',
+		valueAfterExpressionStr: '',
+		previousValueStr: '',
+		currentIndexStr: '0',
+		origTextStr: '',
+		startStr: '1',
+		stepStr: '1',
+		numberOfSelectionsStr: '5',
+	});
+	assertEqual(stopCheckFalse, false, 'checkStopExpression: 2 > 5 is false');
+
 	console.log('Validator tests passed');
 	console.log('Ghost-text preview tests passed');
+	console.log('Typed scope variable and stop condition tests passed');
 })().catch((err) => {
 	console.error('Preset/Wizard/Validator tests failed:', err);
 	process.exit(1);
