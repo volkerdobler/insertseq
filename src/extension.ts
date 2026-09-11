@@ -26,6 +26,14 @@ import {
 	migrateOldHistory,
 } from './components/history';
 import {
+	getPresets,
+	savePreset,
+	deletePreset,
+	clearPresets,
+	resetToDefaultPresets,
+	TPreset,
+} from './components/presets';
+import {
 	setDebugMode,
 	setOutputChannel,
 	removeOutputChannel,
@@ -211,6 +219,30 @@ export function activate(context: vscode.ExtensionContext) {
 				InsertSeqHistory(context, value);
 				printToConsole(
 					'Congratulations, extension "insertseq.history" is now active!',
+				);
+			},
+		),
+	);
+	// register insertseq.presets command (presets / favorites picker)
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			'extension.insertseq.presets',
+			(value: string) => {
+				InsertSeqPresets(context, value);
+				printToConsole(
+					'Congratulations, extension "insertseq.presets" is now active!',
+				);
+			},
+		),
+	);
+	// register insertseq.savePreset command (save sequence as preset)
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			'extension.insertseq.savePreset',
+			(value?: string) => {
+				InsertSeqSavePreset(context, value);
+				printToConsole(
+					'Congratulations, extension "insertseq.savePreset" is now active!',
 				);
 			},
 		),
@@ -413,6 +445,86 @@ async function InsertSeqHistory(
 		InsertSeqCommand(context, value);
 	}
 }
+
+/**
+ * Presets command handler — shows a QuickPick of saved sequence presets / favorites.
+ * Default keybinding: `Ctrl+Alt+P` / `Cmd+Alt+P`.
+ *
+ * @param context - The extension context (used for presets persistence).
+ * @param _value - Unused, reserved for future command parameters.
+ */
+async function InsertSeqPresets(
+	context: vscode.ExtensionContext,
+	_value?: string,
+) {
+	// get active editor
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) {
+		return;
+	}
+
+	// get global parameter (config, regex, original selections etc.)
+	const parameter: TParameter = await initApp(editor);
+
+	// build Presets QuickPick
+	const qp = createPresetsQuickPick(context, parameter);
+	qp.show();
+}
+
+/**
+ * Save Preset command handler — prompts for sequence, name and optional description
+ * to persist a reusable sequence preset.
+ *
+ * @param context - The extension context.
+ * @param defaultSeq - Optional sequence definition to save (e.g. from history or active input).
+ */
+async function InsertSeqSavePreset(
+	context: vscode.ExtensionContext,
+	defaultSeq?: string,
+) {
+	let seq = defaultSeq;
+	if (!seq) {
+		const history = getHistory(context) || [];
+		const fallback = history.length > 0 ? history[0] : '1:1';
+		seq = await vscode.window.showInputBox({
+			title: 'Save Preset: Sequence Definition',
+			prompt: 'Enter the sequence definition string to save as preset',
+			value: fallback,
+			validateInput: (v) =>
+				v.trim() ? null : 'Sequence definition is required',
+		});
+		if (!seq) {
+			return;
+		}
+	}
+
+	const name = await vscode.window.showInputBox({
+		title: 'Save Preset: Name',
+		prompt: 'Enter a recognizable name for this preset',
+		placeHolder: 'e.g. Markdown Table Row Index',
+		validateInput: (v) => (v.trim() ? null : 'Preset name is required'),
+	});
+	if (!name) {
+		return;
+	}
+
+	const description = await vscode.window.showInputBox({
+		title: 'Save Preset: Description (optional)',
+		prompt: 'Enter an optional short description for this preset',
+		placeHolder: 'e.g. 1, 2, 3... left-aligned with width 4',
+	});
+
+	await savePreset(context, {
+		name: name.trim(),
+		sequence: seq.trim(),
+		description: description?.trim() || undefined,
+	});
+
+	vscode.window.showInformationMessage(
+		`Sequence preset "${name.trim()}" saved successfully.`,
+	);
+}
+
 
 /**
  * Core insertion engine — generates the sequence values and either shows them
@@ -1057,7 +1169,7 @@ function createQuickPick(
 	const maxHistoryItems =
 		Number(parameter.config.get('maxHistoryItems')) || 100;
 
-	// create items with a delete button each (trash icon)
+	// create items with a delete button each (trash icon) and save-as-preset button (star icon)
 	const history = getHistory(context) || [];
 	for (const h of history) {
 		if (items.length >= maxHistoryItems) {
@@ -1068,6 +1180,10 @@ function createQuickPick(
 			description: '',
 			cmd: h,
 			buttons: [
+				{
+					iconPath: new vscode.ThemeIcon('star'),
+					tooltip: 'Save as preset',
+				} as any,
 				{
 					iconPath: new vscode.ThemeIcon('edit'),
 					tooltip: 'Edit this history entry',
@@ -1083,6 +1199,8 @@ function createQuickPick(
 	qp.items = items;
 	qp.placeholder = 'Choose "New sequence" or any of the last entries';
 	qp.matchOnDescription = true;
+
+	let accepted = false;
 
 	function schedulePreview(cmd: string | undefined) {
 		if (!cmd) {
@@ -1111,14 +1229,18 @@ function createQuickPick(
 		schedulePreview(active.cmd);
 	});
 
-	// handle clicking the per-item buttons (delete / edit)
+	// handle clicking the per-item buttons (delete / edit / save as preset)
 	qp.onDidTriggerItemButton(async (e) => {
 		const item = e.item as vscode.QuickPickItem & { cmd?: string };
 		if (!item || !item.cmd) {
 			return;
 		}
 		const tooltip = (e.button && (e.button as any).tooltip) || '';
-		if (tooltip === 'Delete this history entry') {
+		if (tooltip === 'Save as preset') {
+			accepted = true;
+			qp.hide();
+			await InsertSeqSavePreset(context, item.cmd);
+		} else if (tooltip === 'Delete this history entry') {
 			// delete from storage
 			await deleteFromHistory(context, item.cmd);
 			// remove from quickpick items
@@ -1132,20 +1254,32 @@ function createQuickPick(
 			}
 		} else if (tooltip === 'Edit this history entry') {
 			// Hide quickpick and launch InsertSeqCommand with the selected history item
+			accepted = true;
 			qp.hide();
 			await InsertSeqCommand(context, item.cmd);
 		}
 	});
 
-	// add a toolbar Clear button to clear all history
+	// add toolbar buttons for Presets and Clear all history
 	qp.buttons = [
+		{
+			iconPath: new vscode.ThemeIcon('bookmark'),
+			tooltip: 'Open Presets / Favorites',
+		} as any,
 		{
 			iconPath: new vscode.ThemeIcon('trash'),
 			tooltip: 'Clear all history',
 		} as any,
 	];
-	qp.onDidTriggerButton(async (_) => {
-		// Confirm
+	qp.onDidTriggerButton(async (btn) => {
+		const tooltip = (btn as any).tooltip || '';
+		if (tooltip === 'Open Presets / Favorites') {
+			accepted = true;
+			qp.hide();
+			await InsertSeqPresets(context);
+			return;
+		}
+		// Confirm clear history
 		const ans = await vscode.window.showWarningMessage(
 			'Clear entire history?',
 			{ modal: true },
@@ -1175,12 +1309,14 @@ function createQuickPick(
 
 		if (!chosen.cmd) {
 			// New sequence selected -> delegate to InsertSeqCommand
+			accepted = true;
 			qp.hide();
 			await InsertSeqCommand(context, '');
 			return;
 		}
 
 		// history item selected -> final execution
+		accepted = true;
 		qp.busy = true;
 		try {
 			insertNewSequence(chosen.cmd, parameter, 'final');
@@ -1196,7 +1332,253 @@ function createQuickPick(
 		if (previewDecorationType) {
 			parameter.editor.setDecorations(previewDecorationType, []);
 		}
+		if (!accepted) {
+			insertNewSequence(undefined, parameter, 'final');
+		}
 		qp.dispose();
 	});
 	return qp;
 }
+
+/**
+ * Creates and configures the Presets QuickPick.
+ *
+ * Displays all saved presets with options to insert, edit, delete, add new,
+ * or jump to history.
+ *
+ * @param context - The extension context.
+ * @param parameter - Shared command context.
+ * @returns Configured QuickPick instance.
+ */
+function createPresetsQuickPick(
+	context: vscode.ExtensionContext,
+	parameter: TParameter,
+): vscode.QuickPick<
+	vscode.QuickPickItem & {
+		preset: TPreset | null;
+	}
+> {
+	const qp = vscode.window.createQuickPick<
+		vscode.QuickPickItem & { preset: TPreset | null }
+	>();
+
+	function refreshItems() {
+		const presets = getPresets(context);
+		const items: Array<
+			vscode.QuickPickItem & {
+				preset: TPreset | null;
+				buttons?: vscode.QuickInputButton[];
+			}
+		> = [];
+
+		items.push({
+			label: '$(add) New preset',
+			description: 'Save a new preset from history or scratch',
+			preset: null,
+		});
+
+		for (const p of presets) {
+			items.push({
+				label: p.name,
+				description:
+					p.sequence + (p.description ? `  •  ${p.description}` : ''),
+				preset: p,
+				buttons: [
+					{
+						iconPath: new vscode.ThemeIcon('edit'),
+						tooltip: 'Edit this preset',
+					} as any,
+					{
+						iconPath: new vscode.ThemeIcon('trash'),
+						tooltip: 'Delete this preset',
+					} as any,
+				],
+			});
+		}
+		qp.items = items;
+	}
+
+	refreshItems();
+	qp.placeholder = 'Choose a preset to insert, or click edit/delete';
+	qp.matchOnDescription = true;
+
+	let accepted = false;
+
+	function schedulePreview(cmd: string | undefined) {
+		if (!cmd) {
+			if (previewDecorationType) {
+				parameter.editor.setDecorations(previewDecorationType, []);
+			}
+		} else {
+			try {
+				insertNewSequence(cmd, parameter, 'preview');
+			} catch (e) {
+				printToConsole('Function: schedulePreview - preview error: ' + e);
+			}
+		}
+	}
+
+	qp.onDidChangeActive((activeItems) => {
+		const active = activeItems[0];
+		if (!active || !active.preset) {
+			schedulePreview(undefined);
+			return;
+		}
+		schedulePreview(active.preset.sequence);
+	});
+
+	// Handle per-item buttons (edit, delete)
+	qp.onDidTriggerItemButton(async (e) => {
+		const item = e.item as vscode.QuickPickItem & { preset?: TPreset | null };
+		if (!item || !item.preset) {
+			return;
+		}
+		const tooltip = (e.button && (e.button as any).tooltip) || '';
+		if (tooltip === 'Delete this preset') {
+			await deletePreset(context, item.preset.name);
+			refreshItems();
+			const active = qp.activeItems[0];
+			if (!active || !active.preset) {
+				schedulePreview(undefined);
+			} else {
+				schedulePreview(active.preset.sequence);
+			}
+		} else if (tooltip === 'Edit this preset') {
+			const presetToEdit = item.preset;
+			const newName = await vscode.window.showInputBox({
+				title: 'Edit Preset Name',
+				prompt: 'Preset Name',
+				value: presetToEdit.name,
+				validateInput: (v) => (v.trim() ? null : 'Preset name is required'),
+			});
+			if (!newName) {
+				return;
+			}
+			const newSeq = await vscode.window.showInputBox({
+				title: 'Edit Preset Sequence',
+				prompt: 'Sequence Definition',
+				value: presetToEdit.sequence,
+				validateInput: (v) =>
+					v.trim() ? null : 'Sequence definition is required',
+			});
+			if (!newSeq) {
+				return;
+			}
+			const newDesc = await vscode.window.showInputBox({
+				title: 'Edit Preset Description (optional)',
+				prompt: 'Description',
+				value: presetToEdit.description || '',
+			});
+			if (
+				newName.trim().toLowerCase() !==
+				presetToEdit.name.trim().toLowerCase()
+			) {
+				await deletePreset(context, presetToEdit.name);
+			}
+			await savePreset(context, {
+				name: newName.trim(),
+				sequence: newSeq.trim(),
+				description: newDesc?.trim() || undefined,
+			});
+			refreshItems();
+			const active = qp.activeItems[0];
+			if (active && active.preset) {
+				schedulePreview(active.preset.sequence);
+			}
+		}
+	});
+
+	// Toolbar buttons
+	qp.buttons = [
+		{
+			iconPath: new vscode.ThemeIcon('add'),
+			tooltip: 'Add new preset',
+		} as any,
+		{
+			iconPath: new vscode.ThemeIcon('history'),
+			tooltip: 'Open History',
+		} as any,
+		{
+			iconPath: new vscode.ThemeIcon('trash'),
+			tooltip: 'Clear all presets',
+		} as any,
+		{
+			iconPath: new vscode.ThemeIcon('discard'),
+			tooltip: 'Reset to default presets',
+		} as any,
+	];
+
+	qp.onDidTriggerButton(async (btn) => {
+		const tooltip = (btn as any).tooltip || '';
+		if (tooltip === 'Add new preset') {
+			accepted = true;
+			qp.hide();
+			await InsertSeqSavePreset(context);
+		} else if (tooltip === 'Open History') {
+			accepted = true;
+			qp.hide();
+			await InsertSeqHistory(context, '');
+		} else if (tooltip === 'Clear all presets') {
+			const ans = await vscode.window.showWarningMessage(
+				'Clear all presets?',
+				{ modal: true },
+				'Clear',
+			);
+			if (ans === 'Clear') {
+				await clearPresets(context);
+				refreshItems();
+				schedulePreview(undefined);
+			}
+		} else if (tooltip === 'Reset to default presets') {
+			const ans = await vscode.window.showWarningMessage(
+				'Reset presets to default presets?',
+				{ modal: true },
+				'Reset',
+			);
+			if (ans === 'Reset') {
+				await resetToDefaultPresets(context);
+				refreshItems();
+			}
+		}
+	});
+
+	qp.onDidAccept(async () => {
+		const chosen = qp.activeItems[0];
+		if (!chosen) {
+			qp.hide();
+			return;
+		}
+
+		if (!chosen.preset) {
+			// New preset selected
+			accepted = true;
+			qp.hide();
+			await InsertSeqSavePreset(context);
+			return;
+		}
+
+		// Preset selected -> final insertion
+		accepted = true;
+		qp.busy = true;
+		try {
+			insertNewSequence(chosen.preset.sequence, parameter, 'final');
+			await saveToHistory(context, chosen.preset.sequence);
+		} finally {
+			qp.busy = false;
+			qp.hide();
+		}
+	});
+
+	qp.onDidHide(() => {
+		if (previewDecorationType) {
+			parameter.editor.setDecorations(previewDecorationType, []);
+		}
+		if (!accepted) {
+			insertNewSequence(undefined, parameter, 'final');
+		}
+		qp.dispose();
+	});
+
+	return qp;
+}
+

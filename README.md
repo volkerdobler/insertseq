@@ -22,7 +22,7 @@ At a glance — what InsertSeq can do:
 | **📝 Templates & Wrapping** | • **Quoted templates**: embed sequences into surrounding text (`"Item {}":1` → `Item 1`, `Item 2`)<br>• **Backtick templates**: multiple independent sequences in one line (`` `Row {1}: Col {a}` ``) |
 | **⚡ Custom Logic & Functions** | • Inline JavaScript expressions (`|"item_" + (i*2)`)<br>• User-defined reusable functions from configuration settings (`=1`, `=2;5`) |
 | **🎛️ Sequence Controls** | • Custom step sizes (`:2`, `:-1`, `step:5`)<br>• Frequency (`*2` / `freq:2` — repeat each value N times)<br>• Repetition (`#5` / `rep:5` — cycle length over values)<br>• Startover (`##10` / `startover:10` — restart stream every N items)<br>• Formatting (`~03d`, `~>10`, padding, alignment)<br>• Stop expressions (`@i>5` / `stopif:(i>5)`)<br>• Document order sorting (`$`) and reverse order (`!`) |
-| **💡 Productivity & UX** | • **Live preview decoration** directly in the active editor before pressing Enter<br>• **Command history** (`insertseq.history`, `Ctrl+Alt+,`) to view, repeat, or edit previous insertions |
+| **💡 Productivity & UX** | • **Live preview decoration** directly in the active editor before pressing Enter<br>• **Command history** (`insertseq.history`, `Ctrl+Alt+,`) to view, repeat, or edit previous insertions<br>• **Presets & Favorites** (`insertseq.presets`, `Ctrl+Alt+P`) to store, name, and execute reusable sequences |
 
 ## Usage
 
@@ -40,6 +40,8 @@ See [CHANGELOG.md](./CHANGELOG.md) for all version history and changes from vers
 You can start the extension from the Command Palette by searching for `insertseq`, or use the default key binding `Ctrl+Alt+.` (CTRL-ALT or COMMAND-OPTION + DOT - this can be changed in settings).
 
 If you have used this extension before, you can reuse previous inputs with the command `insertseq.history` (default key binding `Ctrl+Alt+,` CTRL+ALT or COMMAND-OPTION + COMMA). This shows your previous insertions; you can run them again or edit them. If no history entries exist, the normal input box is shown. See the [History](#history) section for details.
+
+To quickly select from predefined or custom saved favorite sequences, use `insertseq.presets` (default key binding `Ctrl+Alt+P` or Command Palette "Insert Sequences: Presets / Favorites"). You can also save any sequence as a named preset with `insertseq.savePreset` or via the star icon (`⭐`) in the History list. See the [Presets / Favorites](#presets--favorites) section for details.
 
 ### Examples (simple → advanced)
 
@@ -886,6 +888,42 @@ Notes:
 
 ---
 
+## Presets / Favorites
+
+Default keybinding: `Ctrl+Alt+P` / `Cmd+Alt+P` (or Command Palette: "Insert Sequences: Presets / Favorites").
+
+Presets allow you to permanently save, name, and quickly trigger frequently used sequence patterns with a friendly name (e.g. *"Markdown Table Row Index"*, *"Zero-padded 3-digit ID"*, *"IPv4 Local Subnet"*).
+
+### Built-in Presets
+
+Out of the box, InsertSeq comes with several practical presets:
+- **Markdown Row Index**: `1:1~<4`
+- **Zero-padded 3-digit ID**: `1~03d`
+- **IPv4 Local Subnet**: `192.168.1.1:1`
+- **UUID v4**: `:uuid`
+- **UUID v7 (Time-sortable)**: `:uuid:v7`
+- **Secure 16-char Password**: `:pwd:16`
+- **Roman Numerals**: `1~R`
+- **Daily ISO Dates**: `%now:1d~"yyyy-MM-dd"`
+
+### How to use Presets
+
+- **Open Presets QuickPick**: Press `Ctrl+Alt+P` or run `Insert Sequences: Presets / Favorites`.
+- **Live Preview**: Navigating through presets live-previews the sequence at your cursors.
+- **Insert**: Press `Enter` to commit the selected preset.
+- **Save as Preset**:
+  - From History (`Ctrl+Alt+,`): Click the ⭐ star icon next to any history entry to name and save it as a preset.
+  - From Presets (`Ctrl+Alt+P`): Select `$(add) New preset` or click the `+` toolbar button.
+  - Via Command: Run `Insert Sequences: Save as Preset` from the Command Palette.
+- **Edit & Delete**: Each preset item features an edit (✏️) and delete (🗑️) button.
+- **Toolbar Actions**:
+  - `+`: Add new preset
+  - History icon: Jump directly to recent insertion history
+  - Trash icon: Clear all presets
+  - Discard/Reset icon: Restore default built-in presets
+
+---
+
 ## Configuration
 
 The extension exposes settings under the `insertseq` namespace. A quick reference:
@@ -901,6 +939,7 @@ The extension exposes settings under the `insertseq` namespace. A quick referenc
 | `insertseq.numberFormat`      |  string | `""`                           | Default format template for numeric outputs (d3-format).                                                                                                                                                                                                                                                                                                                                          |
 | `insertseq.dateFormat`        |  string | `""`                           | Default date output format.                                                                                                                                                                                                                                                                                                                                                                       |
 | `insertseq.ipStart`           |  string | `"192.168.1.1"`                | Default start address for IPv4 sequences if omitted.                                                                                                                                                                                                                                                                                                                                              |
+| `insertseq.presets`           |   array | `[]`                           | User-defined sequence presets and favorites (name, sequence, description).                                                                                                                                                                                                                                                                                                                        |
 | `insertseq.alphaCapital`      |  string | `"preserve"`                   | Case handling for alpha sequences: `preserve`, `upper`, `lower`, `pascal`.                                                                                                                                                                                                                                                                                                                        |
 | `insertseq.language`          |  string | `""`                           | Default locale/language for date formatting.                                                                                                                                                                                                                                                                                                                                                      |
 | `insertseq.sortedOuput`       | boolean | `false`                        | Default insertion order: false (default) in multi cursor click order; true in cursor order                                                                                                                                                                                                                                                                                                        |

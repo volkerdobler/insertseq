@@ -6,28 +6,17 @@ Dieser Bericht dokumentiert alle identifizierten Probleme, logischen Schwachstel
 
 ## Inhaltsverzeichnis
 
-1. [Kritische Bugs (Schweregrad: Hoch)](#1-kritische-bugs-schweregrad-hoch)
-2. [Berechnungs-, Logik- und Parsing-Fehler (Schweregrad: Mittel)](#2-berechnungs--logik--und-parsing-fehler-schweregrad-mittel)
-3. [Vorschläge für funktionale Erweiterungen](#4-vorschläge-für-funktionale-erweiterungen)
+1. [Kritische Bugs (Schweregrad: Hoch)]
+2. [Berechnungs-, Logik- und Parsing-Fehler (Schweregrad: Mittel)]
+3. [Vorschläge für funktionale Erweiterungen]
 4. [Vorschläge für User Experience (UX)](#5-vorschläge-für-user-experience-ux)
 5. [Vorschläge für Architektur & Testautomatisierung](#6-vorschläge-für-architektur--testautomatisierung)
 6. [Empfohlene Roadmap](#7-empfohlene-roadmap)
 
----
-
----
-
-## 4. Vorschläge für funktionale Erweiterungen
-
-_(Alle Punkte 4.1–4.5 erledigt und nach HISTORY.md verschoben)_
 
 ---
 
 ## 5. Vorschläge für User Experience (UX)
-
-### 5.1 Quick-Presets / Favoriten (Named Sequences)
-
-- Über ein Zahnrad-Icon oder einen Befehl `Insert Sequences: Save as Preset` sollten häufig genutzte Eingaben dauerhaft mit einem sprechenden Namen gespeichert werden können (z. B. _"Markdown Table Row Index"_, _"SQL Insert IDs"_).
 
 ### 5.2 Interaktiver Wizard / Sequenz-Assistent
 

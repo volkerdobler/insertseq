@@ -1,10 +1,21 @@
 // Mock vscode for standalone Node test runner
 declare const require: any;
+declare const process: any;
 const Module = require('module');
 const origRequire = Module.prototype.require;
+const mockConfigStore: Record<string, any> = {};
 Module.prototype.require = function (id: string) {
 	if (id === 'vscode') {
 		return {
+			ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
+			workspace: {
+				getConfiguration: () => ({
+					get: (key: string) => mockConfigStore[key],
+					update: async (key: string, value: any) => {
+						mockConfigStore[key] = value;
+					},
+				}),
+			},
 			window: {
 				createOutputChannel: () => ({
 					appendLine: () => {},
@@ -384,3 +395,86 @@ assertEqual(
 );
 
 console.log('IPv4 sequence tests passed');
+
+// Presets tests
+const {
+	getPresets,
+	savePreset,
+	deletePreset,
+	clearPresets,
+	resetToDefaultPresets,
+	DEFAULT_PRESETS,
+} = require('./components/presets');
+
+// 1. Initial presets fallback to defaults
+const initialPresets = getPresets();
+assertEqual(
+	initialPresets.length,
+	DEFAULT_PRESETS.length,
+	'initial presets length equals default presets length',
+);
+
+// 2. Mock context with globalState
+const testGlobalState: Record<string, any> = {};
+const mockExtensionContext: any = {
+	globalState: {
+		get: (key: string) => testGlobalState[key],
+		update: async (key: string, val: any) => {
+			testGlobalState[key] = val;
+		},
+	},
+};
+
+(async () => {
+	// Save new preset
+	await savePreset(mockExtensionContext, {
+		name: 'Custom Markdown Table',
+		sequence: '1:1~<5',
+		description: 'Table row numbering',
+	});
+
+	let current = getPresets(mockExtensionContext);
+	const found = current.find((p: any) => p.name === 'Custom Markdown Table');
+	assertEqual(!!found, true, 'custom preset was saved');
+	assertEqual(found.sequence, '1:1~<5', 'custom preset sequence is correct');
+
+	// Update existing preset (case-insensitive name match)
+	await savePreset(mockExtensionContext, {
+		name: 'custom markdown table',
+		sequence: '1:2~<6',
+		description: 'Updated description',
+	});
+
+	current = getPresets(mockExtensionContext);
+	const updated = current.find(
+		(p: any) => p.name.toLowerCase() === 'custom markdown table',
+	);
+	assertEqual(updated.sequence, '1:2~<6', 'preset was updated');
+
+	// Delete preset
+	await deletePreset(mockExtensionContext, 'Custom Markdown Table');
+	current = getPresets(mockExtensionContext);
+	const deleted = current.find(
+		(p: any) => p.name.toLowerCase() === 'custom markdown table',
+	);
+	assertEqual(deleted, undefined, 'preset was deleted');
+
+	// Clear all presets
+	await clearPresets(mockExtensionContext);
+	current = getPresets(mockExtensionContext);
+	assertEqual(current.length, 0, 'all presets cleared');
+
+	// Reset to default presets
+	await resetToDefaultPresets(mockExtensionContext);
+	current = getPresets(mockExtensionContext);
+	assertEqual(
+		current.length,
+		DEFAULT_PRESETS.length,
+		'presets reset to defaults',
+	);
+
+	console.log('Preset management tests passed');
+})().catch((err) => {
+	console.error('Preset tests failed:', err);
+	process.exit(1);
+});

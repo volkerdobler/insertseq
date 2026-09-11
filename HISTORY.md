@@ -256,3 +256,14 @@ _No completed tasks were found at the time of restructuring._
 
 - **Nutzen:** DevOps- und Netzwerk-Konfigurationen (Subnetze, Host-Listen).
 - **Syntax:** `192.168.1.1:1` -> zählt das letzte Oktett hoch (`192.168.1.1`, `.2`, `.3`, ...), inklusive Subnetz-Übertrag (`192.168.1.255:1` -> `192.168.2.0`), CIDR-Erhalt (`10.0.0.1/24:1`), negativer Schritte (`10.0.1.0:-1`), Format-Optionen (`~0`, `~hex`, `~bin`, `~int`) und Default-Präfix (`:ip:1`).
+
+### 5.1 Quick-Presets / Favoriten (Named Sequences)
+
+- **Nutzen:** Häufig genutzte Sequenzeingaben dauerhaft unter einem sprechenden Namen speichern, per Schnellmenü abrufen und direkt einfügen.
+- **Implementierung:**
+  - Presets-Manager in `src/components/presets.ts` mit get, save, delete, clear und resetToDefault.
+  - Befehle: `extension.insertseq.presets` ("Insert Sequences: Presets / Favorites", Tastenkürzel `Ctrl+Alt+P` / `Cmd+Alt+P`) und `extension.insertseq.savePreset` ("Insert Sequences: Save as Preset").
+  - Schnellspeichern aus dem History-QuickPick per Stern-Icon (`⭐`) an jedem Eintrag.
+  - Interaktives Bearbeiten und Löschen von Presets direkt im QuickPick mit Live-Preview.
+  - Persistierung in `insertseq.presets` (Workspace/User-Settings) und `globalState`.
+

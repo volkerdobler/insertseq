@@ -247,6 +247,32 @@
 					"default": 100,
 					"description": "Maximum items stored in history"
 				},
+				"insertseq.presets": {
+					"type": "array",
+					"default": [],
+					"description": "Custom sequence presets and favorites",
+					"items": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string",
+								"description": "Unique display name for this preset"
+							},
+							"sequence": {
+								"type": "string",
+								"description": "Sequence definition string (e.g. '1:1~<4')"
+							},
+							"description": {
+								"type": "string",
+								"description": "Optional description for this preset"
+							}
+						},
+						"required": [
+							"name",
+							"sequence"
+						]
+					}
+				},
 				"insertseq.debug": {
 					"type": "boolean",
 					"default": false,
@@ -262,6 +288,14 @@
 			{
 				"command": "extension.insertseq.history",
 				"title": "Insert Sequences-History"
+			},
+			{
+				"command": "extension.insertseq.presets",
+				"title": "Insert Sequences: Presets / Favorites"
+			},
+			{
+				"command": "extension.insertseq.savePreset",
+				"title": "Insert Sequences: Save as Preset"
 			}
 		],
 		"keybindings": [
@@ -275,6 +309,12 @@
 				"command": "extension.insertseq.history",
 				"key": "ctrl+alt+,",
 				"mac": "cmd+alt+,",
+				"when": "editorTextFocus"
+			},
+			{
+				"command": "extension.insertseq.presets",
+				"key": "ctrl+alt+p",
+				"mac": "cmd+alt+p",
 				"when": "editorTextFocus"
 			}
 		]
