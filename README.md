@@ -22,7 +22,7 @@ At a glance — what InsertSeq can do:
 | **📝 Templates & Wrapping** | • **Quoted templates**: embed sequences into surrounding text (`"Item {}":1` → `Item 1`, `Item 2`)<br>• **Backtick templates**: multiple independent sequences in one line (`` `Row {1}: Col {a}` ``) |
 | **⚡ Custom Logic & Functions** | • Inline JavaScript expressions (`|"item_" + (i*2)`)<br>• User-defined reusable functions from configuration settings (`=1`, `=2;5`) |
 | **🎛️ Sequence Controls** | • Custom step sizes (`:2`, `:-1`, `step:5`)<br>• Frequency (`*2` / `freq:2` — repeat each value N times)<br>• Repetition (`#5` / `rep:5` — cycle length over values)<br>• Startover (`##10` / `startover:10` — restart stream every N items)<br>• Formatting (`~03d`, `~>10`, padding, alignment)<br>• Stop expressions (`@i>5` / `stopif:(i>5)`)<br>• Document order sorting (`$`) and reverse order (`!`) |
-| **💡 Productivity & UX** | • **Live preview decoration** directly in the active editor before pressing Enter<br>• **Command history** (`insertseq.history`, `Ctrl+Alt+,`) to view, repeat, or edit previous insertions<br>• **Presets & Favorites** (`insertseq.presets`, `Ctrl+Alt+P`) to store, name, and execute reusable sequences |
+| **💡 Productivity & UX** | • **Live preview decoration** directly in the active editor before pressing Enter<br>• **Command history** (`insertseq.history`, `Ctrl+Alt+,`) to view, repeat, or edit previous insertions<br>• **Presets & Favorites** (`insertseq.presets`, `Ctrl+Alt+P`) to store, name, and execute reusable sequences<br>• **Interactive Wizard / Assistant** (`insertseq.wizard`, `Ctrl+Alt+W`) to assemble sequences step-by-step |
 
 ## Usage
 
@@ -42,6 +42,8 @@ You can start the extension from the Command Palette by searching for `insertseq
 If you have used this extension before, you can reuse previous inputs with the command `insertseq.history` (default key binding `Ctrl+Alt+,` CTRL+ALT or COMMAND-OPTION + COMMA). This shows your previous insertions; you can run them again or edit them. If no history entries exist, the normal input box is shown. See the [History](#history) section for details.
 
 To quickly select from predefined or custom saved favorite sequences, use `insertseq.presets` (default key binding `Ctrl+Alt+P` or Command Palette "Insert Sequences: Presets / Favorites"). You can also save any sequence as a named preset with `insertseq.savePreset` or via the star icon (`⭐`) in the History list. See the [Presets / Favorites](#presets--favorites) section for details.
+
+If you don't want to memorize syntax options, use the **Interactive Wizard** with `insertseq.wizard` (default key binding `Ctrl+Alt+W` or Command Palette "Insert Sequences: Wizard"). The wizard guides you step-by-step through choosing a sequence type, start value, increment, and format with live preview in the editor. See the [Wizard / Assistant](#wizard--assistant) section for details.
 
 ### Examples (simple → advanced)
 
@@ -921,6 +923,31 @@ Out of the box, InsertSeq comes with several practical presets:
   - History icon: Jump directly to recent insertion history
   - Trash icon: Clear all presets
   - Discard/Reset icon: Restore default built-in presets
+
+---
+
+## Wizard / Assistant
+
+Default keybinding: `Ctrl+Alt+W` / `Cmd+Alt+W` (or Command Palette: "Insert Sequences: Wizard").
+
+The interactive Wizard guides you step-by-step through generating sequences without needing to remember raw syntax tokens:
+
+1. **Choose Category**:
+   - 🔢 **Numbers & Integers**: Decimals, custom step, zero-padding (`001`), roman numerals (`~R`).
+   - 🔤 **Letters & Alphabet**: Start letter, step, lowercase/uppercase/pascal casing.
+   - 📅 **Date & Time**: Today, time clocks, custom start dates, daily/weekly/hourly step intervals, ISO/locale date formats.
+   - 🛠️ **DevOps, UUIDs & Passwords**: UUID v4/v7, random alphanumeric strings, strong passwords, hex hashes, PIN codes, IPv4 subnets.
+   - 📋 **Custom List / Words**: Comma-separated items converted to circular arrays.
+   - ⚡ **JavaScript Expression**: Formula templates or custom JavaScript expressions.
+2. **Interactive Live Preview**:
+   - As you navigate options or type values, the editor shows a real-time decoration preview of the sequence across all cursors.
+3. **Back-Button Navigation**:
+   - Made a mistake? Click the VS Code Back button (`←`) in the top-left of any step to return to the previous option.
+4. **Final Options**:
+   - 🚀 **Insert Sequence**: Insert immediately into active cursors and record to history.
+   - ✏️ **Fine-tune in Input Box**: Transition into the regular input box pre-filled with the wizard's generated sequence.
+   - ⭐ **Save as Preset**: Save the generated sequence with a friendly name for recurring use.
+   - ❌ **Cancel**: Abort and restore original editor selections.
 
 ---
 

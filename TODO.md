@@ -18,10 +18,6 @@ Dieser Bericht dokumentiert alle identifizierten Probleme, logischen Schwachstel
 
 ## 5. Vorschläge für User Experience (UX)
 
-### 5.2 Interaktiver Wizard / Sequenz-Assistent
-
-- Die Syntax ist extrem mächtig, für Gelegenheitsnutzer aber schwer zu merken. Ein Wizard-Modus (`Insert Sequences: Wizard`) könnte Schritt für Schritt per Dropdown durch Typ, Start, Schrittweite und Format führen.
-
 ### 5.3 Live-Fehlerfeedback in der InputBox
 
 - Der `validateInput`-Hook gibt derzeit immer `''` zurück. Bei Syntaxfehlern in Ausdrücken (`::`) oder ungültigen Parametern sollte dort eine direkte Hilfestellung angezeigt werden (z. B. _"Ungültiger Ausdruck: 'abc' is not defined"_).

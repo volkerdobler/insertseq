@@ -33,6 +33,7 @@ import {
 	resetToDefaultPresets,
 	TPreset,
 } from './components/presets';
+import { startSequenceWizard } from './components/wizard';
 import {
 	setDebugMode,
 	setOutputChannel,
@@ -247,6 +248,18 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		),
 	);
+	// register insertseq.wizard command (interactive step-by-step assistant)
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			'extension.insertseq.wizard',
+			(value?: string) => {
+				InsertSeqWizard(context, value);
+				printToConsole(
+					'Congratulations, extension "insertseq.wizard" is now active!',
+				);
+			},
+		),
+	);
 }
 
 /** Extension teardown hook — disposes the debug output channel. */
@@ -370,6 +383,7 @@ async function initApp(editor: vscode.TextEditor): Promise<TParameter> {
 async function InsertSeqCommand(
 	context: vscode.ExtensionContext,
 	value: string,
+	existingParameter?: TParameter,
 ) {
 	// get active editor, if not available show info message and return
 	const editor = vscode.window.activeTextEditor;
@@ -379,7 +393,8 @@ async function InsertSeqCommand(
 	}
 
 	// get global parameter (config, regex, original selections etc.) - will be passed to subfunctions
-	const parameter: TParameter = await initApp(editor);
+	const parameter: TParameter =
+		existingParameter ?? (await initApp(editor));
 
 	printToConsole('Initialized parameters for InsertSeqCommand');
 
@@ -524,6 +539,58 @@ async function InsertSeqSavePreset(
 		`Sequence preset "${name.trim()}" saved successfully.`,
 	);
 }
+
+/**
+ * Wizard command handler — launches the step-by-step interactive sequence assistant.
+ * Default keybinding: `Ctrl+Alt+W` / `Cmd+Alt+W`.
+ *
+ * @param context - The extension context.
+ * @param _value - Optional initial value.
+ */
+async function InsertSeqWizard(
+	context: vscode.ExtensionContext,
+	_value?: string,
+) {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) {
+		return;
+	}
+
+	const parameter: TParameter = await initApp(editor);
+	let committed = false;
+
+	await startSequenceWizard(parameter, {
+		preview: (seq: string) => {
+			insertNewSequence(seq, parameter, 'preview');
+		},
+		clearPreview: () => {
+			if (previewDecorationType) {
+				parameter.editor.setDecorations(previewDecorationType, []);
+			}
+		},
+		commit: async (seq: string) => {
+			committed = true;
+			insertNewSequence(seq, parameter, 'final');
+			await saveToHistory(context, seq);
+		},
+		editInInputBox: async (seq: string) => {
+			committed = true;
+			await InsertSeqCommand(context, seq, parameter);
+		},
+		savePreset: async (seq: string) => {
+			committed = true;
+			insertNewSequence(seq, parameter, 'final');
+			await saveToHistory(context, seq);
+			await InsertSeqSavePreset(context, seq);
+		},
+		cancel: () => {
+			if (!committed) {
+				insertNewSequence(undefined, parameter, 'final');
+			}
+		},
+	});
+}
+
 
 
 /**
@@ -1256,12 +1323,16 @@ function createQuickPick(
 			// Hide quickpick and launch InsertSeqCommand with the selected history item
 			accepted = true;
 			qp.hide();
-			await InsertSeqCommand(context, item.cmd);
+			await InsertSeqCommand(context, item.cmd, parameter);
 		}
 	});
 
-	// add toolbar buttons for Presets and Clear all history
+	// add toolbar buttons for Wizard, Presets and Clear all history
 	qp.buttons = [
+		{
+			iconPath: new vscode.ThemeIcon('wand'),
+			tooltip: 'Open Wizard / Assistant',
+		} as any,
 		{
 			iconPath: new vscode.ThemeIcon('bookmark'),
 			tooltip: 'Open Presets / Favorites',
@@ -1273,6 +1344,12 @@ function createQuickPick(
 	];
 	qp.onDidTriggerButton(async (btn) => {
 		const tooltip = (btn as any).tooltip || '';
+		if (tooltip === 'Open Wizard / Assistant') {
+			accepted = true;
+			qp.hide();
+			await InsertSeqWizard(context);
+			return;
+		}
 		if (tooltip === 'Open Presets / Favorites') {
 			accepted = true;
 			qp.hide();
@@ -1311,7 +1388,7 @@ function createQuickPick(
 			// New sequence selected -> delegate to InsertSeqCommand
 			accepted = true;
 			qp.hide();
-			await InsertSeqCommand(context, '');
+			await InsertSeqCommand(context, '', parameter);
 			return;
 		}
 
@@ -1495,6 +1572,10 @@ function createPresetsQuickPick(
 			tooltip: 'Add new preset',
 		} as any,
 		{
+			iconPath: new vscode.ThemeIcon('wand'),
+			tooltip: 'Open Wizard / Assistant',
+		} as any,
+		{
 			iconPath: new vscode.ThemeIcon('history'),
 			tooltip: 'Open History',
 		} as any,
@@ -1514,6 +1595,10 @@ function createPresetsQuickPick(
 			accepted = true;
 			qp.hide();
 			await InsertSeqSavePreset(context);
+		} else if (tooltip === 'Open Wizard / Assistant') {
+			accepted = true;
+			qp.hide();
+			await InsertSeqWizard(context);
 		} else if (tooltip === 'Open History') {
 			accepted = true;
 			qp.hide();

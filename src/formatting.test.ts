@@ -474,7 +474,121 @@ const mockExtensionContext: any = {
 	);
 
 	console.log('Preset management tests passed');
+
+	// Wizard builder tests
+	const {
+		buildNumberSeq,
+		buildAlphaSeq,
+		buildDateSeq,
+		buildDevOpsSeq,
+		buildListSeq,
+		buildExprSeq,
+	} = require('./components/wizard');
+
+	// Numbers
+	assertEqual(
+		buildNumberSeq({ start: '1', step: '2', format: '~03d' }),
+		'1:2~03d',
+		'wizard number seq with step and format',
+	);
+	assertEqual(
+		buildNumberSeq({
+			start: '0',
+			step: '1',
+			repeat: '5',
+			frequency: '2',
+			startover: '10',
+		}),
+		'0#5*2##10',
+		'wizard number seq with repeat, frequency, startover',
+	);
+	assertEqual(
+		buildNumberSeq({ start: '1', format: '04d' }),
+		'1~04d',
+		'wizard number seq auto-prepends tilde',
+	);
+
+	// Alpha
+	assertEqual(
+		buildAlphaSeq({ start: 'a', step: '1', caseStyle: 'upper' }),
+		'a?u',
+		'wizard alpha uppercase',
+	);
+	assertEqual(
+		buildAlphaSeq({
+			start: 'B',
+			step: '2',
+			caseStyle: 'lower',
+			format: '~<4',
+		}),
+		'B?l:2~<4',
+		'wizard alpha lowercase step 2 padding',
+	);
+
+	// Date & Time
+	assertEqual(
+		buildDateSeq({ start: '%now', step: '1d', format: '~"yyyy-MM-dd"' }),
+		'%now~"yyyy-MM-dd"',
+		'wizard date default step omitted',
+	);
+	assertEqual(
+		buildDateSeq({ start: '%2026-01-01', step: '1w', format: '~iso' }),
+		'%2026-01-01:1w~iso',
+		'wizard date with step and format',
+	);
+
+	// DevOps
+	assertEqual(
+		buildDevOpsSeq({ type: 'uuid-v4' }),
+		':uuid',
+		'wizard devops uuid v4',
+	);
+	assertEqual(
+		buildDevOpsSeq({ type: 'uuid-v7' }),
+		':uuid:v7',
+		'wizard devops uuid v7',
+	);
+	assertEqual(
+		buildDevOpsSeq({ type: 'pwd', length: 24 }),
+		':pwd:24',
+		'wizard devops pwd 24',
+	);
+	assertEqual(
+		buildDevOpsSeq({ type: 'rnd', length: 12 }),
+		':rnd:12',
+		'wizard devops rnd 12',
+	);
+	assertEqual(
+		buildDevOpsSeq({ type: 'hex', length: 16 }),
+		':hex:16',
+		'wizard devops hex 16',
+	);
+	assertEqual(
+		buildDevOpsSeq({ type: 'pin', length: 4 }),
+		':rnd:4~d',
+		'wizard devops pin 4',
+	);
+	assertEqual(
+		buildDevOpsSeq({ type: 'ip', ipStart: '10.0.0.1', ipStep: '2' }),
+		'10.0.0.1:2',
+		'wizard devops ip',
+	);
+
+	// List & Expr
+	assertEqual(
+		buildListSeq(['apple', 'banana', 'cherry']),
+		'["apple","banana","cherry"]',
+		'wizard list json',
+	);
+	assertEqual(
+		buildExprSeq('"Item_" + (i+1)'),
+		'|"Item_" + (i+1)',
+		'wizard expr auto-pipe',
+	);
+
+	console.log('Wizard builder tests passed');
 })().catch((err) => {
-	console.error('Preset tests failed:', err);
+	console.error('Preset/Wizard tests failed:', err);
 	process.exit(1);
 });
+

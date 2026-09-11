@@ -267,3 +267,20 @@ _No completed tasks were found at the time of restructuring._
   - Interaktives Bearbeiten und Löschen von Presets direkt im QuickPick mit Live-Preview.
   - Persistierung in `insertseq.presets` (Workspace/User-Settings) und `globalState`.
 
+### 5.2 Interaktiver Wizard / Sequenz-Assistent
+
+- **Nutzen:** Schneller, geführter Einstieg in die Sequenzerstellung per Menüauswahl für Benutzer, die die kompakte Syntax nicht auswendig kennen.
+- **Implementierung:**
+  - Mehrstufiger Assistent in `src/components/wizard.ts` mit voller Back-Navigation (`QuickInputButtons.Back`) und dynamischer Live-Decoration-Preview bei jedem Einzelschritt.
+  - Befehl: `extension.insertseq.wizard` ("Insert Sequences: Wizard", Tastenkürzel `Ctrl+Alt+W` / `Cmd+Alt+W`).
+  - Direkter Zauberstab-Button (`🪄`) in History- und Presets-Menüleisten.
+  - Unterstützt Kategorien:
+    - 🔢 Zahlen & Ganzzahlen (Start, Schrittweite, Formatierung/Zero-Padding/Römisch)
+    - 🔤 Buchstaben & Alphabet (Start, Schrittweite, Casing: klein/groß/pascal)
+    - 📅 Datum & Uhrzeit (Jetzt, Heute, Uhrzeit, Schrittweiten wie Tage/Wochen/Monate/Stunden, Format-Tokens)
+    - 🛠️ DevOps, UUIDs & Passwörter (UUID v4/v7, alphanumerische Token, Passwörter, Hashes, PIN-Codes, IPv4)
+    - 📋 Benutzerdefinierte Listen / Wortfolgen (kommagetrennte Eingabe)
+    - ⚡ JavaScript-Ausdrücke (Formelvorlagen und benutzerdefinierte Ausdrücke)
+  - Abschluss-Optionen: Direkt einfügen (`Insert`), Feintuning in der regulären InputBox (`Fine-tune`), oder als Favorit speichern (`Save as Preset`).
+
+

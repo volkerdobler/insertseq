@@ -296,6 +296,10 @@
 			{
 				"command": "extension.insertseq.savePreset",
 				"title": "Insert Sequences: Save as Preset"
+			},
+			{
+				"command": "extension.insertseq.wizard",
+				"title": "Insert Sequences: Wizard"
 			}
 		],
 		"keybindings": [
@@ -315,6 +319,12 @@
 				"command": "extension.insertseq.presets",
 				"key": "ctrl+alt+p",
 				"mac": "cmd+alt+p",
+				"when": "editorTextFocus"
+			},
+			{
+				"command": "extension.insertseq.wizard",
+				"key": "ctrl+alt+w",
+				"mac": "cmd+alt+w",
 				"when": "editorTextFocus"
 			}
 		]
