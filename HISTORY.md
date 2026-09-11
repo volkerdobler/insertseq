@@ -407,3 +407,13 @@ _No completed tasks were found at the time of restructuring._
     - Bereinigung des `src/`-Ordners durch Entfernen von `src/formatting.test.ts` (Linter-Warnungen im Projekt auf 2 reduziert, saubere Trennung von Code und Tests).
     - `package.json`-Scripts aktualisiert: `"test": "vitest run"`, `"test:watch": "vitest"`.
     - Alle 89 Tests laufen in unter 1 Sekunde durch.
+
+---
+
+## 7. Weitere Bugfixes & Detailverbesserungen
+
+### 7.1 Korrektur der Standard-Schrittweite bei Datumssequenzen (`%`)
+
+- **Problem:** Bei der Eingabe von `%` (ohne expliziten Start- oder Step-Wert) wurde der Startwert intern über `Temporal.Now.plainDateTimeISO()` mit der vollen Uhrzeit inkl. Doppelpunkten (z. B. `%2026-09-11T14:14:05`) gebildet. Der nachfolgende Parser für `steps_date` interpretierte den Doppelpunkt der Uhrzeit fälschlicherweise als Schrittweitenangabe `:14` und setzte die Schrittweite auf 14 Tage statt des Defaults von 1 Tag.
+- **Fix:** In `src/sequences/date.ts` wird für reine Datums-Eingaben nun `Temporal.Now.plainDateISO()` (ohne Uhrzeit und Doppelpunkte) genutzt. Dadurch bleibt die Schrittweite sauber beim Default von 1 Tag (`11.09.2026`, `12.09.2026` ...).
+- **Test:** Durch Unit-Test in `test/date.test.ts` abgesichert.

@@ -32,12 +32,15 @@ export function createDateSeq(
 	input: string,
 	parameter: TParameter,
 ): (i: number) => { stringFunction: string; stopFunction: boolean } {
-	// if only "%" or "date:", without additional digits, is given, use current date/time as start
-	if (input.match(/^(?:%|date:)(?!\d)/i)) {
+	// if only "%" or "date:", without date digits, insert current date (plainDateISO to avoid colons in time)
+	if (
+		input.match(/^(?:%|date:)(?!\d)/i) &&
+		!input.match(/^(?:%|date:)\s*now\b/i)
+	) {
 		const prefix = input.match(/^(?:%|date:)/i)?.[0] || '%';
 		input =
 			prefix +
-			Temporal.Now.plainDateTimeISO().toString() +
+			Temporal.Now.plainDateISO().toString() +
 			input.slice(prefix.length);
 	}
 	// extract start date

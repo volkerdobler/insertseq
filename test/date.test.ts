@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { formatTemporalDateTime } from '../src/formatting';
+import { createDateSeq } from '../src/sequences/date';
 import { Temporal } from 'temporal-polyfill';
 import { getRegExpressions } from '../src/components/evaluator';
 import { RuleTemplate } from '../src/types';
@@ -91,6 +92,57 @@ describe('Date & Time Formatting and Evaluator Parsing', () => {
 			const match = '%2026-03-31:1y'.match(new RegExp(rules.steps_date, 'i'));
 			expect(match).not.toBeNull();
 			expect(match?.groups?.step_expr).toBe('1y');
+		});
+	});
+
+	describe('createDateSeq default stepping', () => {
+		it('steps by exactly 1 day for "%"', () => {
+			const param = {
+				editor: {} as any,
+				cursors: 3,
+				multiCursorSort: 'default',
+				origCursorPos: [{} as any, {} as any, {} as any],
+				selectionText: ['', '', ''],
+				origTextSel: ['', '', ''],
+				segments: getRegExpressions(),
+				formatSegments: {},
+				config: { get: () => '' },
+			} as any;
+
+			const seqFn = createDateSeq('%~yyyy-MM-dd', param);
+			const d0 = seqFn(0).stringFunction;
+			const d1 = seqFn(1).stringFunction;
+			const d2 = seqFn(2).stringFunction;
+
+			const t0 = Temporal.PlainDate.from(d0);
+			const t1 = Temporal.PlainDate.from(d1);
+			const t2 = Temporal.PlainDate.from(d2);
+
+			expect(t1.toString()).toBe(t0.add({ days: 1 }).toString());
+			expect(t2.toString()).toBe(t0.add({ days: 2 }).toString());
+		});
+
+		it('supports %now with intervals', () => {
+			const param = {
+				editor: {} as any,
+				cursors: 3,
+				multiCursorSort: 'default',
+				origCursorPos: [{} as any, {} as any, {} as any],
+				selectionText: ['', '', ''],
+				origTextSel: ['', '', ''],
+				segments: getRegExpressions(),
+				formatSegments: {},
+				config: { get: () => '' },
+			} as any;
+
+			const seqFn = createDateSeq('%now:1d~yyyy-MM-dd', param);
+			const d0 = seqFn(0).stringFunction;
+			const d1 = seqFn(1).stringFunction;
+
+			const t0 = Temporal.PlainDate.from(d0);
+			const t1 = Temporal.PlainDate.from(d1);
+
+			expect(t1.toString()).toBe(t0.add({ days: 1 }).toString());
 		});
 	});
 });
