@@ -157,3 +157,12 @@ Alternative, and if you want to insert multiple sequences in one input and text,
 Input: `` `Hello backticks {3:5} and more {h:2}` `` with 15 selections → output:
 
 ![Example 16](./examples/InsertSeq_16.gif)
+
+### UUID Sequences
+
+Use :uuid to generate Universally Unique Identifiers (UUIDs).
+
+Input: `:uuid~u` with 8 selections → output:
+
+![Example 17](./examples/InsertSeq_17.gif)
+

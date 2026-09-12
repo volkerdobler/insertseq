@@ -452,10 +452,16 @@ export function getRegExpressions(): RuleTemplate {
 
 	ruleTemplate.start_uuid = `^(?:
 									(?: {{charStartUuid}} )
-									\\s*
-									(?::?(?<uuidversion> [vV]?[47] ))?
 									(?:
-										{{charStartOptions}}
+										\\s*
+										:?
+										\\s*
+										(?<uuidversion> [vV]?[47] )
+									)?
+									(?:
+										\\s*
+										(?: {{charStartFormat}} | {{charStartOptions}} )
+										\\s*
 										(?<uuidformat> [a-zA-Z]+ )
 									)?
 									(?: {{sequencedelimiter}} )?
