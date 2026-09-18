@@ -48,7 +48,7 @@ If you don't want to memorize syntax options, use the **Interactive Wizard** wit
 
 ### Examples (simple → advanced)
 
-#### If you want to see the examples as "live" GIF film [click here](./EXAMPLES.md).
+#### If you want to see the examples as "live" GIF film [click here](https://github.com/volkerdobler/insertseq/blob/master/EXAMPLES.md).
 
 ### Decimal sequence (5 cursors)
 
