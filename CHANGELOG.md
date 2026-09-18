@@ -2,6 +2,21 @@
 
 All notable changes to this extension (newest first):
 
+# Version 1.3.0
+
+- Added **Quick Presets / Favorites** (`insertseq.presets`, `insertseq.savePreset`) to save, name, preview, and reuse frequently used sequences.
+- Added **Interactive Wizard / Assistant** (`insertseq.wizard`) to compose sequences step-by-step and transfer the result into the normal input flow.
+- Added **Native Ghost-Text Preview** with improved live validation/error feedback directly in the input workflow.
+- Added **Internationalization (i18n)** for validation messages and syntax hints.
+- Added typed scope-variable handling in expression evaluation and improved preview responsiveness (debounced preview updates).
+- Changed document insertion to an atomic `vscode.WorkspaceEdit`-based flow for more robust multi-cursor updates.
+- Migrated tests to **Vitest** with modularized test suites.
+- Fixed default date step handling for `%` date sequences to reliably use one day when no step is provided.
+- Changed release notes handling:
+    - moved `WHATSNEW-1.2.0.md` to `release-notes/1.2.0.md`
+    - extension now shows the newest available release note for the current `MAJOR.MINOR` line only once per shown note version (for example: `1.2.1` can show `1.2.0`, `1.3.x` shows `1.3.0` or `1.3.1` if available)
+- Added CI workflow and restricted branch triggers to `master`; publish now reuses the VSIX artifact from the build job.
+
 # Version 1.2.0
 
 - Added **UUID Generator** (`:uuid` for v4, `:uuid:v7` for time-sortable v7, with uppercase `~u` and clean `~c` modifiers)

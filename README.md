@@ -10,12 +10,21 @@ All inputs are previewed live (as a decoration) for the current selections,
 so you can verify the generated sequence before pressing Enter.
 The input box also provides real-time syntax and error validation with helpful hints.
 
+## New in 1.3.0 (User Features)
+
+Version 1.3.0 focuses on making InsertSeq easier to adopt in day-to-day work. 
+* The new Wizard lowers the entry barrier for new and occasional users: instead of typing complex option syntax from memory, you can build a sequence step by step and then continue with a valid prefilled input. 
+* Presets and Favorites provide another fast path for recurring sequences by letting you save and launch named patterns directly. Similar workflows are still possible through History, but Presets/Favorites give you an additional, more intentional way to organize reusable inputs. 
+* Instant Input Feedback supports users who prefer typing everything directly into the input line by showing immediate hints and error messages while they type; unlike the Wizard, it is not a guided step-by-step flow, but real-time assistance for manual input.
+
 ## Feature Overview (Agenda)
 
 At a glance — what InsertSeq can do:
 
 | Category | Key Capabilities & Quick Examples |
 | :--- | :--- |
+| **🆕 New in 1.3.0** | • **Presets & Favorites** (`insertseq.presets`, `Ctrl+Alt+P`): save, name, and re-run your recurring sequences<br>• **Interactive Wizard** (`insertseq.wizard`, `Ctrl+Alt+W`): create valid sequences step-by-step without memorizing syntax<br>• **Native Ghost-Text Preview**: clearer, smoother live preview while typing<br>• **Live syntax/error feedback**: instant hints for invalid input<br>• **Localized hints/messages**: validation guidance appears in your language setup |
+| **💡 Productivity & UX** | • **Command history** (`insertseq.history`, `Ctrl+Alt+,`) to view, repeat, or edit previous insertions<br>• **Presets & Favorites** (`insertseq.presets`, `Ctrl+Alt+P`) to store, name, and execute reusable sequences<br>• **Interactive Wizard / Assistant** (`insertseq.wizard`, `Ctrl+Alt+W`) to assemble sequences step-by-step<br>• **Preview modes**: choose between native ghost text and classic decoration preview |
 | **🔢 Numbers & Radices** | • Decimal integers and floating-point numbers (`1`, `0.5`, `-10`)<br>• Radix systems: Hexadecimal (`0x10`), Octal (`0o10`), Binary (`0b10`)<br>• Random number ranges (`1r10` = random numbers between 1 and 10)<br>• Roman numerals: uppercase (`1~R`, `1~roman`) and lowercase (`1~r`) |
 | **🔤 Strings & Lists** | • Alphabetic sequences (`a`, `b`, `c`, ...) with case options (`?u`, `?l`, `?p`)<br>• Custom inline lists and circular arrays (`["red","green","blue"]`)<br>• Predefined lists from configuration settings (`;Jan`, `;?1`)<br>• Re-insert or transform previously selected text |
 | **📅 Date & Time** | • Calendar dates (`%2025-01-01`, `%now`, `%date:`)<br>• Clock times & timestamps (`%14:00`, `%14:00:15min`)<br>• Compound duration steps (`:1d15min`, `:2h30min`, `:1.5d`)<br>• Format tokens (`yyyy-MM-dd HH:mm:ss`), locales (`lang:de`), and timestamps (`~epoch`, `~epochms`, `~iso`, `~utc`) |
@@ -23,7 +32,6 @@ At a glance — what InsertSeq can do:
 | **📝 Templates & Wrapping** | • **Quoted templates**: embed sequences into surrounding text (`"Item {}":1` → `Item 1`, `Item 2`)<br>• **Backtick templates**: multiple independent sequences in one line (`` `Row {1}: Col {a}` ``) |
 | **⚡ Custom Logic & Functions** | • Inline JavaScript expressions (`|"item_" + (i*2)`)<br>• User-defined reusable functions from configuration settings (`=1`, `=2;5`) |
 | **🎛️ Sequence Controls** | • Custom step sizes (`:2`, `:-1`, `step:5`)<br>• Frequency (`*2` / `freq:2` — repeat each value N times)<br>• Repetition (`#5` / `rep:5` — cycle length over values)<br>• Startover (`##10` / `startover:10` — restart stream every N items)<br>• Formatting (`~03d`, `~>10`, padding, alignment)<br>• Stop expressions (`@i>5` / `stopif:(i>5)`)<br>• Document order sorting (`$`) and reverse order (`!`) |
-| **💡 Productivity & UX** | • **Native Ghost-Text & Live Preview**: flicker-free theme-integrated ghost text (`editorGhostText.foreground`) and compact overflow handling<br>• **Live syntax & error feedback** in the input box with clear hints and severity badges<br>• **Command history** (`insertseq.history`, `Ctrl+Alt+,`) to view, repeat, or edit previous insertions<br>• **Presets & Favorites** (`insertseq.presets`, `Ctrl+Alt+P`) to store, name, and execute reusable sequences<br>• **Interactive Wizard / Assistant** (`insertseq.wizard`, `Ctrl+Alt+W`) to assemble sequences step-by-step |
 
 ## Usage
 
