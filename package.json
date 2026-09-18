@@ -38,7 +38,7 @@
 		"README.md",
 		"CHANGELOG.md",
 		"LICENSE.md",
-		"WHATSNEW*.md",
+		"release-notes/*.md",
 		"package.json",
 		"insertseq.png"
 	],

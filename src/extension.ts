@@ -77,45 +77,90 @@ export function activate(context: vscode.ExtensionContext) {
 	// set output channel for debug messages
 	setOutputChannel('InsertSeq');
 
-	// --- What's New: only show when a version-specific WHATSNEW-<version>.md exists ---
+	// --- What's New: show newest note for current major.minor if not shown yet ---
 	(async () => {
 		try {
-			const currentVersion = context.extension.packageJSON
-				.version as string;
-			const keyShown = 'shownWhatsNewForVersion';
+			const currentVersion = String(
+				context.extension.packageJSON.version ?? '',
+			);
+			const keyShown = 'shownWhatsNewReleaseNoteVersion';
 			const keyAlways = 'alwaysShowWhatsNew';
 			const always = context.globalState.get<boolean>(keyAlways) === true;
 			const shownFor = context.globalState.get<string>(keyShown);
 
-			// Candidate file names for this version (include padded MAJOR.MINOR.PATCH)
-			const parts = currentVersion.split('.');
-			while (parts.length < 3) {
-				parts.push('0');
-			}
-			const padded = parts.slice(0, 3).join('.');
-			const candidates = [
-				`WHATSNEW-${currentVersion}.md`,
-				`WHATSNEW-${currentVersion.replace(/\./g, '_')}.md`,
-				`WHATSNEW-${padded}.md`,
-			];
-			let foundPath: string | undefined;
-			for (const p of candidates) {
-				const uri = vscode.Uri.joinPath(context.extensionUri, p);
-				try {
-					await vscode.workspace.fs.stat(uri);
-					foundPath = p;
-					break;
-				} catch {
-					// not found — try next
+			const parseSemver = (
+				version: string,
+			): { major: number; minor: number; patch: number } | undefined => {
+				const m = version.trim().match(/^(\d+)\.(\d+)(?:\.(\d+))?$/);
+				if (!m) {
+					return undefined;
 				}
-			}
+				return {
+					major: Number(m[1]),
+					minor: Number(m[2]),
+					patch: Number(m[3] ?? 0),
+				};
+			};
 
-			// If no version-specific file exists, do nothing
-			if (!foundPath) {
+			const parsedCurrent = parseSemver(currentVersion);
+			if (!parsedCurrent) {
 				return;
 			}
 
-			if (always || shownFor !== currentVersion) {
+			const releaseNotesDir = vscode.Uri.joinPath(
+				context.extensionUri,
+				'release-notes',
+			);
+			let entries: [string, vscode.FileType][] = [];
+			try {
+				entries = await vscode.workspace.fs.readDirectory(releaseNotesDir);
+			} catch {
+				// no release-notes directory yet
+				return;
+			}
+
+			type TNote = {
+				version: string;
+				major: number;
+				minor: number;
+				patch: number;
+				path: string;
+			};
+
+			const notes: TNote[] = [];
+			for (const [name, fileType] of entries) {
+				if (fileType !== vscode.FileType.File || !name.endsWith('.md')) {
+					continue;
+				}
+				const version = name.slice(0, -3);
+				const parsed = parseSemver(version);
+				if (!parsed) {
+					continue;
+				}
+				notes.push({
+					version: `${parsed.major}.${parsed.minor}.${parsed.patch}`,
+					major: parsed.major,
+					minor: parsed.minor,
+					patch: parsed.patch,
+					path: `release-notes/${name}`,
+				});
+			}
+
+			const candidates = notes
+				.filter(
+					(n) =>
+						n.major === parsedCurrent.major &&
+						n.minor === parsedCurrent.minor &&
+						n.patch <= parsedCurrent.patch,
+				)
+				.sort((a, b) => b.patch - a.patch);
+
+			const selected = candidates[0];
+			if (!selected) {
+				return;
+			}
+
+			if (always || shownFor !== selected.version) {
 				const buttons = ["What's New"] as string[];
 				if (always) {
 					buttons.push('Disable auto-show');
@@ -130,7 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
 				if (choice === "What's New") {
 					const uri = vscode.Uri.joinPath(
 						context.extensionUri,
-						foundPath,
+						selected.path,
 					);
 					try {
 						// open rendered Markdown preview (preferred)
@@ -147,7 +192,7 @@ export function activate(context: vscode.ExtensionContext) {
 							});
 						} catch {
 							vscode.window.showErrorMessage(
-								`${foundPath} nicht gefunden.`,
+								`${selected.path} nicht gefunden.`,
 							);
 						}
 					}
@@ -163,7 +208,7 @@ export function activate(context: vscode.ExtensionContext) {
 						} else {
 							await context.globalState.update(
 								keyShown,
-								currentVersion,
+								selected.version,
 							);
 						}
 					}
@@ -171,7 +216,7 @@ export function activate(context: vscode.ExtensionContext) {
 					await context.globalState.update(keyAlways, true);
 					const uri = vscode.Uri.joinPath(
 						context.extensionUri,
-						foundPath,
+						selected.path,
 					);
 					try {
 						await vscode.commands.executeCommand(
@@ -187,19 +232,19 @@ export function activate(context: vscode.ExtensionContext) {
 							});
 						} catch {
 							vscode.window.showErrorMessage(
-								`${foundPath} nicht gefunden.`,
+								`${selected.path} nicht gefunden.`,
 							);
 						}
 					}
 				} else if (choice === 'Disable auto-show') {
 					await context.globalState.update(keyAlways, false);
-					await context.globalState.update(keyShown, currentVersion);
+					await context.globalState.update(keyShown, selected.version);
 				} else {
 					// Dismiss or undefined
 					if (!always) {
 						await context.globalState.update(
 							keyShown,
-							currentVersion,
+							selected.version,
 						);
 					}
 				}
