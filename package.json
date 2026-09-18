@@ -286,7 +286,7 @@
 		"compile:all": "npm run clean && npm run compile:desk",
 		"build:desk": "npm run check-types && npm run lint && node esbuild.js --production",
 		"build:web": "npm run check-types && npm run lint && node esbuild-web.js --production",
-		"build:all": "npm run clean && npm run build:desk",
+		"build:all": "npm run clean && npm run build:desk && npm run build:web",
 		"lint": "eslint src --ext .ts",
 		"watch:desk": "tsc -watch -p ./",
 		"watch:web": "tsc -watch -project tsconfig.json & node esbuild-web.js --watch",
