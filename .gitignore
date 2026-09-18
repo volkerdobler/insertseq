@@ -17,3 +17,4 @@ quickpick_keyboard.txt
 package-lock.json
 CLAUDE.md
 .ps_history
+*.code-workspace

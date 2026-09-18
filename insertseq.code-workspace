@@ -13,6 +13,12 @@
 				"editor.findMatchHighlightBackground": "#b6c700",
 				"editor.findMatchBackground": "#869e00"
 			}
+		},
+		"chat.tools.terminal.autoApprove": {
+			"/^cmd /c npm run build:all$/": {
+				"approve": true,
+				"matchCommandLine": true
+			}
 		}
 	}
 }
