@@ -33,6 +33,9 @@
 	],
 	"main": "./dist/extension.js",
 	"browser": "./dist/extension.js",
+	"activationEvents": [
+		"onStartupFinished"
+	],
 	"files": [
 		"dist",
 		"README.md",
