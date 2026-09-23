@@ -35,7 +35,7 @@ jobs:
               run: npm test
 
             - name: Package VSIX
-              run: npx vsce package
+              run: npx @vscode/vsce package
 
             - uses: actions/upload-artifact@v4
               with:
@@ -59,6 +59,6 @@ jobs:
             - name: Publish to VS Code Marketplace
               run: |
                   VSIX_PATH="$(ls *.vsix | head -n1)"
-                  npx vsce publish --pat "$VSCE_PAT" --packagePath "$VSIX_PATH"
+                  npx @vscode/vsce publish --pat "$VSCE_PAT" --packagePath "$VSIX_PATH"
               env:
                   VSCE_PAT: ${{ secrets.VSCE_PAT }}
