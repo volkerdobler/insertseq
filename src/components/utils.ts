@@ -49,8 +49,6 @@ export function printToConsole(str: string): void {
 	}
 	if (outputChannel) {
 		outputChannel.appendLine('Debugging insertseq: ' + str);
-	} else {
-		console.log('Debugging insertseq: ' + str);
 	}
 }
 

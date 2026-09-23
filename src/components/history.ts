@@ -44,7 +44,11 @@ export async function migrateOldHistory(
 		// clear old history to avoid duplicate future migrations
 		await ctx.globalState.update(OLD_HISTORY_KEY, []);
 	} catch (err) {
-		console.error('insertseq: history migration failed', err);
+		const message =
+			err instanceof Error ? err.message : String(err);
+		void vscode.window.showErrorMessage(
+			`InsertSeq: history migration failed (${message})`,
+		);
 	}
 }
 
