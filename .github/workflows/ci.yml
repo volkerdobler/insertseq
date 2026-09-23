@@ -18,6 +18,9 @@ jobs:
                   node-version: 22
                   cache: npm
 
+            - name: Check toolchain
+              run: node -v && npm -v && pwd
+
             # keytar (transitive dependency of @vscode/vsce) may fall back to a
             # native build if no prebuild matches the runner.
             - name: Install libsecret
