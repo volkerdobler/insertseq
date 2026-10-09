@@ -697,7 +697,7 @@ async function InsertSeqWizard(
  * @param parameter - Shared command context.
  * @param status - `"preview"` to show decorations, `"final"` to commit to the document.
  */
-async function insertNewSequence(
+export async function insertNewSequence(
 	input: string | undefined, // der eingegebene Text
 	parameter: TParameter,
 	status: TStatus,
@@ -838,13 +838,21 @@ async function insertNewSequence(
 			// for each created string, insert at original cursor position. If more strings than original cursors, insert the rest at the end (with delimiter or newline symbol)
 			strList.forEach((str, index) => {
 				if (index < maxIndex) {
-					const currSel = new vscode.Selection(
-						insertCursorPos[index].start.line,
-						insertCursorPos[index].start.character,
-						insertCursorPos[index].end.line,
-						insertCursorPos[index].end.character,
-					);
-					edit.replace(docUri, currSel, str);
+					// When there are overflow lines and trailing text on the line of the last cursor,
+					// that last cursor will be replaced through the end of line below.
+					const isLastCursorWithOverflow =
+						delimiter === null &&
+						index === maxIndex - 1 &&
+						strList.length > maxIndex;
+					if (!isLastCursorWithOverflow) {
+						const currSel = new vscode.Selection(
+							insertCursorPos[index].start.line,
+							insertCursorPos[index].start.character,
+							insertCursorPos[index].end.line,
+							insertCursorPos[index].end.character,
+						);
+						edit.replace(docUri, currSel, str);
+					}
 				} else {
 					if (delimiter === null) {
 						overflowLines.push(str);
@@ -856,21 +864,47 @@ async function insertNewSequence(
 
 			// insert all overflow lines as a single operation to preserve correct order
 			if (overflowLines.length > 0) {
-				const lastLine = insertCursorPos[maxIndex - 1].start.line;
+				const lastCursorPos = insertCursorPos[maxIndex - 1];
+				const lastLine = lastCursorPos.start.line;
+				const lineEnd = parameter.editor.document.lineAt(lastLine).range.end;
+				let trailingText = '';
+				if (lastCursorPos.end.character < lineEnd.character) {
+					const trailingRange = new vscode.Range(lastCursorPos.end, lineEnd);
+					trailingText = parameter.editor.document.getText(trailingRange);
+					// Atomically replace from start of cursor to end of line with sequence value
+					const replaceToLineEndRange = new vscode.Range(lastCursorPos.start, lineEnd);
+					edit.replace(docUri, replaceToLineEndRange, strList[maxIndex - 1]);
+				} else {
+					const currSel = new vscode.Selection(
+						lastCursorPos.start.line,
+						lastCursorPos.start.character,
+						lastCursorPos.end.line,
+						lastCursorPos.end.character,
+					);
+					edit.replace(docUri, currSel, strList[maxIndex - 1]);
+				}
+
 				const insertPos = new vscode.Position(lastLine + 1, 0);
+				const lastOverflowIdx = overflowLines.length - 1;
+				const trailingPrefix = lastCursorPos.start.character === 0 ? eolString : '';
+				const formattedOverflow = [
+					...overflowLines.slice(0, lastOverflowIdx),
+					overflowLines[lastOverflowIdx] + (trailingText.length > 0 ? trailingPrefix + trailingText : ''),
+				].join(eolString);
+
 				if (
 					insertPos.line === parameter.editor.document.lineCount
 				) {
 					edit.insert(
 						docUri,
 						insertPos,
-						eolString + overflowLines.join(eolString),
+						eolString + formattedOverflow,
 					);
 				} else {
 					edit.insert(
 						docUri,
 						insertPos,
-						overflowLines.join(eolString) + eolString,
+						formattedOverflow + eolString,
 					);
 				}
 			}

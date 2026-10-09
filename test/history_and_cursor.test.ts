@@ -110,5 +110,245 @@ describe('History, Multi-Cursor & WorkspaceEdit', () => {
 			expect(success).toBe(true);
 		});
 	});
+
+	describe('Section 8.1: Overflow Line Trailing-Text Shift (delimiter === null)', () => {
+		function createMockTextEditor(lines: string[], cursorSelections: vscode.Selection[]) {
+			let docLines = [...lines];
+			const uri = vscode.Uri.file('/test/mockDoc.txt');
+
+			const document: any = {
+				uri,
+				eol: 1, // vscode.EndOfLine.LF
+				get lineCount() {
+					return docLines.length;
+				},
+				lineAt(lineNum: number) {
+					const text = docLines[lineNum] ?? '';
+					return {
+						lineNumber: lineNum,
+						text,
+						range: new vscode.Range(new vscode.Position(lineNum, 0), new vscode.Position(lineNum, text.length)),
+					};
+				},
+				getText(range?: vscode.Range) {
+					if (!range) {
+						return docLines.join('\n');
+					}
+					if (range.start.line === range.end.line) {
+						const line = docLines[range.start.line] ?? '';
+						return line.substring(range.start.character, range.end.character);
+					}
+					return '';
+				},
+			};
+
+			const editor: any = {
+				document,
+				options: { tabSize: 4 },
+				setDecorations: () => {},
+			};
+
+			const applyDocEdits = (edit: any) => {
+				const edits = edit.edits as Array<{ type: string; uri: any; rangeOrPos: any; text: string }>;
+				for (const e of edits) {
+					if (e.type === 'replace') {
+						const range = e.rangeOrPos;
+						const line = docLines[range.start.line];
+						docLines[range.start.line] =
+							line.substring(0, range.start.character) + e.text + line.substring(range.end.character);
+					} else if (e.type === 'delete') {
+						const range = e.rangeOrPos;
+						const line = docLines[range.start.line];
+						docLines[range.start.line] =
+							line.substring(0, range.start.character) + line.substring(range.end.character);
+					} else if (e.type === 'insert') {
+						const pos = e.rangeOrPos;
+						const inserted = e.text.split('\n');
+						if (pos.line >= docLines.length) {
+							// eolString + overflowContent
+							const textToAppend = e.text.startsWith('\n') ? e.text.slice(1) : e.text;
+							docLines.push(...textToAppend.split('\n'));
+						} else {
+							// overflowContent + eolString
+							const linesToInsert = inserted[inserted.length - 1] === '' ? inserted.slice(0, -1) : inserted;
+							docLines.splice(pos.line, 0, ...linesToInsert);
+						}
+					}
+				}
+			};
+
+			return { editor, docLines, applyDocEdits };
+		}
+
+		it('shifts trailing line content to end of overflow lines when cursor is at start of line (|abc)', async () => {
+			const { insertNewSequence } = await import('../src/extension');
+			const { getRegExpressions } = await import('../src/components/evaluator');
+
+			const mock = createMockTextEditor(['abc'], [
+				new vscode.Selection(new vscode.Position(0, 0), new vscode.Position(0, 0)),
+			]);
+
+			const param: any = {
+				editor: mock.editor,
+				segments: getRegExpressions(),
+				origCursorPos: [new vscode.Selection(new vscode.Position(0, 0), new vscode.Position(0, 0))],
+				origTextSel: [''],
+				config: {
+					get: (key: string) => (key === 'maxInsertions' ? 1000 : undefined),
+				},
+				myDelimiter: null,
+			};
+
+			const originalApplyEdit = vscode.workspace.applyEdit;
+			vscode.workspace.applyEdit = async (edit: any) => {
+				mock.applyDocEdits(edit);
+				return true;
+			};
+
+			try {
+				await insertNewSequence('1@i>2', param, 'final');
+				expect(mock.docLines).toEqual(['1', '2', '3', 'abc']);
+			} finally {
+				vscode.workspace.applyEdit = originalApplyEdit;
+			}
+		});
+
+		it('preserves prefix on line 1 and appends suffix to last overflow line when cursor is in middle (foo|bar)', async () => {
+			const { insertNewSequence } = await import('../src/extension');
+			const { getRegExpressions } = await import('../src/components/evaluator');
+
+			const mock = createMockTextEditor(['foobar'], [
+				new vscode.Selection(new vscode.Position(0, 3), new vscode.Position(0, 3)),
+			]);
+
+			const param: any = {
+				editor: mock.editor,
+				segments: getRegExpressions(),
+				origCursorPos: [new vscode.Selection(new vscode.Position(0, 3), new vscode.Position(0, 3))],
+				origTextSel: [''],
+				config: {
+					get: (key: string) => (key === 'maxInsertions' ? 1000 : undefined),
+				},
+				myDelimiter: null,
+			};
+
+			const originalApplyEdit = vscode.workspace.applyEdit;
+			vscode.workspace.applyEdit = async (edit: any) => {
+				mock.applyDocEdits(edit);
+				return true;
+			};
+
+			try {
+				await insertNewSequence('1@i>2', param, 'final');
+				expect(mock.docLines).toEqual(['foo1', '2', '3bar']);
+			} finally {
+				vscode.workspace.applyEdit = originalApplyEdit;
+			}
+		});
+
+		it('does not append extra empty line when cursor is at end of line (abc|)', async () => {
+			const { insertNewSequence } = await import('../src/extension');
+			const { getRegExpressions } = await import('../src/components/evaluator');
+
+			const mock = createMockTextEditor(['abc'], [
+				new vscode.Selection(new vscode.Position(0, 3), new vscode.Position(0, 3)),
+			]);
+
+			const param: any = {
+				editor: mock.editor,
+				segments: getRegExpressions(),
+				origCursorPos: [new vscode.Selection(new vscode.Position(0, 3), new vscode.Position(0, 3))],
+				origTextSel: [''],
+				config: {
+					get: (key: string) => (key === 'maxInsertions' ? 1000 : undefined),
+				},
+				myDelimiter: null,
+			};
+
+			const originalApplyEdit = vscode.workspace.applyEdit;
+			vscode.workspace.applyEdit = async (edit: any) => {
+				mock.applyDocEdits(edit);
+				return true;
+			};
+
+			try {
+				await insertNewSequence('1@i>2', param, 'final');
+				expect(mock.docLines).toEqual(['abc1', '2', '3']);
+			} finally {
+				vscode.workspace.applyEdit = originalApplyEdit;
+			}
+		});
+
+		it('inserts horizontally and shifts text to right when explicit horizontal delimiter is used (foo|bar with space)', async () => {
+			const { insertNewSequence } = await import('../src/extension');
+			const { getRegExpressions } = await import('../src/components/evaluator');
+
+			const mock = createMockTextEditor(['foobar'], [
+				new vscode.Selection(new vscode.Position(0, 3), new vscode.Position(0, 3)),
+			]);
+
+			const param: any = {
+				editor: mock.editor,
+				segments: getRegExpressions(),
+				origCursorPos: [new vscode.Selection(new vscode.Position(0, 3), new vscode.Position(0, 3))],
+				origTextSel: [''],
+				config: {
+					get: (key: string) => (key === 'maxInsertions' ? 1000 : undefined),
+				},
+				myDelimiter: ' ',
+			};
+
+			const originalApplyEdit = vscode.workspace.applyEdit;
+			vscode.workspace.applyEdit = async (edit: any) => {
+				mock.applyDocEdits(edit);
+				return true;
+			};
+
+			try {
+				await insertNewSequence('1_ :1@i>2', param, 'final');
+				expect(mock.docLines).toEqual(['foo1 2 3bar']);
+			} finally {
+				vscode.workspace.applyEdit = originalApplyEdit;
+			}
+		});
+
+		it('handles multiple cursors with overflow on the last cursor (line0, line1 with trailing text)', async () => {
+			const { insertNewSequence } = await import('../src/extension');
+			const { getRegExpressions } = await import('../src/components/evaluator');
+
+			const mock = createMockTextEditor(['firstLine', 'secondTail'], [
+				new vscode.Selection(new vscode.Position(0, 5), new vscode.Position(0, 5)),
+				new vscode.Selection(new vscode.Position(1, 6), new vscode.Position(1, 6)),
+			]);
+
+			const param: any = {
+				editor: mock.editor,
+				segments: getRegExpressions(),
+				origCursorPos: [
+					new vscode.Selection(new vscode.Position(0, 5), new vscode.Position(0, 5)),
+					new vscode.Selection(new vscode.Position(1, 6), new vscode.Position(1, 6)),
+				],
+				origTextSel: ['', ''],
+				config: {
+					get: (key: string) => (key === 'maxInsertions' ? 1000 : undefined),
+				},
+				myDelimiter: null,
+			};
+
+			const originalApplyEdit = vscode.workspace.applyEdit;
+			vscode.workspace.applyEdit = async (edit: any) => {
+				mock.applyDocEdits(edit);
+				return true;
+			};
+
+			try {
+				// 2 cursors, 4 items: '1', '2', '3', '4' -> cursor 0 gets '1', cursor 1 gets '2', overflow gets '3', '4' + 'Tail'
+				await insertNewSequence('1@i>3', param, 'final');
+				expect(mock.docLines).toEqual(['first1Line', 'second2', '3', '4Tail']);
+			} finally {
+				vscode.workspace.applyEdit = originalApplyEdit;
+			}
+		});
+	});
 });
 

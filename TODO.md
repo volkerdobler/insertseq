@@ -12,6 +12,7 @@ Dieser Bericht dokumentiert alle identifizierten Probleme, logischen Schwachstel
 4. [Vorschläge für User Experience (UX)]
 5. [Vorschläge für Architektur & Testautomatisierung](#6-vorschläge-für-architektur--testautomatisierung)
 6. [Empfohlene Roadmap](#7-empfohlene-roadmap)
+7. [Backlog & Geplante Features für die nächste Version](#8-backlog--geplante-features-für-die-nächste-version)
 
 
 ---
@@ -93,4 +94,45 @@ _Abschnitte 6.1 (Echte Scope-Variablen in safeEvaluate), 6.2 (Debouncing bei val
     - [x] 6.2 Debouncing bei `validateInput` (`insertseq.previewDebounce`).
     - [x] 6.3 Atomare Edits mit `vscode.WorkspaceEdit`.
     - [x] 6.4 Vitest-basiertes Test-Setup einrichten.
-    - [ ] 6.5 Parser-Migration: Umstellung von RegEx-Kaskaden auf Lexer/Tokenizer + AST-Parser.
+    - [x] 6.5 Parser-Migration: Umstellung von RegEx-Kaskaden auf Lexer/Tokenizer + AST-Parser.
+
+---
+
+## 8. Backlog & Geplante Features für die nächste Version
+
+### 8.1 [x] Überhang-Textumbruch bei mehrzeiliger Einfügung (Trailing Line-Content verschieben)
+
+- **Problem / Aktuelles Verhalten:**
+  - Steht der Cursor auf einer Zeile mit nachfolgendem Text (z. B. `'abc'` mit Cursor vor `'a'`) und erzeugt eine Sequenz mehr Zeilen als Cursors vorhanden sind (z. B. `1@i>2` ➔ 3 Werte `1`, `2`, `3` bei 1 Cursor), verbleibt der nachfolgende Zeilentext `'abc'` direkt hinter dem ersten Sequenzwert auf Zeile 1:
+    ```text
+    1abc
+    2
+    3
+    ```
+  - Die Überhangzeilen (`2` und `3`) wurden unterhalb der bestehenden Zeile eingefügt (`insertPos = new vscode.Position(lastLine + 1, 0)`), wodurch der Text der Ursprungszeile zerschnitten bzw. unnatürlich oben festgehalten wurde.
+
+- **Umgesetztes Verhalten:**
+  - Der dem Cursor nachfolgende Text der Zeile (`abc`) wird hinter die gesamte neu eingefügte Sequenz geschoben (analog zu einem echten Zeilenumbruch mit Einschub):
+    ```text
+    1
+    2
+    3
+    abc
+    ```
+  - Steht der Cursor mitten im Text (z. B. `'foo|bar'`), bleibt der Präfix `'foo'` vor der Sequenz und der Suffix `'bar'` wird an das Ende der letzten eingefügten Zeile angehängt:
+    ```text
+    foo1
+    2
+    3bar
+    ```
+
+- **Wichtige Bedingung & Abgrenzung zu Trennzeichen (Delimiter):**
+  - **Nur bei NEWLINE (`delimiter === null`):** Das Verschieben des nachfolgenden Zeilentexts in eine neue Zeile findet **nur** statt, wenn das Einfüge-Trennzeichen ein Zeilenumbruch ist.
+  - **Bei horizontalen Trennzeichen (z. B. SPACE, Komma, etc.):** Ist ein Trennzeichen wie Leerzeichen (`1_ :1`), Komma (`1_,:1`) oder ein sonstiger Delimiter gewählt, wird die Sequenz normal an der Cursor-Stelle eingefügt und der nachfolgende Text horizontal nach rechts verschoben:
+    - Beispiel: `'foo|bar'` mit `1_ :1@i>2` (SPACE-Delimiter) ➔ `'foo1 2 3 bar'`.
+
+- **Technische Umsetzung & Verifikation:**
+  - [x] In `src/extension.ts` (`insertNewSequence`): Bei `delimiter === null` und `overflowLines.length > 0` wird nachfolgender Zeilentext des letzten Cursors erfasst und an das Ende der letzten Überhangzeile verschoben (bzw. auf eine eigene Zeile, falls der Cursor am Zeilenanfang stand).
+  - [x] Bei explizitem Delimiter (`delimiter !== null`) bleibt das horizontale Einfügen und Verschieben nach rechts unverändert erhalten.
+  - [x] Dedizierte Unit-Tests in `test/history_and_cursor.test.ts` implementiert und verifiziert (96/96 Tests bestanden).
+  - [x] TypeScript Typecheck (`check-types`), Linting (`eslint`) und Extension-Builds (`build:desk`, `build:web`) erfolgreich abgeschlossen.

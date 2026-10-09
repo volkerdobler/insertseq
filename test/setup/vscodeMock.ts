@@ -38,10 +38,20 @@ export class MockRange {
 export class MockSelection extends MockRange {
 	public anchor: MockPosition;
 	public active: MockPosition;
-	constructor(anchor: MockPosition, active: MockPosition) {
-		super(anchor, active);
-		this.anchor = anchor;
-		this.active = active;
+	constructor(
+		anchorOrAnchorLine: MockPosition | number,
+		activeOrAnchorChar: MockPosition | number,
+		activeLine?: number,
+		activeChar?: number,
+	) {
+		super(anchorOrAnchorLine as any, activeOrAnchorChar as any, activeLine, activeChar);
+		if (typeof anchorOrAnchorLine === 'number') {
+			this.anchor = this.start;
+			this.active = this.end;
+		} else {
+			this.anchor = anchorOrAnchorLine;
+			this.active = activeOrAnchorChar as MockPosition;
+		}
 	}
 }
 
@@ -65,6 +75,7 @@ export class MockWorkspaceEdit {
 }
 
 export const vscodeMock = {
+	EndOfLine: { LF: 1, CRLF: 2 },
 	ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
 	InputBoxValidationSeverity: {
 		Info: 1,
