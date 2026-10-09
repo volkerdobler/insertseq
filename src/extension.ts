@@ -919,8 +919,33 @@ export async function insertNewSequence(
 				);
 				edit.replace(docUri, currSel, addStr.slice(0, -1));
 			}
+			const success = await vscode.workspace.applyEdit(edit);
+			if (success) {
+				const newSelections: vscode.Selection[] = [];
+				for (let i = 0; i < maxIndex; i++) {
+					const pos = insertCursorPos[i];
+					const insertedStr = strList[i] ?? '';
+					const charPos = pos.start.character + insertedStr.length;
+					const newPos = new vscode.Position(pos.start.line, charPos);
+					newSelections.push(new vscode.Selection(newPos, newPos));
+				}
 
-			return await vscode.workspace.applyEdit(edit);
+				if (overflowLines.length > 0) {
+					const lastLine = insertCursorPos[maxIndex - 1].start.line;
+					overflowLines.forEach((str, idx) => {
+						const line = lastLine + 1 + idx;
+						const charPos = str.length;
+						const newPos = new vscode.Position(line, charPos);
+						newSelections.push(new vscode.Selection(newPos, newPos));
+					});
+				}
+
+				if (newSelections.length > 0) {
+					parameter.editor.selections = newSelections;
+				}
+			}
+
+			return success;
 		}
 	}
 

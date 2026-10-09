@@ -349,6 +349,49 @@ describe('History, Multi-Cursor & WorkspaceEdit', () => {
 				vscode.workspace.applyEdit = originalApplyEdit;
 			}
 		});
+
+		it('selects/places cursors on all inserted lines when more lines are inserted than cursors (1 cursor -> 4 lines)', async () => {
+			const { insertNewSequence } = await import('../src/extension');
+			const { getRegExpressions } = await import('../src/components/evaluator');
+
+			const mock = createMockTextEditor(['', ''], [
+				new vscode.Selection(new vscode.Position(0, 0), new vscode.Position(0, 0)),
+			]);
+
+			const param: any = {
+				editor: mock.editor,
+				segments: getRegExpressions(),
+				origCursorPos: [new vscode.Selection(new vscode.Position(0, 0), new vscode.Position(0, 0))],
+				origTextSel: [''],
+				config: {
+					get: (key: string) => (key === 'maxInsertions' ? 1000 : undefined),
+				},
+				myDelimiter: null,
+			};
+
+			const originalApplyEdit = vscode.workspace.applyEdit;
+			vscode.workspace.applyEdit = async (edit: any) => {
+				mock.applyDocEdits(edit);
+				return true;
+			};
+
+			try {
+				// 1 cursor at (0, 0), sequence 1@i>3 -> '1', '2', '3', '4'
+				await insertNewSequence('1@i>3', param, 'final');
+				expect(mock.docLines).toEqual(['1', '2', '3', '4', '']);
+				expect(mock.editor.selections).toHaveLength(4);
+				expect(mock.editor.selections[0].start.line).toBe(0);
+				expect(mock.editor.selections[0].start.character).toBe(1);
+				expect(mock.editor.selections[1].start.line).toBe(1);
+				expect(mock.editor.selections[1].start.character).toBe(1);
+				expect(mock.editor.selections[2].start.line).toBe(2);
+				expect(mock.editor.selections[2].start.character).toBe(1);
+				expect(mock.editor.selections[3].start.line).toBe(3);
+				expect(mock.editor.selections[3].start.character).toBe(1);
+			} finally {
+				vscode.workspace.applyEdit = originalApplyEdit;
+			}
+		});
 	});
 });
 
