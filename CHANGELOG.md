@@ -2,6 +2,15 @@
 
 All notable changes to this extension (newest first):
 
+# Version 1.4.0
+
+- **Smart Trailing-Text Shift on Multi-Line Overflow**: When generating more sequence items than active cursors (using a stop condition like `1@i>9`) with newline separation (`delimiter === null`), any text following the cursor on the same line is now cleanly shifted to the end of the inserted sequence instead of remaining stuck on the first line:
+    - Cursor at the start of a line before existing text (`|abc` with `1@i>2`) inserts the full sequence above and moves `abc` to a new line after the sequence (`1`, `2`, `3`, `abc`).
+    - Cursor in the middle of a line (`foo|bar` with `1@i>2`) keeps the prefix `foo` before the first item and attaches the suffix `bar` to the last overflow line (`foo1`, `2`, `3bar`).
+    - Explicit horizontal delimiters (such as space `1_ :1@i>2` or comma `1_,:1@i>2`) continue to insert inline at the cursor position and shift trailing text horizontally to the right (`foo1 2 3bar`).
+- **Multi-Cursor Placement on All Inserted Overflow Lines**: When a sequence inserts additional overflow lines beyond the original cursor count, cursors (`editor.selections`) are now automatically placed at the end of **all** newly inserted lines (not just the original cursor lines), allowing immediate multi-cursor editing across the entire generated block.
+- Updated dependencies and pinned `temporal-polyfill` to `1.0.4` for reliable packaging and CI builds.
+
 # Version 1.3.0
 
 - Added **Quick Presets / Favorites** (`insertseq.presets`, `insertseq.savePreset`) to save, name, preview, and reuse frequently used sequences.

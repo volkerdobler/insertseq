@@ -10,21 +10,13 @@ All inputs are previewed live (as a decoration) for the current selections,
 so you can verify the generated sequence before pressing Enter.
 The input box also provides real-time syntax and error validation with helpful hints.
 
-## New in 1.3.0 (User Features)
-
-Version 1.3.0 focuses on making InsertSeq easier to adopt in day-to-day work. 
-* The new Wizard lowers the entry barrier for new and occasional users: instead of typing complex option syntax from memory, you can build a sequence step by step and then continue with a valid prefilled input. 
-* Presets and Favorites provide another fast path for recurring sequences by letting you save and launch named patterns directly. Similar workflows are still possible through History, but Presets/Favorites give you an additional, more intentional way to organize reusable inputs. 
-* Instant Input Feedback supports users who prefer typing everything directly into the input line by showing immediate hints and error messages while they type; unlike the Wizard, it is not a guided step-by-step flow, but real-time assistance for manual input.
-
 ## Feature Overview (Agenda)
 
 At a glance — what InsertSeq can do:
 
 | Category | Key Capabilities & Quick Examples |
 | :--- | :--- |
-| **🆕 New in 1.3.0** | • **Presets & Favorites** (`insertseq.presets`, `Ctrl+Alt+P`): save, name, and re-run your recurring sequences<br>• **Interactive Wizard** (`insertseq.wizard`, `Ctrl+Alt+W`): create valid sequences step-by-step without memorizing syntax<br>• **Native Ghost-Text Preview**: clearer, smoother live preview while typing<br>• **Live syntax/error feedback**: instant hints for invalid input<br>• **Localized hints/messages**: validation guidance appears in your language setup |
-| **💡 Productivity & UX** | • **Command history** (`insertseq.history`, `Ctrl+Alt+,`) to view, repeat, or edit previous insertions<br>• **Presets & Favorites** (`insertseq.presets`, `Ctrl+Alt+P`) to store, name, and execute reusable sequences<br>• **Interactive Wizard / Assistant** (`insertseq.wizard`, `Ctrl+Alt+W`) to assemble sequences step-by-step<br>• **Preview modes**: choose between native ghost text and classic decoration preview |
+| **💡 Productivity & UX** | • **Command history** (`insertseq.history`, `Ctrl+Alt+,`) to view, repeat, or edit previous insertions<br>• **Presets & Favorites** (`insertseq.presets`, `Ctrl+Alt+P`) to store, name, and execute reusable sequences<br>• **Interactive Wizard / Assistant** (`insertseq.wizard`, `Ctrl+Alt+W`) to assemble sequences step-by-step without memorizing syntax<br>• **Preview modes**: choose between native ghost text and classic decoration preview<br>• **Live syntax/error feedback**: localized real-time hints and validation messages while typing<br>• **Smart multi-line overflow**: trailing line text is shifted to the end of newline-overflow sequences and all newly inserted lines receive active cursors |
 | **🔢 Numbers & Radices** | • Decimal integers and floating-point numbers (`1`, `0.5`, `-10`)<br>• Radix systems: Hexadecimal (`0x10`), Octal (`0o10`), Binary (`0b10`)<br>• Random number ranges (`1r10` = random numbers between 1 and 10)<br>• Roman numerals: uppercase (`1~R`, `1~roman`) and lowercase (`1~r`) |
 | **🔤 Strings & Lists** | • Alphabetic sequences (`a`, `b`, `c`, ...) with case options (`?u`, `?l`, `?p`)<br>• Custom inline lists and circular arrays (`["red","green","blue"]`)<br>• Predefined lists from configuration settings (`;Jan`, `;?1`)<br>• Re-insert or transform previously selected text |
 | **📅 Date & Time** | • Calendar dates (`%2025-01-01`, `%now`, `%date:`)<br>• Clock times & timestamps (`%14:00`, `%14:00:15min`)<br>• Compound duration steps (`:1d15min`, `:2h30min`, `:1.5d`)<br>• Format tokens (`yyyy-MM-dd HH:mm:ss`), locales (`lang:de`), and timestamps (`~epoch`, `~epochms`, `~iso`, `~utc`) |
@@ -178,13 +170,17 @@ xi
 xii
 ```
 
-#### ___Stop expression___
+#### ___Stop expression & multi-line overflow___
 
 Use `@` or `stopif:` / `stopexpr:` / `stopexpression:` to stop insertion based on a boolean expression. Use placeholders such as `i` for the current index (0-based).
 
 Input: `1 stopif:(i>5)` with many selections will stop when `i > 5` (when the number would be 7).
 
-During preview no new lines are inserted; the preview shows future insertions on the last selected line.
+If a stop expression generates **more items than there are cursors** (for example, `1@i>2` with a single cursor):
+- With the default newline delimiter, excess items are inserted on new lines below the last cursor, and **active cursors are placed at the end of all inserted lines**.
+- If the cursor stands before existing text on that line (`|abc`), the trailing text is shifted below the inserted sequence (`1`, `2`, `3`, `abc`); if the cursor is in the middle of a word (`foo|bar`), the prefix remains on the first line and the suffix attaches to the last inserted line (`foo1`, `2`, `3bar`).
+- With an explicit horizontal delimiter (such as space `1_ :1@i>2`), all items are inserted inline on the same line (`foo1 2 3bar`).
+- During live preview, no new lines are inserted in the document; excess items are shown compactly on the last selected line.
 
 ### Alphabetic sequences
 
@@ -978,8 +974,8 @@ The extension exposes settings under the `insertseq` namespace. A quick referenc
 | `insertseq.presets`           |   array | `[]`                           | User-defined sequence presets and favorites (name, sequence, description).                                                                                                                                                                                                                                                                                                                        |
 | `insertseq.alphaCapital`      |  string | `"preserve"`                   | Case handling for alpha sequences: `preserve`, `upper`, `lower`, `pascal`.                                                                                                                                                                                                                                                                                                                        |
 | `insertseq.language`          |  string | `""`                           | Default language for dates and validation hints/messages (`"en"`, `"de"`, or empty for automatic VS Code UI detection).                                                                                                                                                                                                         |
-| `insertseq.sortedOuput`       | boolean | `false`                        | Default insertion order: false (default) in multi cursor click order; true in cursor order                                                                                                                                                                                                                                                                                                        |
-| `insertseq.reversedOuput`     | boolean | `false`                        | Default insertion order: false (default) in natural order; true: in reverse order                                                                                                                                                                                                                                                                                                                 |
+| `insertseq.sortedOutput`      | boolean | `false`                        | Default insertion order: false (default) in multi cursor click order; true in cursor order                                                                                                                                                                                                                                                                                                        |
+| `insertseq.reversedOutput`    | boolean | `false`                        | Default insertion order: false (default) in natural order; true: in reverse order                                                                                                                                                                                                                                                                                                                 |
 | `insertseq.century`           |  string | `"20"`                         | Default century for two-digit year inputs.                                                                                                                                                                                                                                                                                                                                                        |
 | `insertseq.centerString`      |  string | `"l"`                          | Centering bias for string padding: `l` (left), `r` (right).                                                                                                                                                                                                                                                                                                                                       |
 | `insertseq.dateStepUnit`      |  string | `"d"`                          | Default date step unit: `d`, `w`, `m`, `y`.                                                                                                                                                                                                                                                                                                                                                       |
@@ -1011,7 +1007,7 @@ See the Changelog file for release notes.
 
 Thanks to everyone who contributed:
 
-- Yu [(@codingyu)](https://github.com/codingyu) — added the history picklist (v0.5.0)
+- Yu [(@codingyu)](https://github.com/codingyu) — added the history picklist
 - Jesse Peden [(@JessePeden)](https://github.com/JessePeden) — fixed package.json typos
 - Noah [(@nmay231)](https://github.com/nmay231) — inspired date sequences
 

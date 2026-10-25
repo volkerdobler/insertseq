@@ -12,7 +12,8 @@ Dieser Bericht dokumentiert alle identifizierten Probleme, logischen Schwachstel
 4. [Vorschläge für User Experience (UX)]
 5. [Vorschläge für Architektur & Testautomatisierung](#6-vorschläge-für-architektur--testautomatisierung)
 6. [Empfohlene Roadmap](#7-empfohlene-roadmap)
-7. [Backlog & Geplante Features für die nächste Version](#8-backlog--geplante-features-für-die-nächste-version)
+7. [Backlog & Geplante Features (v1.4.0)](#8-backlog--geplante-features-für-die-nächste-version)
+8. [Empfehlungen & Roadmap für Version 2.0.0](#9-empfehlungen--roadmap-für-version-200)
 
 
 ---
@@ -136,3 +137,70 @@ _Abschnitte 6.1 (Echte Scope-Variablen in safeEvaluate), 6.2 (Debouncing bei val
   - [x] Bei explizitem Delimiter (`delimiter !== null`) bleibt das horizontale Einfügen und Verschieben nach rechts unverändert erhalten.
   - [x] Dedizierte Unit-Tests in `test/history_and_cursor.test.ts` implementiert und verifiziert (96/96 Tests bestanden).
   - [x] TypeScript Typecheck (`check-types`), Linting (`eslint`) und Extension-Builds (`build:desk`, `build:web`) erfolgreich abgeschlossen.
+
+### 8.2 [x] Automatische Multi-Cursor-Platzierung auf allen Überhangzeilen
+
+- **Umgesetztes Verhalten:**
+  - Werden mehr Zeilen generiert als ursprünglich Cursors vorhanden waren (`overflowLines.length > 0`), werden nach dem finalen Einfügen (`applyEdit`) automatisch Cursors am Ende **aller** eingefügten Zeilen (Ursprungszeilen + Überhangzeilen) platziert (`parameter.editor.selections`).
+  - Mit Unit-Test in `test/history_and_cursor.test.ts` abgesichert (97/97 Tests bestanden).
+
+---
+
+## 9. Empfehlungen & Roadmap für Version 2.0.0
+
+### 9.1 Vollständige Ablösung der RegEx-Engine (`evaluator.ts`) in allen Sequenz-Generatoren & im Validator
+
+- **Aktueller Stand (Branch `v2.0.0`):**
+  - Auf `v2.0.0` wurden Lexer (`src/parser/lexer.ts`), AST (`src/parser/ast.ts`) und Recursive-Descent-Parser (`src/parser/parser.ts`) implementiert und in `getInputType()` angebunden.
+  - Allerdings wird der erzeugte `SequenceAST` nach `getInputType()` noch verworfen: Die einzelnen Sequenz-Module (`src/sequences/decimal.ts`, `date.ts`, `string.ts`, `ip.ts`, etc.) sowie `src/components/validator.ts` parsen den Eingabestring anschließend noch immer ein zweites Mal über die alten RegEx-Segmente aus `src/components/evaluator.ts` (~520 Zeilen).
+- **Ziel für 2.0.0:**
+  - [ ] `getSequenceFunction()` übergibt den vom `Parser` erzeugten `SequenceAST` direkt an `createDecimalSeq`, `createDateSeq`, `createStringSeq`, `createIpSeq`, `createUuidSeq`, `createRandomTokenSeq`, `createOwnSeq`, `createPredefinedSeq`, `createFunctionSeq` und `createExpressionSeq`.
+  - [ ] Umbau von `src/components/validator.ts`, sodass Syntaxfehler und Spaltenpositionen (`startCol`..`endCol`) direkt aus dem AST-Parser (`ParseError`) bezogen werden, ergänzt um die bestehenden kontextsensitiven Operator-Hinweise während des Tippens.
+  - [ ] Vollständiges Entfernen von `src/components/evaluator.ts` sowie `segments: RuleTemplate` aus `TParameter` (`src/types.ts`).
+
+### 9.2 Non-Destructive Preview (Keine vorzeitige Dokument-Modifikation in `initApp`)
+
+- **Problem / Aktuelles Verhalten:**
+  - Beim Aufruf eines InsertSeq-Befehls löscht `initApp()` in `src/extension.ts` **sofort** den aktuell markierten Text im Editor mittels `vscode.workspace.applyEdit(edit)` und speichert ihn in `origTextSel` zwischen, um ihn bei `Escape` wieder einzufügen.
+  - **Nachteile:**
+    - Das Dokument wird bereits beim bloßen Öffnen der InputBox als geändert („Dirty"-Indikator am Tab) markiert.
+    - Selbst bei Abbruch mit `Escape` entstehen zwei echte Dokument-Edits (Löschen + Wiederherstellen), die die Undo-Historie (`Ctrl+Z`) des Editors verschmutzen.
+- **Ziel für 2.0.0:**
+  - [ ] `initApp()` liest `editor.selections` und den selektierten Text nur noch schreibgeschützt aus, ohne das Dokument vorab zu verändern.
+  - [ ] Während der Live-Vorschau (`status === 'preview'`) bleibt der Originaltext im Dokument unangetastet; die Vorschau wird über Decorations (`replace` / Ghost-Text) dargestellt.
+  - [ ] Erst beim finalen Bestätigen (`status === 'final'` mit `input !== undefined`) wird ein einziges atomares `WorkspaceEdit` auf das Dokument angewandt. Bei `Escape` werden lediglich die Vorschau-Decorations geleert — das Dokument bleibt zu 100 % unberührt.
+
+### 9.3 Bereinigung von Deprecated Settings & Legacy-Code (Breaking Cleanup für Major Release)
+
+- **Ziel für 2.0.0:**
+  - [ ] Entfernen der seit Version 1.1.1 als *deprecated* markierten Einstellung `insertseq.insertOrder` aus `package.json` und `src/extension.ts` (vollständig abgelöst durch `insertseq.sortedOutput` und `insertseq.reversedOutput`).
+  - [ ] Prüfen und Bereinigen alter Migrationspfade (`migrateOldHistory`), sofern für 2.0.0 nicht mehr benötigt.
+
+### 9.4 Aufwertung der Haupt-InputBox (`createInputBox` mit Schnellzugriff-Buttons)
+
+- **Motivation:**
+  - Aktuell nutzt `InsertSeqCommand` `vscode.window.showInputBox()`, was keine eigenen Action-Buttons in der Titelleiste erlaubt.
+- **Ziel für 2.0.0:**
+  - [ ] Umstellung von `showInputBox` auf `vscode.window.createInputBox()` mit eingebetteten Action-Buttons oben rechts:
+    - `$(bookmark)` **Save as Preset:** Speichert den aktuell getippten Sequenz-Ausdruck direkt als Favorit/Preset.
+    - `$(wand)` **Switch to Wizard:** Wechselt nahtlos in den interaktiven Sequenz-Assistenten.
+    - `$(history)` **History:** Wechselt direkt zur Verlauf-Auswahl.
+    - `$(question)` **Syntax Cheat-Sheet:** Öffnet eine kompakte Kurzreferenz (oder Dokumentation) der Operatoren (`:`, `*`, `#`, `##`, `~`, `::`, `@`, `$`, `!`).
+
+### 9.5 Erweiterte Transformationen auf bestehenden Selektionen (Smart Selection Transform)
+
+- **Motivation:**
+  - Häufig markieren Nutzer bereits bestehende Zahlen, Versionen oder Daten im Code und möchten diese relativ zu ihrem aktuellen Wert verändern (z. B. alle markierten Zahlen um `+10` erhöhen, neu nummerieren oder formatieren).
+  - Zwar existiert in Expressions die Variable `o` (Originaltext, z. B. `|Number(o) + 10`), diese ist aber umständlich zu tippen.
+- **Ziel für 2.0.0:**
+  - [ ] Kurzsyntax oder direkter Modus für relative Berechnungen auf dem bestehenden Selektionswert `o` (z. B. automatisches Bereitstellen von `num(o)` / numerischem `o` in Ausdrücken oder ein relativer Step-Modus auf bestehenden Zahlen).
+  - [ ] Aufnahme von „Transform Selected Text" als eigene Kategorie in den **Wizard** (`insertseq.wizard`) und die Standard-Presets (z. B. *„Add +1 to selected numbers"*, *„Wrap selection in quotes with index"*).
+
+### 9.6 Neue Sequenz- & Generator-Typen (DevOps & Alltag)
+
+- **Optionale Funktions-Erweiterungen für 2.0.0:**
+  - [ ] **SemVer-Sequenzen:** Inkrementieren von Versionsnummern nach Semantic Versioning (z. B. `1.2.0:patch` ➔ `1.2.0`, `1.2.1`, `1.2.2`; `1.2.0:minor` ➔ `1.2.0`, `1.3.0`, `1.4.0`).
+  - [ ] **IPv6 & MAC-Adress-Sequenzen:** Ergänzend zu IPv4 auch hochzählbare MAC-Adressen (`00:1A:2B:00:00:01:1`) und einfache IPv6-Subnetz-/Host-Sequenzen (`fe80::1:1`).
+  - [ ] **Lokalisierte Wochentags- & Monatsnamen (`Intl`):** Direkte Generierung von Wochentagen (`:weekday` / `:dayname`) oder Monaten (`:monthname`) über die native `Intl.DateTimeFormat`-API in der eingestellten Sprache (`de`, `en`, `fr`, `es`, ...) als Kurz- oder Langform (`~s`, `~l`), ohne dass `mysequences` manuell gepflegt werden muss.
+  - [ ] **NanoID / ULID Support:** Neben `:uuid` (`v4`/`v7`) auch `:ulid` (lexikografisch sortierbar, kompakt) als Generator-Option.
+
